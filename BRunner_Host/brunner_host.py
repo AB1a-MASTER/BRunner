@@ -127,6 +127,35 @@ async def handle_connection(websocket):
                 except Exception as e:
                     await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
 
+            elif command == "DELETE_WORKFLOW":
+                try:
+                    filename = payload.get("filename")
+                    file_path = f"Workflows/{filename}"
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        await websocket.send(json.dumps({"status": "success"}))
+                    else:
+                        await websocket.send(json.dumps({"status": "failed", "error": "File not found"}))
+                except Exception as e:
+                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+
+            elif command == "DUPLICATE_WORKFLOW":
+                try:
+                    original = payload.get("filename")
+                    new_name = payload.get("new_filename")
+                    if not new_name.endswith(".json"):
+                        new_name += ".json"
+
+                    # Read the original and write to the new file
+                    with open(f"Workflows/{original}", "r") as f:
+                        content = json.load(f)
+                    with open(f"Workflows/{new_name}", "w") as f:
+                        json.dump(content, f, indent=4)
+
+                    await websocket.send(json.dumps({"status": "success"}))
+                except Exception as e:
+                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+
             else:
                 await websocket.send(json.dumps({"status": "error", "error": f"Unknown command: {command}"}))
                 logging.warning(

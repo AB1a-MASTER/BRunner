@@ -1,0 +1,5 @@
+todo:
+imporve the recorder and change the way the ids are saved, instead of internal id we will save their id or name, right now the internal id system fails on recorded macros.
+close sidebar when studio is open
+add it so that when we record it associates the website we are recording. so that when the steps are run it opens that site.
+nav url needs to open a new tab to navigate. add options to either use the same tab or new tab.

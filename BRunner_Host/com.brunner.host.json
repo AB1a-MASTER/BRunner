@@ -1,9 +1,0 @@
-{
-  "name": "com.brunner.host",
-  "description": "BRunner OS Hardware and File System Bridge",
-  "path": "brunner_host.py",
-  "type": "stdio",
-  "allowed_origins": [
-    "chrome-extension://dmcecmacoljookoafaiakdbibpihaibp/"
-  ]
-}

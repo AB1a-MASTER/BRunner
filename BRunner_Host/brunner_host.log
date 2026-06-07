@@ -43,3 +43,251 @@
 2026-06-06 17:47:20,445 [INFO] ========================================
 2026-06-06 17:47:20,505 [INFO] server listening on 127.0.0.1:8999
 2026-06-06 17:47:20,505 [INFO] server listening on [::1]:8999
+2026-06-07 18:27:50,795 [INFO] ========================================
+2026-06-07 18:27:50,796 [INFO]  BRunner Native OS Host Started
+2026-06-07 18:27:50,800 [INFO]  Listening on ws://localhost:8999
+2026-06-07 18:27:50,800 [INFO] ========================================
+2026-06-07 18:27:50,800 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-07 18:27:50,801 [INFO] ========================================
+2026-06-07 18:27:50,952 [INFO] server listening on [::1]:8999
+2026-06-07 18:27:50,952 [INFO] server listening on 127.0.0.1:8999
+2026-06-07 18:27:59,112 [INFO] connection open
+2026-06-07 18:27:59,114 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:27:59,118 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:27:59,119 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:27:59,122 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:28:05,839 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'search apple on google.json', 'content': [{'id': 'step_4j76eq2tr', 'action': 'browser.navigate', 'target': '', 'payload': {'primary': 'www.google.com'}}, {'id': 'step_cvabu8kmw', 'action': 'element.type', 'target': '[name=q]', 'payload': {'primary': 'apple'}}, {'id': 'step_prtp00ebt', 'action': 'element.click', 'target': '[name=btnK]', 'payload': {}}]}
+2026-06-07 18:28:08,689 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:28:50,858 [INFO] connection closed
+2026-06-07 18:28:56,894 [INFO] connection open
+2026-06-07 18:28:56,895 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:28:56,896 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:28:56,897 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:28:56,902 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:28:58,975 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 18:29:23,868 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:29:55,517 [INFO] connection closed
+2026-06-07 18:30:41,004 [INFO] ========================================
+2026-06-07 18:30:41,005 [INFO]  BRunner Native OS Host Started
+2026-06-07 18:30:41,005 [INFO]  Listening on ws://localhost:8999
+2026-06-07 18:30:41,005 [INFO] ========================================
+2026-06-07 18:30:41,005 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-07 18:30:41,006 [INFO] ========================================
+2026-06-07 18:30:41,069 [INFO] server listening on [::1]:8999
+2026-06-07 18:30:41,072 [INFO] server listening on 127.0.0.1:8999
+2026-06-07 18:30:44,719 [INFO] connection open
+2026-06-07 18:30:44,720 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:30:44,726 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:30:44,726 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:30:44,731 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:31:14,752 [INFO] connection closed
+2026-06-07 18:33:47,207 [INFO] connection open
+2026-06-07 18:33:47,208 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:33:47,210 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:33:47,210 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:33:47,305 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:33:50,145 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 18:33:52,660 [INFO] [Inbound] Received Command: DELETE_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 18:33:52,667 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:33:54,599 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:33:56,248 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'search apple on google.json', 'content': [{'id': 'step_4j76eq2tr', 'action': 'browser.navigate', 'target': '', 'payload': {'primary': 'www.google.com'}}, {'id': 'step_cvabu8kmw', 'action': 'element.type', 'target': '[name=q]', 'payload': {'primary': 'apple'}}, {'id': 'step_prtp00ebt', 'action': 'element.click', 'target': '[name=btnK]', 'payload': {}}]}
+2026-06-07 18:33:57,177 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:34:27,195 [INFO] connection closed
+2026-06-07 18:37:22,196 [INFO] ========================================
+2026-06-07 18:37:22,197 [INFO]  BRunner Native OS Host Started
+2026-06-07 18:37:22,197 [INFO]  Listening on ws://localhost:8999
+2026-06-07 18:37:22,197 [INFO] ========================================
+2026-06-07 18:37:22,197 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-07 18:37:22,198 [INFO] ========================================
+2026-06-07 18:37:22,271 [INFO] server listening on 127.0.0.1:8999
+2026-06-07 18:37:22,273 [INFO] server listening on [::1]:8999
+2026-06-07 18:37:27,749 [INFO] connection open
+2026-06-07 18:37:27,750 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:37:27,751 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:37:27,752 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:37:27,754 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:38:19,261 [INFO] connection closed
+2026-06-07 18:38:36,904 [INFO] connection open
+2026-06-07 18:38:36,904 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:38:36,907 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:38:36,908 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:38:36,913 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:39:06,920 [INFO] connection closed
+2026-06-07 18:39:18,418 [INFO] connection open
+2026-06-07 18:39:18,418 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:39:18,420 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:39:18,420 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:39:18,422 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 18:39:48,448 [INFO] connection closed
+2026-06-07 18:40:36,383 [INFO] connection open
+2026-06-07 18:40:36,383 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:40:36,385 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:40:36,386 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:40:36,393 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:40:38,545 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 18:40:45,329 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'search apple on google 2.json', 'content': [{'id': 'step_4j76eq2tr', 'action': 'browser.navigate', 'target': '', 'payload': {'primary': 'www.google.com'}}, {'id': 'step_cvabu8kmw', 'action': 'element.type', 'target': '[name=q]', 'payload': {'primary': 'apple'}}, {'id': 'step_prtp00ebt', 'action': 'element.click', 'target': '[name=btnK]', 'payload': {}}]}
+2026-06-07 18:40:46,338 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:41:16,348 [INFO] connection closed
+2026-06-07 18:41:29,737 [INFO] connection open
+2026-06-07 18:41:29,738 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:41:29,739 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:41:29,740 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:41:29,741 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'search apple on google 2.json', 'content': [{'id': 'step_4j76eq2tr', 'action': 'browser.navigate', 'target': '', 'payload': {'primary': 'www.google.com'}}, {'id': 'step_cvabu8kmw', 'action': 'element.type', 'target': '[name=q]', 'payload': {'primary': 'apple'}}, {'id': 'step_prtp00ebt', 'action': 'element.click', 'target': '[name=btnK]', 'payload': {}}]}
+2026-06-07 18:41:32,195 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:42:02,211 [INFO] connection closed
+2026-06-07 18:43:24,379 [INFO] connection open
+2026-06-07 18:43:24,379 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:43:24,381 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:43:24,382 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:43:24,386 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:43:39,955 [INFO] [Inbound] Received Command: DUPLICATE_WORKFLOW | Payload: {'filename': 'search apple on google.json', 'new_filename': 'search apple on google_copy'}
+2026-06-07 18:43:39,963 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:43:42,624 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google_copy.json'}
+2026-06-07 18:44:22,558 [INFO] connection closed
+2026-06-07 18:47:26,750 [INFO] connection open
+2026-06-07 18:47:26,750 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:47:26,752 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:47:26,753 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:47:26,758 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:48:29,942 [INFO] connection closed
+2026-06-07 18:48:41,512 [INFO] connection open
+2026-06-07 18:48:41,513 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:48:41,515 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:48:41,516 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:48:41,524 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:49:06,635 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:50:04,478 [INFO] connection closed
+2026-06-07 18:54:13,217 [INFO] connection open
+2026-06-07 18:54:13,218 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:54:13,220 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:54:13,221 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:54:13,225 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:55:04,079 [INFO] connection closed
+2026-06-07 18:55:30,412 [INFO] connection open
+2026-06-07 18:55:30,412 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 18:55:30,414 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 18:55:30,415 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 18:55:30,420 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 18:58:18,945 [INFO] connection closed
+2026-06-07 19:14:57,027 [INFO] connection open
+2026-06-07 19:14:57,028 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 19:14:57,030 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 19:14:57,031 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 19:14:57,036 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:16:02,701 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'Untitled.json', 'content': [{'id': 'step_v3r8wk46r', 'action': 'element.click', 'target': 'ctrl_181305986', 'friendlyName': 'Span: Wikipedia', 'payload': {}}, {'id': 'step_egpdec61t', 'action': 'element.click', 'target': 'ctrl_353773681', 'friendlyName': 'Input: search', 'payload': {}}, {'id': 'step_gcz455vg9', 'action': 'keyboard.send_keys', 'target': None, 'friendlyName': 'Key: Tab', 'payload': {'primary': 'Tab'}}, {'id': 'step_rcaso30sf', 'action': 'element.type', 'target': 'ctrl_353773681', 'friendlyName': 'Input: apple', 'payload': {'primary': 'apple'}}, {'id': 'step_niiczxk8q', 'action': 'keyboard.send_keys', 'target': None, 'friendlyName': 'Key: Tab', 'payload': {'primary': 'Tab'}}, {'id': 'step_vk5sqz0vm', 'action': 'element.click', 'target': 'ctrl_1267810713', 'friendlyName': 'I: Search', 'payload': {}}]}
+2026-06-07 19:16:04,254 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:16:34,270 [INFO] connection closed
+2026-06-07 19:33:45,649 [INFO] connection open
+2026-06-07 19:33:45,650 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 19:33:45,653 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 19:33:45,653 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 19:33:45,658 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:33:47,320 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'Untitled.json'}
+2026-06-07 19:34:17,360 [INFO] connection closed
+2026-06-07 19:34:54,611 [INFO] connection open
+2026-06-07 19:34:54,611 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 19:34:54,614 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 19:34:54,614 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 19:34:54,616 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:34:55,816 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'Untitled.json'}
+2026-06-07 19:35:25,833 [INFO] connection closed
+2026-06-07 19:43:49,830 [INFO] connection open
+2026-06-07 19:43:49,831 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 19:43:49,832 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 19:43:49,833 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 19:43:49,834 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:44:13,567 [INFO] connection closed
+2026-06-07 19:44:14,816 [INFO] connection open
+2026-06-07 19:44:14,818 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 19:44:14,822 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 19:44:14,828 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 19:44:14,830 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 19:44:51,510 [INFO] connection closed
+2026-06-07 20:53:43,195 [INFO] connection open
+2026-06-07 20:53:43,197 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 20:53:43,199 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 20:53:43,200 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 20:53:43,201 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 20:54:13,221 [INFO] connection closed
+2026-06-07 21:14:56,698 [INFO] connection open
+2026-06-07 21:14:56,699 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:14:56,701 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:14:56,702 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:14:56,703 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:15:07,750 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google 2.json'}
+2026-06-07 21:15:14,551 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'Untitled.json'}
+2026-06-07 21:15:19,333 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google_copy.json'}
+2026-06-07 21:15:35,203 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:15:47,042 [INFO] connection closed
+2026-06-07 21:15:59,448 [INFO] connection open
+2026-06-07 21:15:59,449 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:15:59,451 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:15:59,451 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:15:59,453 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:16:27,164 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:18:19,051 [INFO] connection closed
+2026-06-07 21:37:57,839 [INFO] connection open
+2026-06-07 21:37:57,839 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:37:57,841 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:37:57,842 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:37:57,843 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:38:14,354 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json', 'content': [{'id': 'step_d06i64qwu', 'action': 'element.click', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {}}, {'id': 'step_l8hti8i81', 'action': 'keyboard.send_keys', 'target': None, 'friendlyName': 'Key: Enter', 'payload': {'primary': 'Enter'}}, {'id': 'step_3li1irkse', 'action': 'element.type', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {'primary': 'apples'}}]}
+2026-06-07 21:38:14,362 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:38:19,552 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:38:26,296 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:38:32,839 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:38:38,609 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:38:47,679 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:38:49,583 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:39:42,528 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google 2.json'}
+2026-06-07 21:40:20,480 [INFO] connection closed
+2026-06-07 21:47:57,784 [INFO] connection open
+2026-06-07 21:47:57,784 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:47:57,786 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:47:57,787 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:47:57,788 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:48:27,207 [INFO] connection closed
+2026-06-07 21:48:38,264 [INFO] connection open
+2026-06-07 21:48:38,265 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:48:38,267 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:48:38,267 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:48:38,268 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:49:09,658 [INFO] connection closed
+2026-06-07 21:51:52,901 [INFO] connection open
+2026-06-07 21:51:52,902 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 21:51:52,904 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 21:51:52,904 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 21:51:52,906 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:51:58,482 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:52:00,985 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:52:15,146 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 21:52:20,714 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json', 'content': {'boundDomain': 'www.google.com', 'steps': [{'id': 'step_d06i64qwu', 'action': 'element.click', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {}}, {'id': 'step_l8hti8i81', 'action': 'keyboard.send_keys', 'target': None, 'friendlyName': 'Key: Enter', 'payload': {'primary': 'Enter'}}, {'id': 'step_3li1irkse', 'action': 'element.type', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {'primary': 'apples'}}]}}
+2026-06-07 21:52:22,364 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 21:53:23,122 [INFO] connection closed
+2026-06-07 22:19:36,598 [INFO] connection open
+2026-06-07 22:19:36,601 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 22:19:36,602 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 22:19:36,602 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 22:19:36,604 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:19:37,798 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:19:44,990 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json'}
+2026-06-07 22:20:13,933 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'AutoSave_2026-06-07-16-38-14.json', 'content': {'boundDomain': 'www.google.com', 'steps': [{'id': 'step_d06i64qwu', 'action': 'element.click', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {}}, {'id': 'step_3li1irkse', 'action': 'element.type', 'target': 'ctrl_30877699', 'friendlyName': 'Textarea: Search', 'payload': {'primary': 'apples'}}, {'id': 'step_l8hti8i81', 'action': 'keyboard.send_keys', 'target': None, 'friendlyName': 'Key: Enter', 'payload': {'primary': 'Enter'}}]}}
+2026-06-07 22:20:15,224 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:20:49,612 [INFO] [Inbound] Received Command: LOAD_WORKFLOW | Payload: {'filename': 'search apple on google.json'}
+2026-06-07 22:20:59,365 [INFO] [Inbound] Received Command: SAVE_WORKFLOW | Payload: {'filename': 'search apple on google.json', 'content': {'boundDomain': 'www.google.com', 'steps': [{'id': 'step_cvabu8kmw', 'action': 'element.type', 'target': '[name=q]', 'payload': {'primary': 'apple'}, 'friendlyName': None}, {'id': 'step_prtp00ebt', 'action': 'element.click', 'target': '[name=btnK]', 'payload': {}, 'friendlyName': None}]}}
+2026-06-07 22:21:00,784 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:21:50,858 [INFO] connection closed
+2026-06-07 22:42:28,465 [INFO] connection open
+2026-06-07 22:42:28,466 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 22:42:28,468 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 22:42:28,468 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 22:42:28,471 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:42:29,405 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:43:21,190 [INFO] connection closed
+2026-06-07 22:45:06,500 [INFO] connection open
+2026-06-07 22:45:06,500 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-07 22:45:06,502 [INFO] [Inbound] Received Command: AUTH | Payload: {'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-07 22:45:06,503 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-07 22:45:06,504 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:45:07,647 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
+2026-06-07 22:46:11,870 [INFO] connection closed

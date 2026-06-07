@@ -1,0 +1,50 @@
+[
+    {
+        "id": "step_v3r8wk46r",
+        "action": "element.click",
+        "target": "ctrl_181305986",
+        "friendlyName": "Span: Wikipedia",
+        "payload": {}
+    },
+    {
+        "id": "step_egpdec61t",
+        "action": "element.click",
+        "target": "ctrl_353773681",
+        "friendlyName": "Input: search",
+        "payload": {}
+    },
+    {
+        "id": "step_gcz455vg9",
+        "action": "keyboard.send_keys",
+        "target": null,
+        "friendlyName": "Key: Tab",
+        "payload": {
+            "primary": "Tab"
+        }
+    },
+    {
+        "id": "step_rcaso30sf",
+        "action": "element.type",
+        "target": "ctrl_353773681",
+        "friendlyName": "Input: apple",
+        "payload": {
+            "primary": "apple"
+        }
+    },
+    {
+        "id": "step_niiczxk8q",
+        "action": "keyboard.send_keys",
+        "target": null,
+        "friendlyName": "Key: Tab",
+        "payload": {
+            "primary": "Tab"
+        }
+    },
+    {
+        "id": "step_vk5sqz0vm",
+        "action": "element.click",
+        "target": "ctrl_1267810713",
+        "friendlyName": "I: Search",
+        "payload": {}
+    }
+]
