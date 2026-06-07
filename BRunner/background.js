@@ -632,9 +632,11 @@ async function runWorkflowEngine(workflowData, port) {
     }
 
     // --- VARIABLE INJECTION & EXECUTION (Standard DOM Actions) ---
+
+    // --- Standard DOM Actions via Content Script ---
     if (targetTabId) {
       try {
-        // 1. Inject any stored variables into the payload before executing
+        // 1. Inject stored variables into the payload
         const processedStep = {
           ...step,
           payload: injectVariables(
@@ -643,15 +645,22 @@ async function runWorkflowEngine(workflowData, port) {
           ),
         };
 
-        // 2. Send to Content Script
+        // 2. Add the Target Resolver logic
+        // The Content Script needs to know HOW to use the target based on its type
+        const executionPayload = {
+          ...processedStep,
+          selectorType: step.targetType || "css_selector", // Defaults to existing behavior
+        };
+
+        // 3. Send to Content Script
         const response = await chrome.tabs.sendMessage(targetTabId, {
           type: "EXECUTE_STEP",
-          payload: processedStep,
+          payload: executionPayload,
         });
 
         console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
 
-        // 3. Handle Variable Extraction Storage
+        // 4. Handle Variable Extraction Storage
         if (
           step.action === "element.extract" &&
           response &&
@@ -679,10 +688,59 @@ async function runWorkflowEngine(workflowData, port) {
           `[BRunner Brain] Failed to communicate with Tab ${targetTabId}.`,
         );
       }
-    } else {
-      console.error("[BRunner Brain] No active tab to execute action on.");
-      break;
     }
+
+    // if (targetTabId) {
+    //   try {
+    //     // 1. Inject any stored variables into the payload before executing
+    //     const processedStep = {
+    //       ...step,
+    //       payload: injectVariables(
+    //         step.payload,
+    //         OrchestrationEngine.VariableRegistry,
+    //       ),
+    //     };
+
+    //     // 2. Send to Content Script
+    //     const response = await chrome.tabs.sendMessage(targetTabId, {
+    //       type: "EXECUTE_STEP",
+    //       payload: processedStep,
+    //     });
+
+    //     console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
+
+    //     // 3. Handle Variable Extraction Storage
+    //     if (
+    //       step.action === "element.extract" &&
+    //       response &&
+    //       response.status === "success"
+    //     ) {
+    //       const varName = step.payload.primary;
+    //       if (varName) {
+    //         OrchestrationEngine.VariableRegistry[varName] =
+    //           response.extractedData;
+    //         console.log(
+    //           `[BRunner Brain] Saved Variable: '${varName}' = '${response.extractedData}'`,
+    //         );
+    //       }
+    //     }
+
+    //     if (response && response.status === "failed") {
+    //       console.error(
+    //         `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
+    //         response.reason,
+    //       );
+    //       break;
+    //     }
+    //   } catch (error) {
+    //     console.error(
+    //       `[BRunner Brain] Failed to communicate with Tab ${targetTabId}.`,
+    //     );
+    //   }
+    // } else {
+    //   console.error("[BRunner Brain] No active tab to execute action on.");
+    //   break;
+    // }
 
     // Brief human-like pause between actions
     await new Promise((res) => setTimeout(res, 500));

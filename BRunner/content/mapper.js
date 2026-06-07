@@ -276,18 +276,30 @@ class BRunnerExecutor {
   // --------------------------------------------------------------------------
   // The Smart Resolution Engine (Translates human inputs to physical nodes)
   // --------------------------------------------------------------------------
-  resolveTarget(userTarget) {
+  resolveTarget(userTarget, selectorType) {
     if (!userTarget) return { physicalElement: null, matchedNodeData: null };
     let physicalElement = null;
 
-    // Strategy 1: Direct CSS Selector Match (IDs, Classes, structured queries)
-    try {
-      physicalElement = document.querySelector(userTarget);
-    } catch (e) {
-      /* Ignore invalid selector strings */
+    // --- NEW: Priority 0 (Stable Identifier Match) ---
+    if (selectorType && ["id", "name", "attribute"].includes(selectorType)) {
+      try {
+        physicalElement = document.querySelector(userTarget);
+      } catch (e) {
+        /* Ignore invalid selectors */
+      }
     }
 
-    // Strategy 2: Fuzzy Text / Attribute Match (If Strategy 1 fails)
+    // --- EXISTING STRATEGIES (Only if Priority 0 didn't find it) ---
+    if (!physicalElement) {
+      // Strategy 1: Legacy CSS Selector Match
+      try {
+        physicalElement = document.querySelector(userTarget);
+      } catch (e) {
+        /* Ignore invalid selectors */
+      }
+    }
+
+    // Strategy 2: Fuzzy Text / Attribute Match
     if (!physicalElement) {
       const elements = this.mapper.getInteractableElements();
       const lowerTarget = userTarget.toLowerCase();
@@ -308,14 +320,13 @@ class BRunnerExecutor {
       });
     }
 
+    // --- Mapping Logic (Unchanged) ---
     if (physicalElement) {
-      // Map it back to our internal tree so we have accurate JIT occlusion data
       const internalId = this.mapper.generateDeterministicId(physicalElement);
       const matchedNodeData = this.mapper.controlsTree.find(
         (c) => c.internalId === internalId,
       );
 
-      // If we found the physical element but our map missed it, we generate temporary node data
       if (!matchedNodeData) {
         const rect = physicalElement.getBoundingClientRect();
         return {
@@ -367,6 +378,7 @@ class BRunnerExecutor {
       attempt++;
       const { matchedNodeData, physicalElement } = this.resolveTarget(
         stepPayload.target,
+        stepPayload.selectorType,
       );
 
       if (!physicalElement) {
@@ -488,6 +500,189 @@ class BRunnerExecutor {
 // PHASE 4 & 5: Intelligent Macro Recorder (With Friendly Naming & Keystrokes)
 // ============================================================================
 
+// class BRunnerRecorder {
+//   constructor(mapperInstance) {
+//     this.mapper = mapperInstance;
+//     this.isRecording = false;
+//     this.overlay = this.createOverlay();
+//     this.setupListeners();
+//   }
+
+//   createOverlay() {
+//     const div = document.createElement("div");
+//     div.style.position = "fixed";
+//     div.style.pointerEvents = "none";
+//     div.style.zIndex = "2147483647";
+//     div.style.border = "2px solid #ef4444";
+//     div.style.backgroundColor = "rgba(239, 68, 68, 0.15)";
+//     div.style.transition = "all 0.1s ease-out";
+//     div.style.display = "none";
+
+//     setInterval(() => {
+//       if (!document.body.contains(div)) document.body.appendChild(div);
+//     }, 1000);
+
+//     return div;
+//   }
+
+//   // --- NEW: Phase 5.1 Friendly Naming Engine ---
+//   generateFriendlyName(el) {
+//     const tag = el.tagName.toLowerCase();
+//     // Cascade through attributes to find the most human-readable descriptor
+//     let descriptor =
+//       el.getAttribute("placeholder") ||
+//       el.getAttribute("aria-label") ||
+//       el.innerText?.trim().substring(0, 25) ||
+//       el.value?.substring(0, 25) ||
+//       el.getAttribute("name") ||
+//       el.id ||
+//       "Element";
+
+//     // Clean up excessive whitespace/newlines
+//     descriptor = descriptor.replace(/\s+/g, " ").trim();
+//     return `${tag.charAt(0).toUpperCase() + tag.slice(1)}: ${descriptor}`;
+//   }
+
+//   // Add this method to BRunnerRecorder class in content/mapper.js
+//   getStableIdentifier(el) {
+//     // Priority 1: ID
+//     if (el.id && document.getElementById(el.id) === el) {
+//       return { type: "id", value: `#${el.id}` };
+//     }
+//     // Priority 2: Name
+//     if (el.name) {
+//       return { type: "name", value: `[name="${el.name}"]` };
+//     }
+//     // Priority 3: Aria-label or specialized attribute
+//     const stableAttr =
+//       el.getAttribute("aria-label") || el.getAttribute("data-testid");
+//     if (stableAttr) {
+//       return { type: "attribute", value: `[aria-label="${stableAttr}"]` };
+//     }
+
+//     // Fallback: Internal DOM Hash (for visual/CDP operations)
+//     return {
+//       type: "fallback_hash",
+//       value: this.mapper.generateDeterministicId(el),
+//     };
+//   }
+
+//   setupListeners() {
+//     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+//       if (request.type === "SET_RECORDING_STATE") {
+//         this.isRecording = request.isRecording;
+//         console.log(
+//           `[BRunner Recorder] Recording mode: ${this.isRecording ? "ACTIVE 🔴" : "OFF ⚪"}`,
+//         );
+//         if (!this.isRecording) this.overlay.style.display = "none";
+//         sendResponse({ status: "acknowledged" });
+//       }
+//     });
+
+//     window.addEventListener(
+//       "mouseover",
+//       (e) => {
+//         if (!this.isRecording) return;
+//         const rect = e.target.getBoundingClientRect();
+//         this.overlay.style.display = "block";
+//         this.overlay.style.top = `${rect.top}px`;
+//         this.overlay.style.left = `${rect.left}px`;
+//         this.overlay.style.width = `${rect.width}px`;
+//         this.overlay.style.height = `${rect.height}px`;
+//       },
+//       true,
+//     );
+
+//     // 1. Intercept Clicks
+//     window.addEventListener(
+//       "click",
+//       (e) => {
+//         if (!this.isRecording) return;
+
+//         this.overlay.style.backgroundColor = "rgba(34, 197, 94, 0.4)";
+//         setTimeout(
+//           () =>
+//             (this.overlay.style.backgroundColor = "rgba(239, 68, 68, 0.15)"),
+//           200,
+//         );
+//         const identifier = this.getStableIdentifier(e.target);
+//         this.dispatchRecordedStep({
+//           action: "element.click",
+//           target: identifier.value, // Now saved as #id or [name=...]
+//           targetType: identifier.type, // We can store this to know how to resolve it later
+//           friendlyName: this.generateFriendlyName(e.target),
+//           payload: {},
+//           // const targetId = this.mapper.generateDeterministicId(e.target);
+//           // this.dispatchRecordedStep({
+//           //   action: "element.click",
+//           //   target: targetId,
+//           //   friendlyName: this.generateFriendlyName(e.target), // Inject friendly name
+//           //   payload: {},
+//         });
+//       },
+//       true,
+//     );
+
+//     // 2. Intercept Typing / Dropdowns
+//     window.addEventListener(
+//       "change",
+//       (e) => {
+//         if (!this.isRecording) return;
+
+//         const targetId = this.mapper.generateDeterministicId(e.target);
+//         const actionType =
+//           e.target.tagName === "SELECT" ? "element.select" : "element.type";
+
+//         this.dispatchRecordedStep({
+//           action: actionType,
+//           target: targetId,
+//           friendlyName: this.generateFriendlyName(e.target), // Inject friendly name
+//           payload: { primary: e.target.value },
+//         });
+//       },
+//       true,
+//     );
+
+//     // --- NEW: Phase 5.2 Functional Keystroke Capture ---
+//     window.addEventListener(
+//       "keydown",
+//       (e) => {
+//         if (!this.isRecording) return;
+
+//         // We only care about functional keys, standard typing is caught by 'change' above
+//         const functionalKeys = [
+//           "Enter",
+//           "Escape",
+//           "Tab",
+//           "ArrowUp",
+//           "ArrowDown",
+//         ];
+//         if (functionalKeys.includes(e.key)) {
+//           this.dispatchRecordedStep({
+//             action: "keyboard.send_keys",
+//             target: null,
+//             friendlyName: `Key: ${e.key}`,
+//             payload: { primary: e.key },
+//           });
+//         }
+//       },
+//       true,
+//     );
+//   }
+
+//   dispatchRecordedStep(stepTemplate) {
+//     console.log("[BRunner Recorder] Captured step:", stepTemplate);
+//     chrome.runtime.sendMessage({
+//       type: "RECORDED_STEP",
+//       payload: { step: stepTemplate },
+//     });
+//   }
+// }
+
+// ============================================================================
+// PHASE 5.1 & 5.2: Intelligent Macro Recorder (Combined Logic)
+// ============================================================================
+
 class BRunnerRecorder {
   constructor(mapperInstance) {
     this.mapper = mapperInstance;
@@ -496,6 +691,7 @@ class BRunnerRecorder {
     this.setupListeners();
   }
 
+  // Visual highlight box
   createOverlay() {
     const div = document.createElement("div");
     div.style.position = "fixed";
@@ -513,10 +709,9 @@ class BRunnerRecorder {
     return div;
   }
 
-  // --- NEW: Phase 5.1 Friendly Naming Engine ---
+  // UX: Readable name for Studio UI
   generateFriendlyName(el) {
     const tag = el.tagName.toLowerCase();
-    // Cascade through attributes to find the most human-readable descriptor
     let descriptor =
       el.getAttribute("placeholder") ||
       el.getAttribute("aria-label") ||
@@ -525,19 +720,33 @@ class BRunnerRecorder {
       el.getAttribute("name") ||
       el.id ||
       "Element";
-
-    // Clean up excessive whitespace/newlines
     descriptor = descriptor.replace(/\s+/g, " ").trim();
     return `${tag.charAt(0).toUpperCase() + tag.slice(1)}: ${descriptor}`;
+  }
+
+  // EXECUTION: Robust address for Orchestration Engine
+  getStableIdentifier(el) {
+    if (el.id && document.getElementById(el.id) === el) {
+      return { type: "id", value: `#${el.id}` };
+    }
+    if (el.name) {
+      return { type: "name", value: `[name="${el.name}"]` };
+    }
+    const stableAttr =
+      el.getAttribute("aria-label") || el.getAttribute("data-testid");
+    if (stableAttr) {
+      return { type: "attribute", value: `[aria-label="${stableAttr}"]` };
+    }
+    return {
+      type: "fallback_hash",
+      value: this.mapper.generateDeterministicId(el),
+    };
   }
 
   setupListeners() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.type === "SET_RECORDING_STATE") {
         this.isRecording = request.isRecording;
-        console.log(
-          `[BRunner Recorder] Recording mode: ${this.isRecording ? "ACTIVE 🔴" : "OFF ⚪"}`,
-        );
         if (!this.isRecording) this.overlay.style.display = "none";
         sendResponse({ status: "acknowledged" });
       }
@@ -557,65 +766,51 @@ class BRunnerRecorder {
       true,
     );
 
-    // 1. Intercept Clicks
+    // Click Capture
     window.addEventListener(
       "click",
       (e) => {
         if (!this.isRecording) return;
 
-        this.overlay.style.backgroundColor = "rgba(34, 197, 94, 0.4)";
-        setTimeout(
-          () =>
-            (this.overlay.style.backgroundColor = "rgba(239, 68, 68, 0.15)"),
-          200,
-        );
-
-        const targetId = this.mapper.generateDeterministicId(e.target);
+        const identifier = this.getStableIdentifier(e.target);
         this.dispatchRecordedStep({
           action: "element.click",
-          target: targetId,
-          friendlyName: this.generateFriendlyName(e.target), // Inject friendly name
+          target: identifier.value,
+          targetType: identifier.type,
+          friendlyName: this.generateFriendlyName(e.target),
           payload: {},
         });
       },
       true,
     );
 
-    // 2. Intercept Typing / Dropdowns
+    // Typing/Change Capture
     window.addEventListener(
       "change",
       (e) => {
         if (!this.isRecording) return;
 
-        const targetId = this.mapper.generateDeterministicId(e.target);
+        const identifier = this.getStableIdentifier(e.target);
         const actionType =
           e.target.tagName === "SELECT" ? "element.select" : "element.type";
 
         this.dispatchRecordedStep({
           action: actionType,
-          target: targetId,
-          friendlyName: this.generateFriendlyName(e.target), // Inject friendly name
+          target: identifier.value,
+          targetType: identifier.type,
+          friendlyName: this.generateFriendlyName(e.target),
           payload: { primary: e.target.value },
         });
       },
       true,
     );
 
-    // --- NEW: Phase 5.2 Functional Keystroke Capture ---
+    // Keydown Capture
     window.addEventListener(
       "keydown",
       (e) => {
         if (!this.isRecording) return;
-
-        // We only care about functional keys, standard typing is caught by 'change' above
-        const functionalKeys = [
-          "Enter",
-          "Escape",
-          "Tab",
-          "ArrowUp",
-          "ArrowDown",
-        ];
-        if (functionalKeys.includes(e.key)) {
+        if (["Enter", "Escape", "Tab"].includes(e.key)) {
           this.dispatchRecordedStep({
             action: "keyboard.send_keys",
             target: null,
@@ -629,7 +824,6 @@ class BRunnerRecorder {
   }
 
   dispatchRecordedStep(stepTemplate) {
-    console.log("[BRunner Recorder] Captured step:", stepTemplate);
     chrome.runtime.sendMessage({
       type: "RECORDED_STEP",
       payload: { step: stepTemplate },
