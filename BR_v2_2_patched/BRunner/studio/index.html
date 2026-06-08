@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>BRunner Studio IDE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="connection-status" class="status-bar">
+        Status: <span id="status-text" class="status-disconnected">Connecting...</span>
+        <button id="btn-reconnect" class="micro-btn">Retry Connection</button>
+    </div>
+    <header>
+        <div class="logo">BRunner <span>Studio</span></div>
+        <div class="header-controls">
+            <button id="btn-record" class="danger-btn">🔴 Record Actions</button>
+            <button id="btn-run" class="primary-btn">▶ Run Workflow</button>
+            <button id="btn-toggle-sidebar" class="secondary-btn">🗂️ Toggle Manager</button>
+        </div>
+    </header>
+
+    <main>
+        <aside class="palette">
+            <h3>Actions</h3>
+            <div class="action-btn" data-action="browser.navigate">🌐 Navigate URL</div>
+            <div class="action-btn" data-action="element.click">🖱️ Click Element</div>
+            <div class="action-btn" data-action="element.type">⌨️ Type Text</div>
+            <div class="action-btn" data-action="element.extract">✂️ Extract Data</div>
+            <div class="action-btn" data-action="keyboard.send_keys">🎹 Send Keystroke</div>
+            <div class="action-btn" data-action="element.focus">🎯 Focus Element</div>
+            <div class="action-btn" data-action="element.select">📋 Select Dropdown</div>
+            <div class="action-btn" data-action="element.toggle">☑️ Toggle (Check/Radio)</div>
+            <div class="action-btn" data-action="logic.wait">⏳ Wait / Pause</div>
+        </aside>
+
+        <section class="canvas" id="workflow-canvas">
+            <div class="empty-state">Click an action on the left to start building.</div>
+        </section>
+
+        <aside class="workflow-manager" id="workflow-sidebar">
+            <div class="manager-header">
+                <input type="text" id="workflow-name" placeholder="Workflow Name" value="Untitled"
+                    style="margin-bottom: 8px;">
+                <input type="text" id="workflow-domain" placeholder="Bound Domain (e.g. github.com)">
+            </div>
+
+            <div class="manager-toolbar">
+                <button id="btn-new" class="icon-btn" title="Create New">📄 New</button>
+                <button id="btn-save" class="icon-btn" title="Save to OS">💾 Save</button>
+                <button id="btn-refresh" class="icon-btn" title="Refresh List">🔄 Refresh</button>
+            </div>
+
+            <div class="workflow-list" id="workflow-list">
+                <div class="empty-state" style="font-size: 0.8rem; margin-top: 1rem;">
+                    Click Refresh to load OS files.
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

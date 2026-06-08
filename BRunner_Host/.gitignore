@@ -1,0 +1,6 @@
+BRunner_Host/Workflows/*.json
+BRunner_Host/*.log
+BRunner_Host/brunner_config.json
+__pycache__/
+*.pyc
+.DS_Store

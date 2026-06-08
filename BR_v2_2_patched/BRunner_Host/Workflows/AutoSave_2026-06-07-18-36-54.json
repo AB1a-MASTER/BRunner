@@ -1,0 +1,31 @@
+{
+    "boundDomain": "",
+    "steps": [
+        {
+            "id": "step_p9k01menj",
+            "action": "element.click",
+            "target": "#APjFqb",
+            "targetType": "id",
+            "friendlyName": "Textarea: Search",
+            "payload": {}
+        },
+        {
+            "id": "step_4gj44u8yl",
+            "action": "element.type",
+            "target": "#APjFqb",
+            "targetType": "id",
+            "friendlyName": "Textarea: Search",
+            "payload": {
+                "primary": "gpt"
+            }
+        },
+        {
+            "id": "step_9ho8tcvpq",
+            "action": "element.click",
+            "target": "[name=\"btnK\"]",
+            "targetType": "name",
+            "friendlyName": "Input: Google Search",
+            "payload": {}
+        }
+    ]
+}

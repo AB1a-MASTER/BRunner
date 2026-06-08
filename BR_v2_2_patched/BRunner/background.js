@@ -152,7 +152,7 @@ const HardwareSimulator = {
     } finally {
       await this.detachDebugger(target);
     }
-  },
+  }, // <--- CRITICAL FIX: THIS COMMA WAS MISSING
 
   async executePhysicalKeystroke(tabId, keyToPress) {
     const target = await this.attachDebugger(tabId);
@@ -181,6 +181,9 @@ const HardwareSimulator = {
   },
 };
 
+// ============================================================================
+// PHASE 6: The Native OS Bridge (WebSocket Client)
+// ============================================================================
 // ============================================================================
 // PHASE 6: The Native OS Bridge (WebSocket Client)
 // ============================================================================
@@ -315,50 +318,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     .catch(() => {});
 });
 
-// Helper to evaluate an active tab's URL state and command the sidebar view
-// Smart context evaluator: Forces expansion unless strictly on the Studio tab
-async function syncSidebarContext(tabId) {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    const studioUrl = chrome.runtime.getURL("studio/index.html");
-
-    // If the tab exists, has a URL, and that URL matches our internal Studio tab path
-    if (tab && tab.url && tab.url.startsWith(studioUrl)) {
-      chrome.runtime.sendMessage({ type: "COLLAPSE_SIDEBAR" }).catch(() => {});
-    } else {
-      // Treat every other scenario (blank pages, search tabs, websites) as an expansion trigger
-      chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
-    }
-  } catch (err) {
-    // If Chrome fails to grab tab parameters during high-speed switches, fall back safely to normal view
-    chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
-  }
-}
-
-// Observer A: Triggers when the user clicks/switches tabs
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  syncSidebarContext(activeInfo.tabId);
-});
-
-// Observer B: Triggers when a webpage finishes loading/navigating
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete") {
-    syncSidebarContext(tabId);
-  }
-});
-
-// Observer C: Triggers when switching application window focus entirely
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
-  const activeTabs = await chrome.tabs.query({
-    active: true,
-    windowId: windowId,
-  });
-  if (activeTabs.length > 0) {
-    syncSidebarContext(activeTabs[0].id);
-  }
-});
-
 // ============================================================================
 // 3. Cross-Context Message Pipeline (Updated for Phase 4)
 // ============================================================================
@@ -368,6 +327,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: "success", received: true });
     return false;
   }
+
+  // Helper to evaluate an active tab's URL state and command the sidebar view
+  // Smart context evaluator: Forces expansion unless strictly on the Studio tab
+  async function syncSidebarContext(tabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const studioUrl = chrome.runtime.getURL("studio/index.html");
+
+      // If the tab exists, has a URL, and that URL matches our internal Studio tab path
+      if (tab && tab.url && tab.url.startsWith(studioUrl)) {
+        chrome.runtime
+          .sendMessage({ type: "COLLAPSE_SIDEBAR" })
+          .catch(() => {});
+      } else {
+        // Treat every other scenario (blank pages, search tabs, websites) as an expansion trigger
+        chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
+      }
+    } catch (err) {
+      // If Chrome fails to grab tab parameters during high-speed switches, fall back safely to normal view
+      chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
+    }
+  }
+
+  // Observer A: Triggers when the user clicks/switches tabs
+  chrome.tabs.onActivated.addListener((activeInfo) => {
+    syncSidebarContext(activeInfo.tabId);
+  });
+
+  // Observer B: Triggers when a webpage finishes loading/navigating
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === "complete") {
+      syncSidebarContext(tabId);
+    }
+  });
+
+  // Observer C: Triggers when switching application window focus entirely
+  chrome.windows.onFocusChanged.addListener(async (windowId) => {
+    if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+    const activeTabs = await chrome.tabs.query({
+      active: true,
+      windowId: windowId,
+    });
+    if (activeTabs.length > 0) {
+      syncSidebarContext(activeTabs[0].id);
+    }
+  });
 
   // Intercept Studio loading to minimize the browser Sidebar layout
   if (request.type === "STUDIO_LOADED") {
@@ -519,6 +524,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // --- MACRO RECORDER ROUTING ---
 
   // 1. Sidebar/Studio tells Background to toggle recording state
+  // if (request.type === "TOGGLE_RECORDING") {
+  //   const isTurningOn = request.payload.isRecording;
+
+  //   if (isTurningOn) {
+  //     OrchestrationEngine.RecordingBuffer = []; // Clear memory on start
+  //   } else {
+  //     // Turning OFF: Auto-save if buffer has data
+  //     if (OrchestrationEngine.RecordingBuffer.length > 0) {
+  //       // Generate a clean timestamp for the filename
+  //       const timestamp = new Date()
+  //         .toISOString()
+  //         .replace(/[:.T]/g, "-")
+  //         .slice(0, 19);
+  //       const filename = `AutoSave_${timestamp}.json`;
+
+  //       NativeBridge.saveWorkflow(filename, {
+  //         boundDomain: "",
+  //         steps: OrchestrationEngine.RecordingBuffer,
+  //       })
+  //         .then(() => {
+  //           console.log(`[BRunner Brain] Auto-saved recording as ${filename}`);
+  //           // Tell the Sidebar and Studio to refresh their UI lists
+  //           chrome.runtime
+  //             .sendMessage({ type: "REFRESH_WORKFLOW_LISTS" })
+  //             .catch(() => {});
+  //         })
+  //         .catch((e) => console.error("Auto-save failed", e));
+  //     }
+  //   }
+
+  //   // Broadcast the recording state to ALL tabs
+  //   chrome.tabs.query({}, (tabs) => {
+  //     tabs.forEach((tab) => {
+  //       chrome.tabs
+  //         .sendMessage(tab.id, {
+  //           type: "SET_RECORDING_STATE",
+  //           isRecording: isTurningOn,
+  //         })
+  //         .catch(() => {
+  //           /* Ignore tabs that restrict injected scripts */
+  //         });
+  //     });
+  //     sendResponse({ status: "success", broadcasted: true });
+  //   });
+  //   return true;
+  // }
+
   if (request.type === "GET_RECORDING_STATE") {
     sendResponse({
       status: "success",
@@ -637,6 +689,7 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "brunner-studio") {
     console.log("[BRunner Brain] Studio UI Connected.");
 
+    // Add this to your onConnect listener in background.js
     port.onMessage.addListener(async (msg) => {
       if (msg.type === "CHECK_BRIDGE_STATUS") {
         // Attempt to connect if not already
@@ -648,7 +701,7 @@ chrome.runtime.onConnect.addListener((port) => {
         console.log(
           `[BRunner Brain] Starting Workflow: ${msg.payload.workflow_name}`,
         );
-        //Pass the entire payload (which includes boundDomain and steps)
+        // CRITICAL FIX: Pass the entire payload (which includes boundDomain and steps)
         await runWorkflowEngine(msg.payload, port);
       }
     });
@@ -824,6 +877,58 @@ async function runWorkflowEngine(workflowData, port) {
       }
     }
 
+    // if (targetTabId) {
+    //   try {
+    //     // 1. Inject any stored variables into the payload before executing
+    //     const processedStep = {
+    //       ...step,
+    //       payload: injectVariables(
+    //         step.payload,
+    //         OrchestrationEngine.VariableRegistry,
+    //       ),
+    //     };
+
+    //     // 2. Send to Content Script
+    //     const response = await chrome.tabs.sendMessage(targetTabId, {
+    //       type: "EXECUTE_STEP",
+    //       payload: processedStep,
+    //     });
+
+    //     console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
+
+    //     // 3. Handle Variable Extraction Storage
+    //     if (
+    //       step.action === "element.extract" &&
+    //       response &&
+    //       response.status === "success"
+    //     ) {
+    //       const varName = step.payload.primary;
+    //       if (varName) {
+    //         OrchestrationEngine.VariableRegistry[varName] =
+    //           response.extractedData;
+    //         console.log(
+    //           `[BRunner Brain] Saved Variable: '${varName}' = '${response.extractedData}'`,
+    //         );
+    //       }
+    //     }
+
+    //     if (response && response.status === "failed") {
+    //       console.error(
+    //         `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
+    //         response.reason,
+    //       );
+    //       break;
+    //     }
+    //   } catch (error) {
+    //     console.error(
+    //       `[BRunner Brain] Failed to communicate with Tab ${targetTabId}.`,
+    //     );
+    //   }
+    // } else {
+    //   console.error("[BRunner Brain] No active tab to execute action on.");
+    //   break;
+    // }
+
     // Brief human-like pause between actions
     await new Promise((res) => setTimeout(res, 500));
   }
@@ -831,3 +936,272 @@ async function runWorkflowEngine(workflowData, port) {
   console.log("[BRunner Brain] Workflow Execution Finished.");
   if (port) port.postMessage({ type: "WORKFLOW_COMPLETE" });
 }
+
+// async function runWorkflowEngine(workflowData, port) {
+//   const { steps, boundDomain } = workflowData;
+//   let targetTabId = null;
+
+//   // --- PHASE 6.2: DOMAIN BINDING & AUTO-NAVIGATION ---
+//   const activeTabs = await chrome.tabs.query({
+//     active: true,
+//     lastFocusedWindow: true,
+//   });
+//   let currentActiveTab = activeTabs.length > 0 ? activeTabs[0] : null;
+
+//   if (boundDomain && boundDomain.trim() !== "") {
+//     console.log(`[BRunner Brain] Workflow requires domain: ${boundDomain}`);
+//     let needsNav = true;
+
+//     if (currentActiveTab && currentActiveTab.url) {
+//       try {
+//         const urlObj = new URL(currentActiveTab.url);
+//         // Strip http:// and www. to perform a clean match
+//         const cleanDomain = boundDomain.replace(/^(https?:\/\/)?(www\.)?/, "");
+//         if (urlObj.hostname.includes(cleanDomain)) {
+//           needsNav = false;
+//           targetTabId = currentActiveTab.id;
+//           console.log(`[BRunner Brain] Already on bound domain. Proceeding.`);
+//         }
+//       } catch (e) {
+//         /* ignore invalid urls */
+//       }
+//     }
+
+//     if (needsNav) {
+//       console.log(`[BRunner Brain] Not on bound domain. Auto-navigating...`);
+//       const targetUrl = boundDomain.startsWith("http")
+//         ? boundDomain
+//         : "https://" + boundDomain;
+//       const newTab = await chrome.tabs.create({ url: targetUrl, active: true });
+//       targetTabId = newTab.id;
+
+//       // Wait for the new tab to fully load
+//       await new Promise((resolve) => {
+//         chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+//           if (tabId === targetTabId && info.status === "complete") {
+//             chrome.tabs.onUpdated.removeListener(listener);
+//             setTimeout(resolve, 1000);
+//           }
+//         });
+//       });
+//     }
+//   } else {
+//     // If no domain is bound, default to whatever tab the user is currently looking at
+//     if (currentActiveTab) targetTabId = currentActiveTab.id;
+//   }
+
+//   // --- EXECUTE THE STEPS ---
+//   for (let i = 0; i < steps.length; i++) {
+//     const step = steps[i];
+//     console.log(`[BRunner Brain] Executing Step ${i + 1}: ${step.action}`);
+
+//     // Special Case: Manual Navigation Nodes
+//     if (step.action === "browser.navigate") {
+//       let targetUrl = step.payload.primary.trim();
+//       if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://"))
+//         targetUrl = "https://" + targetUrl;
+
+//       // if (targetTabId) {
+//       //   await chrome.tabs.update(targetTabId, { url: targetUrl });
+//       // } else {
+//       //   const newTab = await chrome.tabs.create({
+//       //     url: targetUrl,
+//       //     active: true,
+//       //   });
+//       //   targetTabId = newTab.id;
+//       // }
+
+//       // --- VARIABLE INJECTION & EXECUTION ---
+//       if (targetTabId) {
+//         try {
+//           // 1. Inject any stored variables into the payload before executing
+//           const processedStep = {
+//             ...step,
+//             payload: injectVariables(
+//               step.payload,
+//               OrchestrationEngine.VariableRegistry,
+//             ),
+//           };
+
+//           // 2. Send to Content Script
+//           const response = await chrome.tabs.sendMessage(targetTabId, {
+//             type: "EXECUTE_STEP",
+//             payload: processedStep,
+//           });
+
+//           console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
+
+//           // 3. Handle Variable Extraction Storage
+//           if (
+//             step.action === "element.extract" &&
+//             response &&
+//             response.status === "success"
+//           ) {
+//             const varName = step.payload.primary;
+//             if (varName) {
+//               OrchestrationEngine.VariableRegistry[varName] =
+//                 response.extractedData;
+//               console.log(
+//                 `[BRunner Brain] Saved Variable: '${varName}' = '${response.extractedData}'`,
+//               );
+//             }
+//           }
+
+//           if (response && response.status === "failed") {
+//             console.error(
+//               `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
+//               response.reason,
+//             );
+//             break;
+//           }
+//         } catch (error) {
+//           console.error(
+//             `[BRunner Brain] Failed to communicate with Tab ${targetTabId}.`,
+//           );
+//         }
+//       } else {
+//         console.error("[BRunner Brain] No active tab to execute action on.");
+//         break;
+//       }
+
+//       await new Promise((resolve) => {
+//         chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+//           if (tabId === targetTabId && info.status === "complete") {
+//             chrome.tabs.onUpdated.removeListener(listener);
+//             setTimeout(resolve, 1000);
+//           }
+//         });
+//       });
+//       continue;
+//     }
+
+//     // Special Case: Hard Wait
+//     if (step.action === "logic.wait") {
+//       const waitTime = parseInt(step.payload.primary) || 1000;
+//       await new Promise((res) => setTimeout(res, waitTime));
+//       continue;
+//     }
+
+//     // Standard DOM Actions via Content Script
+//     if (targetTabId) {
+//       try {
+//         const response = await chrome.tabs.sendMessage(targetTabId, {
+//           type: "EXECUTE_STEP",
+//           payload: step,
+//         });
+//         console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
+
+//         if (response && response.status === "failed") {
+//           console.error(
+//             `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
+//             response.reason,
+//           );
+//           break;
+//         }
+//       } catch (error) {
+//         console.error(
+//           `[BRunner Brain] Failed to communicate with Content Script on Tab ${targetTabId}.`,
+//         );
+//       }
+//     }
+
+//     // Brief human-like pause between actions
+//     await new Promise((res) => setTimeout(res, 500));
+//   }
+
+//   console.log("[BRunner Brain] Workflow Execution Finished.");
+//   if (port) port.postMessage({ type: "WORKFLOW_COMPLETE" });
+// }
+
+// async function runWorkflowEngine(steps, port) {
+//   let targetTabId = null;
+
+//   for (let i = 0; i < steps.length; i++) {
+//     const step = steps[i];
+//     console.log(`[BRunner Brain] Executing Step ${i + 1}: ${step.action}`);
+
+//     // Special Case: Navigation handles tab creation/updating natively
+//     if (step.action === "browser.navigate") {
+//       // --- CRITICAL FIX: URL SANITIZER ---
+//       let targetUrl = step.payload.primary.trim();
+//       if (
+//         !targetUrl.startsWith("http://") &&
+//         !targetUrl.startsWith("https://")
+//       ) {
+//         targetUrl = "https://" + targetUrl;
+//       }
+//       // -----------------------------------
+
+//       const tabs = await chrome.tabs.query({
+//         active: true,
+//         currentWindow: false,
+//       });
+
+//       if (tabs.length > 0 && tabs[0].id) {
+//         // Navigate existing active browser tab
+//         targetTabId = tabs[0].id;
+//         await chrome.tabs.update(targetTabId, { url: targetUrl }); // Use sanitized URL
+//       } else {
+//         // Create a new tab if none found
+//         const newTab = await chrome.tabs.create({
+//           url: targetUrl,
+//           active: true,
+//         }); // Use sanitized URL
+//         targetTabId = newTab.id;
+//       }
+
+//       // Wait for page to fully load before proceeding
+//       await new Promise((resolve) => {
+//         chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+//           if (tabId === targetTabId && info.status === "complete") {
+//             chrome.tabs.onUpdated.removeListener(listener);
+//             setTimeout(resolve, 1000); // Give the DOM 1 second to settle
+//           }
+//         });
+//       });
+//       continue;
+//     }
+
+//     // Special Case: Hard Wait
+//     if (step.action === "logic.wait") {
+//       const waitTime = parseInt(step.payload.primary) || 1000;
+//       await new Promise((res) => setTimeout(res, waitTime));
+//       continue;
+//     }
+
+//     // All other DOM actions are sent to the Content Script Execution Agent
+//     if (targetTabId) {
+//       try {
+//         const response = await chrome.tabs.sendMessage(targetTabId, {
+//           type: "EXECUTE_STEP",
+//           payload: step,
+//         });
+//         console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
+
+//         if (response && response.status === "failed") {
+//           console.error(
+//             `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
+//             response.reason,
+//           );
+//           break; // Stop workflow on failure
+//         }
+//       } catch (error) {
+//         console.error(
+//           `[BRunner Brain] Failed to communicate with Content Script on Tab ${targetTabId}. Is the page loaded?`,
+//         );
+//       }
+//     } else {
+//       console.error(
+//         "[BRunner Brain] No active tab to execute action on. Ensure step 1 is 'Navigate URL'.",
+//       );
+//       break;
+//     }
+
+//     // Brief human-like pause between actions
+//     await new Promise((res) => setTimeout(res, 500));
+//   }
+
+//   console.log("[BRunner Brain] Workflow Execution Finished.");
+//   // Reset the Run button in the UI
+//   port.postMessage({ type: "WORKFLOW_COMPLETE" });
+// }

@@ -46,52 +46,58 @@ function selectWorkflow(element, fileName) {
 }
 
 // 3. Search Filter Logic
-searchInput.addEventListener("keyup", (e) => {
-  const query = e.target.value.toLowerCase();
-  document.querySelectorAll(".workflow-item").forEach((item) => {
-    if (item.innerText.toLowerCase().includes(query)) {
-      item.style.display = "block";
-    } else {
-      item.style.display = "none";
-    }
+if (searchInput) {
+  searchInput.addEventListener("keyup", (e) => {
+    const query = e.target.value.toLowerCase();
+    document.querySelectorAll(".workflow-item").forEach((item) => {
+      if (item.innerText.toLowerCase().includes(query)) {
+        item.style.display = "block";
+      } else {
+        item.style.display = "none";
+      }
+    });
   });
-});
+}
 
 // 4. Execution Logic
-btnPlay.addEventListener("click", () => {
-  if (!selectedWorkflow) return;
+if (btnPlay) {
+  btnPlay.addEventListener("click", () => {
+    if (!selectedWorkflow) return;
 
-  btnPlay.innerText = "⏳ Running...";
-  btnPlay.style.background = "#d97706";
+    btnPlay.innerText = "⏳ Running...";
+    btnPlay.style.background = "#d97706";
 
-  // Request the background script to load the file from OS and execute it
-  chrome.runtime.sendMessage({
-    type: "RUN_WORKFLOW_BY_NAME",
-    payload: { filename: selectedWorkflow },
+    // Request the background script to load the file from OS and execute it
+    chrome.runtime.sendMessage({
+      type: "RUN_WORKFLOW_BY_NAME",
+      payload: { filename: selectedWorkflow },
+    });
+
+    // Reset UI after a delay (or listen for completion event)
+    setTimeout(() => {
+      btnPlay.innerText = "▶ Run Selected";
+      btnPlay.style.background = "#10b981";
+    }, 2000);
   });
-
-  // Reset UI after a delay (or listen for completion event)
-  setTimeout(() => {
-    btnPlay.innerText = "▶ Run Selected";
-    btnPlay.style.background = "#10b981";
-  }, 2000);
-});
+}
 
 // 5. Macro Recorder Toggle
 let isRecording = false;
 const btnRecord = document.getElementById("btn-toggle-record");
-btnRecord.addEventListener("click", () => {
-  isRecording = !isRecording;
-  btnRecord.innerText = isRecording
-    ? "⏹️ Stop Recording"
-    : "🔴 Toggle Recording";
-  btnRecord.style.background = isRecording ? "#334155" : "#ef4444";
+if (btnRecord) {
+  btnRecord.addEventListener("click", () => {
+    isRecording = !isRecording;
+    btnRecord.innerText = isRecording
+      ? "⏹️ Stop Recording"
+      : "🔴 Toggle Recording";
+    btnRecord.style.background = isRecording ? "#334155" : "#ef4444";
 
-  chrome.runtime.sendMessage({
-    type: "TOGGLE_RECORDING",
-    payload: { isRecording: isRecording },
+    chrome.runtime.sendMessage({
+      type: "TOGGLE_RECORDING",
+      payload: { isRecording: isRecording },
+    });
   });
-});
+}
 
 // 6. Open Studio IDE
 const btnOpenStudio = document.getElementById("btn-open-studio");
@@ -109,5 +115,68 @@ chrome.runtime.onMessage.addListener((request) => {
   }
 });
 
+// ============================================================================
+// WORKSPACE SYNC: Auto-Collapse/Expand Layout based on Active Tab Context
+// ============================================================================
+
+async function syncSidebarLayoutWithTab(tabId) {
+  const mainView = document.getElementById("main-sidebar-view");
+  const studioView = document.getElementById("studio-active-view");
+  if (!mainView || !studioView) return;
+
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const studioUrl = chrome.runtime.getURL("studio/index.html");
+
+    // If the current focused tab is strictly the Studio IDE, switch to placeholder
+    if (tab && tab.url && tab.url.startsWith(studioUrl)) {
+      mainView.style.display = "none";
+      studioView.style.display = "flex";
+    } else {
+      // Return to your working workflow controls for all other tabs
+      studioView.style.display = "none";
+      mainView.style.display = "flex";
+
+      // Safely re-trigger your file list rendering
+      if (typeof loadWorkflows === "function") {
+        loadWorkflows();
+      }
+    }
+  } catch (err) {
+    // Safe fallback if tab details are briefly uninitialized during rapid switches
+    studioView.style.display = "none";
+    mainView.style.display = "flex";
+  }
+}
+
+// Native Listener 1: Triggers instantly when user clicks/switches browser tabs
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  syncSidebarLayoutWithTab(activeInfo.tabId);
+});
+
+// Native Listener 2: Triggers instantly when any webpage alters or finishes its loading status
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete") {
+    syncSidebarLayoutWithTab(tabId);
+  }
+});
+
+// Native Listener 3: Run JIT check upon opening/initializing the sidebar window frame
+async function initSidebarLayoutContext() {
+  try {
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (activeTab) {
+      syncSidebarLayoutWithTab(activeTab.id);
+    }
+  } catch (err) {
+    console.error("[BRunner Sidebar] Initialization layout sync skipped:", err);
+  }
+}
+
 // Init
 loadWorkflows();
+// Force baseline calculation immediately on script mount
+initSidebarLayoutContext();

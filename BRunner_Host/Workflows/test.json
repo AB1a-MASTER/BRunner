@@ -1,0 +1,31 @@
+{
+    "boundDomain": "",
+    "steps": [
+        {
+            "id": "step_q79uktww6",
+            "action": "element.click",
+            "target": "#APjFqb",
+            "targetType": "id",
+            "friendlyName": "Textarea: Search",
+            "payload": {}
+        },
+        {
+            "id": "step_abnx1q398",
+            "action": "element.type",
+            "target": "#APjFqb",
+            "targetType": "id",
+            "friendlyName": "Textarea: Search",
+            "payload": {
+                "primary": "apple"
+            }
+        },
+        {
+            "id": "step_hbr7jo6x3",
+            "action": "element.click",
+            "target": "[name=\"btnK\"]",
+            "targetType": "name",
+            "friendlyName": "Input: Google Search",
+            "payload": {}
+        }
+    ]
+}

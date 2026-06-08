@@ -9,13 +9,7 @@ add to recorder so that when we record, it associates the website we start recor
 
 nav url needs to open a new tab to navigate right now its opening in place of the studio. add options to either use the same tab or new tab in the nav node.(for future feature in phase where we will make a list of all the node and their options).
 
-recording from side bar is not not autosaving workflow. i think
-
-the recorder is not going across page change. when an action results in a different page the recorder stops following the actions. it needed to keep following the actions so that the flow can be completed. it also needs to be robust
-
-we need a way to differentiate between new tab page and other restricted pages so that the work flow recording is proper. right now it gets stuck. we should track where the page loads so that we know which url to goto from those pages.
-
-UI needs to more responsive, drag and drop node creation is needed.
+the recorder is not going across page change. when an action results in a different page the recorder stops following the actions. it needed to keep following the actions so that the flow can be completed.
 
 list of all the actions is needed
 
