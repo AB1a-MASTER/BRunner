@@ -1,182 +1,326 @@
-let selectedWorkflow = null;
-const workflowListEl = document.getElementById("workflow-list");
-const searchInput = document.getElementById("search-input");
-const btnPlay = document.getElementById("btn-play");
-const selectedLabel = document.getElementById("selected-label");
+// sidebar/sidebar.js
+// BRunner Sidebar UI.
+// Matches current sidebar.html body:
+// - main-sidebar-view
+// - studio-active-view
+// - btn-open-studio
+// - search-input
+// - workflow-list
+// - selected-label
+// - btn-play
+// - btn-toggle-record
 
-// 1. Fetch and Render Workflows
-function loadWorkflows() {
-  chrome.runtime.sendMessage({ type: "OS_LIST_WORKFLOWS" }, (response) => {
-    workflowListEl.innerHTML = "";
-    if (
-      response &&
-      response.status === "success" &&
-      response.files.length > 0
-    ) {
-      response.files.forEach((file) => {
-        const div = document.createElement("div");
-        div.className = "workflow-item";
-        div.innerText = file;
-        div.dataset.name = file;
+const Messages = Object.freeze({
+  OsListWorkflows: "OS_LIST_WORKFLOWS",
+  RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
+  ToggleRecording: "TOGGLE_RECORDING",
+  GetRecordingState: "GET_RECORDING_STATE",
+  RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
+  CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+});
 
-        div.addEventListener("click", () => selectWorkflow(div, file));
-        workflowListEl.appendChild(div);
-      });
-    } else {
-      workflowListEl.innerHTML =
-        '<div style="color: #ef4444; font-size: 0.8rem;">No workflows found.</div>';
-    }
-  });
-}
-
-// 2. Selection Logic
-function selectWorkflow(element, fileName) {
-  // Clear previous selection
-  document
-    .querySelectorAll(".workflow-item")
-    .forEach((el) => el.classList.remove("selected"));
-
-  // Highlight new selection
-  element.classList.add("selected");
-  selectedWorkflow = fileName;
-
-  // Update UI
-  selectedLabel.innerText = `Selected: ${fileName}`;
-  btnPlay.classList.add("active");
-}
-
-// 3. Search Filter Logic
-if (searchInput) {
-  searchInput.addEventListener("keyup", (e) => {
-    const query = e.target.value.toLowerCase();
-    document.querySelectorAll(".workflow-item").forEach((item) => {
-      if (item.innerText.toLowerCase().includes(query)) {
-        item.style.display = "block";
-      } else {
-        item.style.display = "none";
-      }
-    });
-  });
-}
-
-// 4. Execution Logic
-if (btnPlay) {
-  btnPlay.addEventListener("click", () => {
-    if (!selectedWorkflow) return;
-
-    btnPlay.innerText = "⏳ Running...";
-    btnPlay.style.background = "#d97706";
-
-    // Request the background script to load the file from OS and execute it
-    chrome.runtime.sendMessage({
-      type: "RUN_WORKFLOW_BY_NAME",
-      payload: { filename: selectedWorkflow },
-    });
-
-    // Reset UI after a delay (or listen for completion event)
-    setTimeout(() => {
-      btnPlay.innerText = "▶ Run Selected";
-      btnPlay.style.background = "#10b981";
-    }, 2000);
-  });
-}
-
-// 5. Macro Recorder Toggle
 let isRecording = false;
-const btnRecord = document.getElementById("btn-toggle-record");
-if (btnRecord) {
-  btnRecord.addEventListener("click", () => {
-    isRecording = !isRecording;
-    btnRecord.innerText = isRecording
-      ? "⏹️ Stop Recording"
-      : "🔴 Toggle Recording";
-    btnRecord.style.background = isRecording ? "#334155" : "#ef4444";
+let selectedWorkflow = "";
+let allWorkflows = [];
 
-    chrome.runtime.sendMessage({
-      type: "TOGGLE_RECORDING",
-      payload: { isRecording: isRecording },
-    });
+const mainSidebarView = document.getElementById("main-sidebar-view");
+const studioActiveView = document.getElementById("studio-active-view");
+const workflowList = document.getElementById("workflow-list");
+const searchInput = document.getElementById("search-input");
+const selectedLabel = document.getElementById("selected-label");
+const playButton = document.getElementById("btn-play");
+const recordButton = document.getElementById("btn-toggle-record");
+const openStudioButton = document.getElementById("btn-open-studio");
+
+init();
+
+function init() {
+  wireControls();
+  wireRuntimeMessages();
+  installTabWatchers();
+
+  syncRecordingState();
+  refreshWorkflowList();
+  syncSidebarVisibilityForActiveTab();
+}
+
+function wireControls() {
+  openStudioButton?.addEventListener("click", openStudio);
+  recordButton?.addEventListener("click", toggleRecording);
+  playButton?.addEventListener("click", runSelectedWorkflow);
+
+  searchInput?.addEventListener("input", () => {
+    renderWorkflowList(filterWorkflows(searchInput.value));
   });
 }
 
-// 6. Open Studio IDE
-const btnOpenStudio = document.getElementById("btn-open-studio");
-if (btnOpenStudio) {
-  btnOpenStudio.addEventListener("click", () => {
-    // Creates a new tab pointing to the Studio UI
-    chrome.tabs.create({ url: chrome.runtime.getURL("studio/index.html") });
-  });
-}
-
-// Listen for Auto-Save completion from the Background worker
-chrome.runtime.onMessage.addListener((request) => {
-  if (request.type === "REFRESH_WORKFLOW_LISTS") {
-    loadWorkflows();
-  }
-});
-
-// ============================================================================
-// WORKSPACE SYNC: Auto-Collapse/Expand Layout based on Active Tab Context
-// ============================================================================
-
-async function syncSidebarLayoutWithTab(tabId) {
-  const mainView = document.getElementById("main-sidebar-view");
-  const studioView = document.getElementById("studio-active-view");
-  if (!mainView || !studioView) return;
-
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    const studioUrl = chrome.runtime.getURL("studio/index.html");
-
-    // If the current focused tab is strictly the Studio IDE, switch to placeholder
-    if (tab && tab.url && tab.url.startsWith(studioUrl)) {
-      mainView.style.display = "none";
-      studioView.style.display = "flex";
-    } else {
-      // Return to your working workflow controls for all other tabs
-      studioView.style.display = "none";
-      mainView.style.display = "flex";
-
-      // Safely re-trigger your file list rendering
-      if (typeof loadWorkflows === "function") {
-        loadWorkflows();
-      }
+function wireRuntimeMessages() {
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request?.type === Messages.RefreshWorkflowLists) {
+      refreshWorkflowList();
+      sendResponse({ ok: true });
+      return true;
     }
-  } catch (err) {
-    // Safe fallback if tab details are briefly uninitialized during rapid switches
-    studioView.style.display = "none";
-    mainView.style.display = "flex";
-  }
+
+    return false;
+  });
 }
 
-// Native Listener 1: Triggers instantly when user clicks/switches browser tabs
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  syncSidebarLayoutWithTab(activeInfo.tabId);
-});
+function installTabWatchers() {
+  chrome.tabs.onActivated.addListener(() => {
+    syncSidebarVisibilityForActiveTab();
+  });
 
-// Native Listener 2: Triggers instantly when any webpage alters or finishes its loading status
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete") {
-    syncSidebarLayoutWithTab(tabId);
-  }
-});
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === "complete") {
+      syncSidebarVisibilityForActiveTab();
+    }
+  });
 
-// Native Listener 3: Run JIT check upon opening/initializing the sidebar window frame
-async function initSidebarLayoutContext() {
+  chrome.windows.onFocusChanged.addListener((windowId) => {
+    if (windowId !== chrome.windows.WINDOW_ID_NONE) {
+      syncSidebarVisibilityForActiveTab();
+    }
+  });
+}
+
+async function syncSidebarVisibilityForActiveTab() {
   try {
-    const [activeTab] = await chrome.tabs.query({
+    const [tab] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
-    if (activeTab) {
-      syncSidebarLayoutWithTab(activeTab.id);
+
+    const studioUrl = chrome.runtime.getURL("studio/index.html");
+    const isStudio = Boolean(tab?.url?.startsWith(studioUrl));
+
+    if (isStudio) {
+      mainSidebarView.style.display = "none";
+      studioActiveView.style.display = "flex";
+    } else {
+      mainSidebarView.style.display = "flex";
+      studioActiveView.style.display = "none";
     }
-  } catch (err) {
-    console.error("[BRunner Sidebar] Initialization layout sync skipped:", err);
+  } catch {
+    mainSidebarView.style.display = "flex";
+    studioActiveView.style.display = "none";
   }
 }
 
-// Init
-loadWorkflows();
-// Force baseline calculation immediately on script mount
-initSidebarLayoutContext();
+async function openStudio() {
+  const studioUrl = chrome.runtime.getURL("studio/index.html");
+
+  const tabs = await chrome.tabs.query({
+    url: studioUrl,
+  });
+
+  if (tabs.length > 0) {
+    await chrome.tabs.update(tabs[0].id, {
+      active: true,
+    });
+
+    if (tabs[0].windowId) {
+      await chrome.windows.update(tabs[0].windowId, {
+        focused: true,
+      });
+    }
+
+    return;
+  }
+
+  await chrome.tabs.create({
+    url: studioUrl,
+    active: true,
+  });
+}
+
+async function toggleRecording() {
+  isRecording = !isRecording;
+  updateRecordButton();
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.ToggleRecording,
+      enabled: isRecording,
+    });
+
+    const recording = response?.recording;
+    isRecording = Boolean(recording?.isRecording);
+
+    updateRecordButton();
+
+    if (!isRecording) {
+      refreshWorkflowList();
+    }
+  } catch (error) {
+    isRecording = !isRecording;
+    updateRecordButton();
+    setSelectedLabel(`Recording error: ${error.message || error}`, true);
+  }
+}
+
+async function syncRecordingState() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GetRecordingState,
+    });
+
+    isRecording = Boolean(response?.recording?.isRecording);
+    updateRecordButton();
+  } catch {
+    isRecording = false;
+    updateRecordButton();
+  }
+}
+
+async function refreshWorkflowList() {
+  workflowList.innerHTML = `
+    <div style="color:#94a3b8;font-size:0.8rem;text-align:center;margin-top:20px;">
+      Loading workflows...
+    </div>
+  `;
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.OsListWorkflows,
+    });
+
+    if (!isSuccess(response)) {
+      workflowList.innerHTML = `
+        <div style="color:#ef4444;font-size:0.8rem;text-align:center;margin-top:20px;">
+          Failed to load workflows.<br>${escapeHtml(response?.error || "")}
+        </div>
+      `;
+      return;
+    }
+
+    allWorkflows = response.files || response.workflows || [];
+    renderWorkflowList(filterWorkflows(searchInput?.value || ""));
+  } catch (error) {
+    workflowList.innerHTML = `
+      <div style="color:#ef4444;font-size:0.8rem;text-align:center;margin-top:20px;">
+        Failed to load workflows.<br>${escapeHtml(error.message || error)}
+      </div>
+    `;
+  }
+}
+
+function filterWorkflows(query) {
+  const normalizedQuery = String(query || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalizedQuery) return allWorkflows;
+
+  return allWorkflows.filter((file) => {
+    return String(file).toLowerCase().includes(normalizedQuery);
+  });
+}
+
+function renderWorkflowList(files) {
+  if (!files || files.length === 0) {
+    workflowList.innerHTML = `
+      <div style="color:#94a3b8;font-size:0.8rem;text-align:center;margin-top:20px;">
+        No workflows found.
+      </div>
+    `;
+    return;
+  }
+
+  workflowList.innerHTML = "";
+
+  files.forEach((file) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "workflow-item";
+    item.dataset.file = file;
+
+    item.innerHTML = `
+      <span class="workflow-name">${escapeHtml(file.replace(/\.json$/i, ""))}</span>
+      <span class="workflow-run">▶</span>
+    `;
+
+    item.addEventListener("click", () => {
+      selectWorkflow(file);
+    });
+
+    item.addEventListener("dblclick", () => {
+      selectWorkflow(file);
+      runSelectedWorkflow();
+    });
+
+    workflowList.appendChild(item);
+  });
+
+  updateSelectedWorkflowVisual();
+}
+
+function selectWorkflow(filename) {
+  selectedWorkflow = filename;
+  setSelectedLabel(filename.replace(/\.json$/i, ""));
+  updateSelectedWorkflowVisual();
+}
+
+function updateSelectedWorkflowVisual() {
+  workflowList.querySelectorAll(".workflow-item").forEach((item) => {
+    item.classList.toggle("selected", item.dataset.file === selectedWorkflow);
+  });
+}
+
+async function runSelectedWorkflow() {
+  if (!selectedWorkflow) {
+    setSelectedLabel("No workflow selected", true);
+    return;
+  }
+
+  setSelectedLabel(`Running ${selectedWorkflow.replace(/\.json$/i, "")}...`);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.RunWorkflowByName,
+      filename: selectedWorkflow,
+    });
+
+    if (isSuccess(response)) {
+      setSelectedLabel(`Completed ${selectedWorkflow.replace(/\.json$/i, "")}`);
+    } else {
+      setSelectedLabel(`Failed: ${response?.error || "Unknown error"}`, true);
+    }
+  } catch (error) {
+    setSelectedLabel(`Failed: ${error.message || error}`, true);
+  }
+}
+
+function updateRecordButton() {
+  if (!recordButton) return;
+
+  recordButton.textContent = isRecording
+    ? "⏹ Stop Recording"
+    : "🔴 Toggle Recording";
+
+  recordButton.classList.toggle("recording", isRecording);
+}
+
+function setSelectedLabel(text, isError = false) {
+  if (!selectedLabel) return;
+
+  selectedLabel.textContent = text;
+  selectedLabel.style.color = isError ? "#ef4444" : "";
+}
+
+function isSuccess(response) {
+  return (
+    response?.ok === true ||
+    response?.status === "success" ||
+    response?.success === true
+  );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}

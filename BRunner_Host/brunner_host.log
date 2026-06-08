@@ -659,3 +659,76 @@
 2026-06-08 22:18:39,679 [INFO] [Inbound] Received Command: LIST_WORKFLOWS | Payload: {}
 2026-06-08 22:20:04,347 [INFO] connection closed
 2026-06-08 22:20:04,348 [INFO] connection closed
+2026-06-08 23:27:59,395 [INFO] ========================================
+2026-06-08 23:27:59,396 [INFO]  BRunner Native OS Host Started
+2026-06-08 23:27:59,396 [INFO]  Listening on ws://localhost:8999
+2026-06-08 23:27:59,397 [INFO] ========================================
+2026-06-08 23:27:59,397 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-08 23:27:59,397 [INFO] ========================================
+2026-06-08 23:27:59,546 [INFO] server listening on 127.0.0.1:8999
+2026-06-08 23:27:59,547 [INFO] server listening on [::1]:8999
+2026-06-08 23:29:01,500 [INFO] ========================================
+2026-06-08 23:29:01,500 [INFO]  BRunner Native OS Host Started
+2026-06-08 23:29:01,501 [INFO]  Listening on ws://localhost:8999
+2026-06-08 23:29:01,501 [INFO] ========================================
+2026-06-08 23:29:01,503 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-08 23:29:01,503 [INFO] ========================================
+2026-06-08 23:29:01,591 [INFO] server listening on [::1]:8999
+2026-06-08 23:29:01,591 [INFO] server listening on 127.0.0.1:8999
+2026-06-08 23:29:09,173 [INFO] connection open
+2026-06-08 23:29:09,173 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-08 23:29:09,190 [INFO] connection open
+2026-06-08 23:29:09,193 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-08 23:29:09,194 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'payload': {'key': 'ac1890957e38af28cd5d0961e6d0d530'}, 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-08 23:29:09,195 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-08 23:29:09,196 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:11,430 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:11,532 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:18,338 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'command': 'LOAD_WORKFLOW', 'payload': {'filename': 'search apple on google_copy.json'}, 'filename': 'search apple on google_copy.json'}
+2026-06-08 23:29:20,336 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:21,466 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:37,435 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:37,445 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:39,278 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:40,964 [INFO] connection closed
+2026-06-08 23:29:40,965 [INFO] connection closed
+2026-06-08 23:29:42,692 [INFO] connection open
+2026-06-08 23:29:42,692 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-08 23:29:42,694 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'payload': {'key': 'ac1890957e38af28cd5d0961e6d0d530'}, 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-08 23:29:42,695 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-08 23:29:42,696 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:42,701 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:46,332 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:46,427 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:47,320 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:29:56,697 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'command': 'LOAD_WORKFLOW', 'payload': {'filename': 'search apple on google_copy.json'}, 'filename': 'search apple on google_copy.json'}
+2026-06-08 23:30:17,424 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:17,428 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:18,422 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:18,483 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:25,824 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'command': 'LOAD_WORKFLOW', 'payload': {'filename': 'goto apple and find store.json'}, 'filename': 'goto apple and find store.json'}
+2026-06-08 23:30:32,092 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:34,549 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:39,262 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:40,409 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:50,953 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:30:54,569 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'command': 'LOAD_WORKFLOW', 'payload': {'filename': 'search apple on google_copy.json'}, 'filename': 'search apple on google_copy.json'}
+2026-06-08 23:30:59,154 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:00,983 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:06,671 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:10,697 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'command': 'LOAD_WORKFLOW', 'payload': {'filename': 'goto apple and find store.json'}, 'filename': 'goto apple and find store.json'}
+2026-06-08 23:31:23,100 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:23,519 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:27,941 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:29,777 [INFO] connection closed
+2026-06-08 23:31:47,540 [INFO] connection open
+2026-06-08 23:31:47,540 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-08 23:31:47,542 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'payload': {'key': 'ac1890957e38af28cd5d0961e6d0d530'}, 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-08 23:31:47,543 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-08 23:31:47,544 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:47,547 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:49,011 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:49,114 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:51,156 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:31:51,793 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'command': 'LIST_WORKFLOWS', 'payload': {}}
+2026-06-08 23:33:19,072 [INFO] connection closed

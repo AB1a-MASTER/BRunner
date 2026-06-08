@@ -44,13 +44,18 @@
         }
 
         .workflow-item {
-            padding: 10px;
-            margin-bottom: 5px;
-            background: #1e293b;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #111827;
+            color: #f8fafc;
             border: 1px solid #334155;
-            border-radius: 4px;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
             cursor: pointer;
-            transition: 0.2s;
+            text-align: left;
         }
 
         .workflow-item:hover {
@@ -58,9 +63,8 @@
         }
 
         .workflow-item.selected {
-            background: #2563eb;
-            border-color: #60a5fa;
-            font-weight: bold;
+            border-color: #22c55e;
+            background: #0f172a;
         }
 
         .footer {
@@ -106,6 +110,55 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+        }
+
+        html.studio-active body {
+            display: none;
+        }
+
+        .workflow-launch {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-panel, #111827);
+            color: var(--text-main, #f8fafc);
+            border: 1px solid var(--border, #334155);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .workflow-launch:hover {
+            border-color: var(--accent, #3b82f6);
+        }
+
+        .workflow-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .workflow-run {
+            opacity: 0.8;
+            margin-left: 8px;
+        }
+
+        #btn-toggle-record.recording {
+            background: #111827;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+
+        .empty-state.error,
+        #status-text.error {
+            color: #ef4444;
+        }
+
+        #status-text.ok {
+            color: #22c55e;
         }
     </style>
 </head>

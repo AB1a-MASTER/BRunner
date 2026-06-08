@@ -1,833 +1,294 @@
-// background.js - Enterprise Orchestration Engine & Hardware Simulator
+// background.js
+// BRunner Orchestration Engine.
+// Owns message routing, workflow execution, recording state, native bridge access,
+// and tab lifecycle behavior.
 
-// ============================================================================
-// 1. Core State & Registries
-// ============================================================================
-const OrchestrationEngine = {
-  VariableRegistry: {},
-  ActionSchemaRegistry: [],
-  TabManager: { activeTargetId: null, navigationFlags: {} },
-  NetworkMonitor: { activeRequests: 0, isIdle: true },
-  RecordingBuffer: [], // recording buffer for step recording when sidebar is used to record
-  activeRecordingDomain: "",
-  isRecording: false,
-};
+import {
+  Messages,
+  Actions,
+  NavigationTargets,
+  Defaults,
+} from "./core/constants.js";
+import { NativeBridge } from "./core/nativeBridge.js";
+import { createRecordingController } from "./core/recordingController.js";
+import {
+  normalizeWorkflow,
+  extractDomainFromUrl,
+  isStudioUrl,
+} from "./core/workflowUtils.js";
+import {
+  createTab,
+  getActiveTab,
+  getBestAutomationTab,
+  getTabDomain,
+  navigateTab,
+  waitForTabComplete,
+} from "./core/tabUtils.js";
 
-// Recursively searches an object for {{variableName}} and replaces it with data from the registry
-function injectVariables(payloadObj, registry) {
-  if (!payloadObj) return payloadObj;
-  const newObj = Array.isArray(payloadObj) ? [] : {};
-
-  for (let key in payloadObj) {
-    if (typeof payloadObj[key] === "string") {
-      newObj[key] = payloadObj[key].replace(
-        /\{\{\s*([^}]+)\s*\}\}/g,
-        (match, varName) => {
-          return registry[varName] !== undefined ? registry[varName] : match;
-        },
-      );
-    } else if (
-      typeof payloadObj[key] === "object" &&
-      payloadObj[key] !== null
-    ) {
-      newObj[key] = injectVariables(payloadObj[key], registry);
-    } else {
-      newObj[key] = payloadObj[key];
-    }
-  }
-  return newObj;
-}
-
-// ============================================================================
-// 2. Extension Lifecycle & Network Wait States
-// ============================================================================
-chrome.action.onClicked.addListener((tab) => {
-  // chrome.tabs.create({ url: "studio/index.html" });
-
-  // Open the side panel natively when the extension icon is clicked
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch(console.error);
+const recordingController = createRecordingController({
+  nativeBridge: NativeBridge,
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("[BRunner] Orchestration Engine Initialized.");
+  console.log("[BRunner] Orchestration Engine initialized.");
+  NativeBridge.connect();
 });
 
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    if (details.tabId >= 0) {
-      OrchestrationEngine.NetworkMonitor.activeRequests++;
-      OrchestrationEngine.NetworkMonitor.isIdle = false;
-    }
-  },
-  { urls: ["<all_urls>"] },
-);
-
-const handleNetworkSettle = (details) => {
-  if (details.tabId >= 0) {
-    OrchestrationEngine.NetworkMonitor.activeRequests = Math.max(
-      0,
-      OrchestrationEngine.NetworkMonitor.activeRequests - 1,
-    );
-    if (OrchestrationEngine.NetworkMonitor.activeRequests === 0) {
-      OrchestrationEngine.NetworkMonitor.isIdle = true;
-    }
-  }
-};
-chrome.webRequest.onCompleted.addListener(handleNetworkSettle, {
-  urls: ["<all_urls>"],
-});
-chrome.webRequest.onErrorOccurred.addListener(handleNetworkSettle, {
-  urls: ["<all_urls>"],
+chrome.runtime.onStartup.addListener(() => {
+  NativeBridge.connect();
 });
 
-// ============================================================================
-// PHASE 4: The Hardware Simulation Layer (CDP Bypasser)
-// ============================================================================
-const HardwareSimulator = {
-  async attachDebugger(tabId) {
-    const target = { tabId };
-    try {
-      const targets = await chrome.debugger.getTargets();
-      const isAttached = targets.some((t) => t.tabId === tabId && t.attached);
+NativeBridge.connect();
 
-      if (!isAttached) {
-        await chrome.debugger.attach(target, "1.3");
-        console.log(`[BRunner Hardware] Debugger attached to Tab ${tabId}`);
-      }
-      return target;
-    } catch (error) {
-      console.error(`[BRunner Hardware] Failed to attach debugger:`, error);
-      throw error;
-    }
-  },
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  handleMessage(request, sender)
+    .then((response) => sendResponse(response))
+    .catch((error) => {
+      console.error("[BRunner] Message handler error:", error);
 
-  async detachDebugger(target) {
-    try {
-      await chrome.debugger.detach(target);
-      console.log(
-        `[BRunner Hardware] Debugger detached from Tab ${target.tabId}`,
-      );
-    } catch (error) {
-      // Ignore if already detached
-    }
-  },
-
-  async executePhysicalClick(tabId, coordinates) {
-    const target = await this.attachDebugger(tabId);
-    const { centerX, centerY } = coordinates;
-
-    console.log(
-      `[BRunner Hardware] Dispatching CDP click at X:${centerX}, Y:${centerY}`,
-    );
-
-    try {
-      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-        type: "mouseMoved",
-        x: centerX,
-        y: centerY,
+      sendResponse({
+        ok: false,
+        error: error.message || String(error),
       });
-
-      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-        type: "mousePressed",
-        x: centerX,
-        y: centerY,
-        button: "left",
-        clickCount: 1,
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-        type: "mouseReleased",
-        x: centerX,
-        y: centerY,
-        button: "left",
-        clickCount: 1,
-      });
-
-      console.log(`[BRunner Hardware] CDP click successful.`);
-      return { status: "success", strategy_used: "Hardware_CDP" };
-    } finally {
-      await this.detachDebugger(target);
-    }
-  },
-
-  async executePhysicalKeystroke(tabId, keyToPress) {
-    const target = await this.attachDebugger(tabId);
-    console.log(`[BRunner Hardware] Dispatching CDP Keystroke: ${keyToPress}`);
-
-    try {
-      await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: keyToPress,
-        code: keyToPress,
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: keyToPress,
-        code: keyToPress,
-      });
-
-      console.log(`[BRunner Hardware] CDP keystroke successful.`);
-      return { status: "success", strategy_used: "Hardware_CDP_Key" };
-    } finally {
-      await this.detachDebugger(target);
-    }
-  },
-};
-
-// ============================================================================
-// PHASE 6: The Native OS Bridge (WebSocket Client)
-// ============================================================================
-const NativeBridge = {
-  socket: null,
-  isAuthenticated: false,
-  pairingKey: "ac1890957e38af28cd5d0961e6d0d530",
-
-  connect() {
-    return new Promise((resolve, reject) => {
-      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        return resolve(this.isAuthenticated);
-      }
-
-      console.log("[BRunner Bridge] Connecting to Local Python Host...");
-      this.socket = new WebSocket("ws://127.0.0.1:8999");
-
-      this.socket.onopen = () => {
-        this.socket.send(
-          JSON.stringify({
-            command: "AUTH",
-            payload: { key: this.pairingKey },
-          }),
-        );
-      };
-
-      this.socket.onmessage = (event) => {
-        const response = JSON.parse(event.data);
-        if (response.message === "Authenticated successfully.") {
-          this.isAuthenticated = true;
-          console.log("[BRunner Bridge] Securely paired with OS Host.");
-          resolve(true);
-        }
-      };
-
-      this.socket.onerror = (error) => {
-        console.error("[BRunner Bridge] Connection failed.", error);
-        reject("WebSocket Connection Failed");
-      };
     });
-  },
 
-  sendOsCommand(command, payload = {}) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        await this.connect();
-
-        if (!this.isAuthenticated) {
-          return reject("Bridge not authenticated.");
-        }
-
-        const listener = (event) => {
-          const response = JSON.parse(event.data);
-          this.socket.removeEventListener("message", listener);
-
-          if (response.status === "success") resolve(response);
-          else reject(response.error);
-        };
-
-        this.socket.addEventListener("message", listener);
-        this.socket.send(JSON.stringify({ command, payload }));
-      } catch (e) {
-        reject(e);
-      }
-    });
-  },
-
-  async listWorkflows() {
-    return await this.sendOsCommand("LIST_WORKFLOWS");
-  },
-
-  async saveWorkflow(filename, content) {
-    return await this.sendOsCommand("SAVE_WORKFLOW", { filename, content });
-  },
-
-  async loadWorkflow(filename) {
-    return await this.sendOsCommand("LOAD_WORKFLOW", { filename });
-  },
-
-  async deleteWorkflow(filename) {
-    return await this.sendOsCommand("DELETE_WORKFLOW", { filename });
-  },
-
-  async duplicateWorkflow(filename, newFilename) {
-    return await this.sendOsCommand("DUPLICATE_WORKFLOW", {
-      filename,
-      new_filename: newFilename,
-    });
-  },
-};
-
-async function getBestRecordingTab() {
-  const studioUrl = chrome.runtime.getURL("studio/index.html");
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const activeTab = tabs.find((tab) => tab.active);
-
-  const isRecordable = (tab) =>
-    tab &&
-    tab.id &&
-    tab.url &&
-    !tab.url.startsWith(studioUrl) &&
-    !tab.url.startsWith("chrome://") &&
-    !tab.url.startsWith("chrome-extension://") &&
-    !tab.url.startsWith("edge://") &&
-    !tab.url.startsWith("about:");
-
-  if (isRecordable(activeTab)) return activeTab;
-
-  const recordableTabs = tabs
-    .filter(isRecordable)
-    .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-  return recordableTabs[0] || null;
-}
-
-function normalizeBoundDomain(tabUrl) {
-  try {
-    const urlObj = new URL(tabUrl);
-    return urlObj.hostname.replace(/^(www\.)?/, "");
-  } catch (e) {
-    return "";
-  }
-}
+  return true;
+});
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status !== "complete" || !OrchestrationEngine.isRecording)
-    return;
-  chrome.tabs
-    .sendMessage(tabId, {
-      type: "SET_RECORDING_STATE",
-      isRecording: true,
-    })
-    .catch(() => {});
+  if (changeInfo.status !== "complete") return;
+  recordingController.syncTab(tabId);
 });
 
-// Helper to evaluate an active tab's URL state and command the sidebar view
-// Smart context evaluator: Forces expansion unless strictly on the Studio tab
-async function syncSidebarContext(tabId) {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    const studioUrl = chrome.runtime.getURL("studio/index.html");
+async function handleMessage(request, sender) {
+  const type = request?.type || request?.command;
 
-    // If the tab exists, has a URL, and that URL matches our internal Studio tab path
-    if (tab && tab.url && tab.url.startsWith(studioUrl)) {
-      chrome.runtime.sendMessage({ type: "COLLAPSE_SIDEBAR" }).catch(() => {});
-    } else {
-      // Treat every other scenario (blank pages, search tabs, websites) as an expansion trigger
-      chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
-    }
-  } catch (err) {
-    // If Chrome fails to grab tab parameters during high-speed switches, fall back safely to normal view
-    chrome.runtime.sendMessage({ type: "EXPAND_SIDEBAR" }).catch(() => {});
+  switch (type) {
+    case Messages.CheckBridgeStatus:
+      return {
+        ok: true,
+        ...NativeBridge.getStatus(),
+      };
+
+    case Messages.OsListWorkflows:
+      return await NativeBridge.listWorkflows();
+
+    case Messages.OsLoadWorkflow:
+      return await NativeBridge.loadWorkflow(request.filename);
+
+    case Messages.OsSaveWorkflow:
+      return await NativeBridge.saveWorkflow(request.filename, request.content);
+
+    case Messages.OsDeleteWorkflow:
+      return await NativeBridge.deleteWorkflow(request.filename);
+
+    case Messages.OsDuplicateWorkflow:
+      return await NativeBridge.duplicateWorkflow(
+        request.filename,
+        request.newFilename,
+      );
+
+    case Messages.ToggleRecording:
+      return {
+        ok: true,
+        recording: await recordingController.toggle(Boolean(request.enabled)),
+      };
+
+    case Messages.GetRecordingState:
+      return {
+        ok: true,
+        recording: recordingController.getState(),
+      };
+
+    case Messages.RecordedStep:
+      return {
+        ok: true,
+        recording: recordingController.addStep(request.step),
+      };
+
+    case Messages.RunWorkflowByName:
+      return await runWorkflowByName(request.filename);
+
+    case Messages.StartWorkflow:
+      return await runWorkflow(request.workflow || request.content);
+
+    case Messages.RequestHardwareKeystroke:
+      return await NativeBridge.osKeystroke(request.keys);
+
+    case Messages.StudioLoaded:
+      return {
+        ok: true,
+        bridge: NativeBridge.getStatus(),
+        recording: recordingController.getState(),
+      };
+
+    default:
+      console.warn("[BRunner] Unknown message:", request);
+      return {
+        ok: false,
+        error: `Unknown message type: ${type || "undefined"}`,
+      };
   }
 }
 
-// Observer A: Triggers when the user clicks/switches tabs
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  syncSidebarContext(activeInfo.tabId);
-});
+async function runWorkflowByName(filename) {
+  const loaded = await NativeBridge.loadWorkflow(filename);
 
-// Observer B: Triggers when a webpage finishes loading/navigating
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete") {
-    syncSidebarContext(tabId);
-  }
-});
+  const workflow =
+    loaded?.content || loaded?.workflow || loaded?.data || loaded;
 
-// Observer C: Triggers when switching application window focus entirely
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
-  const activeTabs = await chrome.tabs.query({
-    active: true,
-    windowId: windowId,
-  });
-  if (activeTabs.length > 0) {
-    syncSidebarContext(activeTabs[0].id);
-  }
-});
+  return await runWorkflow(workflow);
+}
 
-// ============================================================================
-// 3. Cross-Context Message Pipeline (Updated for Phase 4)
-// ============================================================================
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === "SYSTEM_LOG") {
-    // console.log(`[BRunner Agent - Tab ${sender.tab?.id}]:`, request.payload);
-    sendResponse({ status: "success", received: true });
-    return false;
-  }
+async function runWorkflow(rawWorkflow) {
+  const workflow = normalizeWorkflow(rawWorkflow);
+  const steps = workflow.steps;
 
-  // Intercept Studio loading to minimize the browser Sidebar layout
-  if (request.type === "STUDIO_LOADED") {
-    console.log("[BRunner Brain] Studio loaded. Requesting Sidebar minimize.");
-    chrome.runtime.sendMessage({ type: "COLLAPSE_SIDEBAR" }).catch(() => {
-      // Ignore errors if the sidebar isn't currently open to receive it
-    });
-    return false; // Sync message channel bypass
-  }
-
-  // 1. Intercept Physical Click Requests
-  if (request.type === "REQUEST_HARDWARE_SIMULATION") {
-    console.warn(
-      `[BRunner Brain] Hardware override requested for Tab ${sender.tab.id}. Reason: ${request.payload.reason}`,
-    );
-
-    HardwareSimulator.executePhysicalClick(
-      sender.tab.id,
-      request.payload.coordinates,
-    )
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.message }),
-      );
-
-    return true; // Keep port open for async response
-  }
-
-  // 2. Intercept Physical Keystroke Requests
-  if (request.type === "REQUEST_HARDWARE_KEYSTROKE") {
-    console.log(
-      `[BRunner Brain] OS Keystroke requested for Tab ${sender.tab.id}.`,
-    );
-
-    // --- CRITICAL FIX: OS-LEVEL FOCUS ---
-    // 1. Force the target window to the front of the OS screen
-    // 2. Force the target tab to be the active tab in that window
-    chrome.tabs
-      .get(sender.tab.id)
-      .then((tab) => {
-        return chrome.windows
-          .update(tab.windowId, { focused: true })
-          .then(() => {
-            return chrome.tabs.update(tab.id, { active: true });
-          });
-      })
-      .then(() => {
-        // 3. Give the OS a tiny 100ms window to finish rendering the UI switch
-        setTimeout(() => {
-          // 4. NOW tell Python to fire the keystroke
-          NativeBridge.sendOsCommand("OS_KEYSTROKE", {
-            key: request.payload.key,
-          })
-            .then((result) => sendResponse(result))
-            .catch((error) =>
-              sendResponse({ status: "failed", error: error.toString() }),
-            );
-        }, 100);
-      })
-      .catch((err) => {
-        console.error("[BRunner Brain] Focus failed:", err);
-        sendResponse({
-          status: "failed",
-          error: "Could not focus tab for OS keystroke.",
-        });
-      });
-
-    return true; // Keep port open for async response
-  }
-
-  // 3. Intercept OS File Saving
-  if (request.type === "OS_SAVE_WORKFLOW") {
-    NativeBridge.saveWorkflow(request.payload.filename, request.payload.content)
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // 4. Intercept OS File Listing
-  if (request.type === "OS_LIST_WORKFLOWS") {
-    NativeBridge.listWorkflows()
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // 5. Intercept OS File Loading
-  if (request.type === "OS_LOAD_WORKFLOW") {
-    NativeBridge.loadWorkflow(request.payload.filename)
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // 6. Intercept OS File Deletion
-  if (request.type === "OS_DELETE_WORKFLOW") {
-    NativeBridge.deleteWorkflow(request.payload.filename)
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // 7. Intercept OS File Duplication
-  if (request.type === "OS_DUPLICATE_WORKFLOW") {
-    NativeBridge.duplicateWorkflow(
-      request.payload.filename,
-      request.payload.newFilename,
-    )
-      .then((result) => sendResponse(result))
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // 8. Sidebar requests to run a workflow directly
-  if (request.type === "RUN_WORKFLOW_BY_NAME") {
-    console.log(
-      `[BRunner Brain] Sidebar requested execution of: ${request.payload.filename}`,
-    );
-    NativeBridge.loadWorkflow(request.payload.filename)
-      .then((result) => {
-        if (result.status === "success") {
-          const content = result.content;
-          const workflowData = Array.isArray(content)
-            ? { boundDomain: null, steps: content }
-            : { boundDomain: content.boundDomain, steps: content.steps };
-
-          runWorkflowEngine(workflowData, null);
-          sendResponse({ status: "success" });
-        } else {
-          sendResponse({ status: "failed", error: result.error });
-        }
-      })
-      .catch((error) =>
-        sendResponse({ status: "failed", error: error.toString() }),
-      );
-    return true;
-  }
-
-  // --- MACRO RECORDER ROUTING ---
-
-  // 1. Sidebar/Studio tells Background to toggle recording state
-  if (request.type === "GET_RECORDING_STATE") {
-    sendResponse({
-      status: "success",
-      isRecording: OrchestrationEngine.isRecording,
-      activeRecordingDomain: OrchestrationEngine.activeRecordingDomain,
-    });
-    return false;
-  }
-
-  if (request.type === "TOGGLE_RECORDING") {
-    if (request.payload.isRecording) {
-      // START RECORDING
-      console.log("[BRunner Brain] Macro Recording STARTED.");
-      OrchestrationEngine.isRecording = true;
-      OrchestrationEngine.RecordingBuffer = [];
-      OrchestrationEngine.activeRecordingDomain = "";
-
-      // Capture the best non-Studio tab so recording launched from Studio still binds to the work site.
-      getBestRecordingTab().then((tab) => {
-        if (!tab) return;
-        OrchestrationEngine.activeRecordingDomain = normalizeBoundDomain(
-          tab.url,
-        );
-        if (OrchestrationEngine.activeRecordingDomain) {
-          console.log(
-            `[BRunner Brain] Auto-binding recording to: ${OrchestrationEngine.activeRecordingDomain}`,
-          );
-        }
-      });
-
-      // Broadcast to all tabs to activate the floating red highlight tracker
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach((tab) => {
-          chrome.tabs
-            .sendMessage(tab.id, {
-              type: "SET_RECORDING_STATE",
-              isRecording: true,
-            })
-            .catch(() => {});
-        });
-      });
-    } else {
-      // STOP RECORDING & AUTO-SAVE
-      console.log("[BRunner Brain] Macro Recording STOPPED. Auto-saving...");
-      OrchestrationEngine.isRecording = false;
-
-      const timestamp = new Date().toISOString().split("T")[0];
-      const autoSaveName = `AutoSave_${timestamp}_${Math.floor(Math.random() * 1000)}.json`;
-
-      // Package the recorded steps with the automatically captured domain
-      const workflowData = {
-        boundDomain: OrchestrationEngine.activeRecordingDomain,
-        steps: OrchestrationEngine.RecordingBuffer,
-      };
-
-      // Send to Python Host for physical disk saving
-      NativeBridge.saveWorkflow(autoSaveName, workflowData)
-        .then(() => {
-          chrome.runtime
-            .sendMessage({ type: "REFRESH_WORKFLOW_LISTS" })
-            .catch(() => {});
-        })
-        .catch((error) => {
-          console.error("[BRunner Brain] Auto-save failed:", error);
-        });
-
-      // Broadcast to all tabs to remove the red highlight tracker
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach((tab) => {
-          chrome.tabs
-            .sendMessage(tab.id, {
-              type: "SET_RECORDING_STATE",
-              isRecording: false,
-            })
-            .catch(() => {});
-        });
-      });
-
-      // Clear the memory buffer
-      OrchestrationEngine.RecordingBuffer = [];
-      OrchestrationEngine.activeRecordingDomain = "";
-    }
-    return false;
-  }
-
-  // 2. Content Script sends a recorded step
-  if (request.type === "RECORDED_STEP") {
-    // Generate the step ID here in the background
-    const newStep = {
-      id: "step_" + Math.random().toString(36).substr(2, 9),
-      ...request.payload.step,
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return {
+      ok: false,
+      error: "Workflow has no steps.",
     };
-
-    // Store in background memory
-    OrchestrationEngine.RecordingBuffer.push(newStep);
-
-    // Forward to Studio UI just in case it is open and the user wants to watch it live
-    chrome.runtime
-      .sendMessage({
-        type: "STUDIO_RECEIVE_STEP",
-        step: newStep,
-      })
-      .catch(() => {
-        /* Ignore if Studio is closed */
-      });
-
-    sendResponse({ status: "success" });
-    return false;
   }
-});
 
-// ============================================================================
-// 5. Studio Connection & Workflow Execution Loop
-// ============================================================================
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === "brunner-studio") {
-    console.log("[BRunner Brain] Studio UI Connected.");
+  let tab = await resolveStartingTab(workflow);
 
-    port.onMessage.addListener(async (msg) => {
-      if (msg.type === "CHECK_BRIDGE_STATUS") {
-        // Attempt to connect if not already
-        const isConnected = await NativeBridge.connect().catch(() => false);
-        port.postMessage({ type: "BRIDGE_STATUS", connected: isConnected });
-      }
+  for (let index = 0; index < steps.length; index++) {
+    const step = steps[index];
 
-      if (msg.type === "START_WORKFLOW") {
-        console.log(
-          `[BRunner Brain] Starting Workflow: ${msg.payload.workflow_name}`,
-        );
-        //Pass the entire payload (which includes boundDomain and steps)
-        await runWorkflowEngine(msg.payload, port);
-      }
+    console.log(`[BRunner] Executing step ${index + 1}/${steps.length}:`, step);
+
+    tab = await executeStep(tab, step);
+    await delay(Defaults.StepDelayMs);
+  }
+
+  chrome.runtime
+    .sendMessage({
+      type: Messages.WorkflowComplete,
+      workflow,
+    })
+    .catch(() => {});
+
+  return {
+    ok: true,
+    executed: steps.length,
+  };
+}
+
+async function resolveStartingTab(workflow) {
+  const activeTab = await getActiveTab();
+
+  if (
+    activeTab &&
+    activeTab.url &&
+    !isStudioUrl(activeTab.url) &&
+    isDomainCompatible(activeTab.url, workflow.boundDomain)
+  ) {
+    return activeTab;
+  }
+
+  const bestTab = await getBestAutomationTab();
+
+  if (
+    bestTab &&
+    bestTab.url &&
+    isDomainCompatible(bestTab.url, workflow.boundDomain)
+  ) {
+    return bestTab;
+  }
+
+  if (workflow.boundDomain) {
+    const url = `https://${workflow.boundDomain}`;
+    return await createTab(url, true);
+  }
+
+  if (bestTab) return bestTab;
+
+  throw new Error("No suitable browser tab found for workflow execution.");
+}
+
+function isDomainCompatible(url, boundDomain) {
+  if (!boundDomain) return true;
+
+  const currentDomain = extractDomainFromUrl(url);
+  if (!currentDomain) return false;
+
+  return (
+    currentDomain === boundDomain || currentDomain.endsWith(`.${boundDomain}`)
+  );
+}
+
+async function executeStep(currentTab, step) {
+  const action = step.action || step.type;
+
+  if (action === Actions.BrowserNavigate) {
+    return await executeNavigateStep(currentTab, step);
+  }
+
+  if (action === Actions.LogicWait) {
+    await delay(Number(step.ms || step.duration || 1000));
+    return currentTab;
+  }
+
+  if (action === "keyboard.send_keys") {
+    await NativeBridge.osKeystroke(step.keys || step.value || step.text || "");
+    return currentTab;
+  }
+
+  return await executeContentStep(currentTab, step);
+}
+
+async function executeNavigateStep(currentTab, step) {
+  const url = step.url || step.value;
+
+  if (!url) {
+    throw new Error("browser.navigate step is missing a URL.");
+  }
+
+  const openIn = step.openIn || step.targetTab || NavigationTargets.SameTab;
+
+  if (openIn === NavigationTargets.NewTab) {
+    return await createTab(url, true);
+  }
+
+  const tabId = currentTab?.id;
+
+  if (!tabId) {
+    return await createTab(url, true);
+  }
+
+  await navigateTab(tabId, url);
+  const updatedTab = await waitForTabComplete(tabId);
+  await delay(Defaults.PageSettleDelayMs);
+
+  return updatedTab || currentTab;
+}
+
+async function executeContentStep(tab, step) {
+  if (!tab?.id) {
+    throw new Error("Cannot execute content step without a target tab.");
+  }
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: Messages.ExecuteStep,
+      step,
     });
+
+    if (response?.ok === false) {
+      throw new Error(response.error || "Content step failed.");
+    }
+
+    return tab;
+  } catch (error) {
+    console.warn("[BRunner] Content step failed:", error);
+
+    throw new Error(
+      `Failed to execute step in tab ${tab.id}: ${error.message || error}`,
+    );
   }
-});
+}
 
-async function runWorkflowEngine(workflowData, port) {
-  const { steps, boundDomain } = workflowData;
-  let targetTabId = null;
-
-  // --- PHASE 6.2: DOMAIN BINDING & AUTO-NAVIGATION ---
-  const activeTabs = await chrome.tabs.query({
-    active: true,
-    lastFocusedWindow: true,
-  });
-  let currentActiveTab = activeTabs.length > 0 ? activeTabs[0] : null;
-
-  if (boundDomain && boundDomain.trim() !== "") {
-    console.log(`[BRunner Brain] Workflow requires domain: ${boundDomain}`);
-    let needsNav = true;
-
-    if (currentActiveTab && currentActiveTab.url) {
-      try {
-        const urlObj = new URL(currentActiveTab.url);
-        // Strip http:// and www. to perform a clean match
-        const cleanDomain = boundDomain.replace(/^(https?:\/\/)?(www\.)?/, "");
-        if (urlObj.hostname.includes(cleanDomain)) {
-          needsNav = false;
-          targetTabId = currentActiveTab.id;
-          console.log(`[BRunner Brain] Already on bound domain. Proceeding.`);
-        }
-      } catch (e) {
-        /* ignore invalid urls */
-      }
-    }
-
-    if (needsNav) {
-      console.log(`[BRunner Brain] Not on bound domain. Auto-navigating...`);
-      const targetUrl = boundDomain.startsWith("http")
-        ? boundDomain
-        : "https://" + boundDomain;
-      const newTab = await chrome.tabs.create({ url: targetUrl, active: true });
-      targetTabId = newTab.id;
-
-      // Wait for the new tab to fully load
-      await new Promise((resolve) => {
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (tabId === targetTabId && info.status === "complete") {
-            chrome.tabs.onUpdated.removeListener(listener);
-            setTimeout(resolve, 1000);
-          }
-        });
-      });
-    }
-  } else {
-    // If no domain is bound, default to whatever tab the user is currently looking at
-    if (currentActiveTab) targetTabId = currentActiveTab.id;
-  }
-
-  // --- EXECUTE THE STEPS ---
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
-    console.log(`[BRunner Brain] Executing Step ${i + 1}: ${step.action}`);
-
-    // Special Case: Manual Navigation Nodes
-    if (step.action === "browser.navigate") {
-      let rawUrl = step.payload.primary.trim();
-
-      // Inject variables into the URL (e.g. https://google.com/search?q={{my_var}})
-      let targetUrl = rawUrl.replace(
-        /\{\{\s*([^}]+)\s*\}\}/g,
-        (match, varName) => {
-          return OrchestrationEngine.VariableRegistry[varName] !== undefined
-            ? OrchestrationEngine.VariableRegistry[varName]
-            : match;
-        },
-      );
-
-      if (
-        !targetUrl.startsWith("http://") &&
-        !targetUrl.startsWith("https://")
-      ) {
-        targetUrl = "https://" + targetUrl;
-      }
-
-      const openIn =
-        step.openIn || step.targetTab || step.payload?.openIn || "sameTab";
-
-      if (openIn === "newTab" || !targetTabId) {
-        const newTab = await chrome.tabs.create({
-          url: targetUrl,
-          active: true,
-        });
-        targetTabId = newTab.id;
-      } else {
-        await chrome.tabs.update(targetTabId, { url: targetUrl });
-      }
-
-      await new Promise((resolve) => {
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (tabId === targetTabId && info.status === "complete") {
-            chrome.tabs.onUpdated.removeListener(listener);
-            setTimeout(resolve, 1000);
-          }
-        });
-      });
-      continue; // Skip the rest of the loop, go to the next step
-    }
-
-    // Special Case: Hard Wait
-    if (step.action === "logic.wait") {
-      const waitTime = parseInt(step.payload.primary) || 1000;
-      await new Promise((res) => setTimeout(res, waitTime));
-      continue;
-    }
-
-    // --- VARIABLE INJECTION & EXECUTION (Standard DOM Actions) ---
-
-    // --- Standard DOM Actions via Content Script ---
-    if (targetTabId) {
-      try {
-        // 1. Inject stored variables into the payload
-        const processedStep = {
-          ...step,
-          payload: injectVariables(
-            step.payload,
-            OrchestrationEngine.VariableRegistry,
-          ),
-        };
-
-        // 2. Add the Target Resolver logic
-        // The Content Script needs to know HOW to use the target based on its type
-        const executionPayload = {
-          ...processedStep,
-          selectorType: step.targetType || "css_selector", // Defaults to existing behavior
-        };
-
-        // 3. Send to Content Script
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-          type: "EXECUTE_STEP",
-          payload: executionPayload,
-        });
-
-        console.log(`[BRunner Brain] Step ${i + 1} Result:`, response);
-
-        // 4. Handle Variable Extraction Storage
-        if (
-          step.action === "element.extract" &&
-          response &&
-          response.status === "success"
-        ) {
-          const varName = step.payload.primary;
-          if (varName) {
-            OrchestrationEngine.VariableRegistry[varName] =
-              response.extractedData;
-            console.log(
-              `[BRunner Brain] Saved Variable: '${varName}' = '${response.extractedData}'`,
-            );
-          }
-        }
-
-        if (response && response.status === "failed") {
-          console.error(
-            `[BRunner Brain] Workflow halted. Step ${i + 1} failed:`,
-            response.reason,
-          );
-          break;
-        }
-      } catch (error) {
-        console.error(
-          `[BRunner Brain] Failed to communicate with Tab ${targetTabId}.`,
-        );
-      }
-    }
-
-    // Brief human-like pause between actions
-    await new Promise((res) => setTimeout(res, 500));
-  }
-
-  console.log("[BRunner Brain] Workflow Execution Finished.");
-  if (port) port.postMessage({ type: "WORKFLOW_COMPLETE" });
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

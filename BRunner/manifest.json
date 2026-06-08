@@ -1,35 +1,60 @@
 {
   "manifest_version": 3,
-  "name": "BRunner (Enterprise RPA Engine)",
-  "version": "1.1.0",
-  "description": "Event-driven browser-native RPA runtime.",
+  "name": "BRunner",
+  "version": "2.2.0",
+  "description": "Enterprise-grade event-driven browser automation engine.",
   "permissions": [
+    
+    "host_permissions",
+    "action",
+    "web_accessible_resources",
     "tabs",
     "activeTab",
     "scripting",
     "storage",
-    "debugger",
-    "nativeMessaging",
-    "webRequest",
-    "sidePanel" 
+    "sidePanel",
+    "debugger"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "ws://127.0.0.1:8999/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "action": {
-    "default_title": "Open BRunner Sidebar"
+    "default_title": "BRunner"
   },
   "side_panel": {
     "default_path": "sidebar/sidebar.html"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content/mapper.js"],
-      "all_frames": true,
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content/targetResolver.js",
+        "content/mapper.js"
+      ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "studio/index.html",
+        "studio/app.js",
+        "studio/style.css",
+        "sidebar/sidebar.html",
+        "sidebar/sidebar.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

@@ -5,35 +5,48 @@ import pyautogui
 import os
 import secrets
 import logging
-import glob
+import shutil
+from pathlib import Path
+
+# --- Paths ---
+
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_FILE = BASE_DIR / "brunner_config.json"
+WORKFLOWS_DIR = BASE_DIR / "Workflows"
+LOG_FILE = BASE_DIR / "brunner_host.log"
+PORT = 8999
+
+WORKFLOWS_DIR.mkdir(exist_ok=True)
 
 # --- Setup Persistent Logging ---
-# This creates a 'brunner_host.log' file and also prints to the console
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("brunner_host.log"),
+        logging.FileHandler(LOG_FILE),
         logging.StreamHandler()
     ]
 )
-
-CONFIG_FILE = "brunner_config.json"
-PORT = 8999
 
 # --- Authentication & Setup ---
 
 
 def load_or_create_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    else:
-        new_key = secrets.token_hex(16)
-        config = {"pairing_key": new_key, "paired_extension_id": None}
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f)
-        return config
+
+    new_key = secrets.token_hex(16)
+    config = {
+        "pairing_key": new_key,
+        "paired_extension_id": None
+    }
+
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=4)
+
+    return config
 
 
 config = load_or_create_config()
@@ -46,130 +59,353 @@ logging.info("========================================")
 logging.info(f" YOUR PAIRING KEY: {PAIRING_KEY}")
 logging.info("========================================")
 
+
+# --- Helpers ---
+
+
+def get_payload(data):
+    """
+    Supports both protocol shapes:
+
+    Old:
+      { "command": "SAVE_WORKFLOW", "payload": { "filename": "x.json" } }
+
+    New:
+      { "id": "1", "command": "SAVE_WORKFLOW", "filename": "x.json" }
+    """
+    payload = data.get("payload")
+
+    if isinstance(payload, dict):
+        merged = dict(data)
+        merged.update(payload)
+        return merged
+
+    return data
+
+
+def response(request_id=None, status="success", **kwargs):
+    body = {
+        "status": status
+    }
+
+    if request_id is not None:
+        body["id"] = request_id
+
+    body.update(kwargs)
+    return json.dumps(body)
+
+
+def success(request_id=None, **kwargs):
+    return response(request_id=request_id, status="success", **kwargs)
+
+
+def failure(request_id=None, error="Unknown error", status="failed"):
+    return response(request_id=request_id, status=status, error=str(error))
+
+
+def sanitize_filename(filename):
+    if not filename:
+        raise ValueError("Missing filename.")
+
+    name = os.path.basename(str(filename))
+
+    if not name.lower().endswith(".json"):
+        name += ".json"
+
+    if name in [".json", "..json"]:
+        raise ValueError("Invalid filename.")
+
+    return name
+
+
+def workflow_path(filename):
+    safe_name = sanitize_filename(filename)
+    path = WORKFLOWS_DIR / safe_name
+
+    # Safety check against traversal tricks.
+    resolved = path.resolve()
+    if WORKFLOWS_DIR.resolve() not in resolved.parents and resolved != WORKFLOWS_DIR.resolve():
+        raise ValueError("Invalid workflow path.")
+
+    return resolved
+
+
+def parse_keys(raw_keys):
+    """
+    Accepts:
+      "enter"
+      "ctrl+l"
+      "ctrl+shift+s"
+      ["ctrl", "l"]
+
+    Returns a normalized list usable by pyautogui.
+    """
+    if isinstance(raw_keys, list):
+        return [str(k).strip().lower() for k in raw_keys if str(k).strip()]
+
+    text = str(raw_keys or "").strip().lower()
+
+    if not text:
+        raise ValueError("Missing key sequence.")
+
+    aliases = {
+        "control": "ctrl",
+        "cmd": "command",
+        "return": "enter",
+        "esc": "escape"
+    }
+
+    parts = [p.strip() for p in text.replace(" ", "").split("+") if p.strip()]
+    return [aliases.get(p, p) for p in parts]
+
+
+async def send_json(websocket, body):
+    await websocket.send(body)
+
+
+# --- Command Handlers ---
+
+
+async def handle_auth(websocket, request_id, payload):
+    client_key = payload.get("key") or payload.get("pairing_key")
+
+    if client_key == PAIRING_KEY:
+        await send_json(
+            websocket,
+            success(request_id, message="Authenticated successfully.")
+        )
+        logging.info("[Auth] Extension connected and authenticated securely.")
+        return True
+
+    await send_json(
+        websocket,
+        failure(request_id, "Invalid Pairing Key.")
+    )
+    logging.warning("[Auth] Blocked connection attempt with invalid key.")
+    return False
+
+
+async def handle_os_keystroke(websocket, request_id, payload):
+    raw_keys = (
+        payload.get("keys")
+        or payload.get("key")
+        or payload.get("value")
+        or payload.get("text")
+    )
+
+    keys = parse_keys(raw_keys)
+
+    logging.info(f"[Hardware] Dispatching OS keystroke: {keys}")
+
+    if len(keys) == 1:
+        pyautogui.press(keys[0])
+    else:
+        pyautogui.hotkey(*keys)
+
+    await send_json(
+        websocket,
+        success(
+            request_id,
+            strategy="Python_OS_Hardware",
+            keys=keys
+        )
+    )
+
+    logging.info(f"[Hardware] Keystroke executed successfully: {keys}")
+
+
+async def handle_list_workflows(websocket, request_id):
+    WORKFLOWS_DIR.mkdir(exist_ok=True)
+
+    files = sorted([
+        path.name
+        for path in WORKFLOWS_DIR.iterdir()
+        if path.is_file() and path.name.lower().endswith(".json")
+    ])
+
+    await send_json(
+        websocket,
+        success(request_id, files=files)
+    )
+
+
+async def handle_save_workflow(websocket, request_id, payload):
+    filename = payload.get("filename")
+    content = payload.get("content")
+
+    if content is None:
+        content = payload.get("workflow")
+
+    path = workflow_path(filename)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(content, f, indent=4)
+
+    await send_json(
+        websocket,
+        success(request_id, filename=path.name)
+    )
+
+
+async def handle_load_workflow(websocket, request_id, payload):
+    filename = payload.get("filename")
+    path = workflow_path(filename)
+
+    if not path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "File not found.")
+        )
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        content = json.load(f)
+
+    await send_json(
+        websocket,
+        success(request_id, filename=path.name, content=content)
+    )
+
+
+async def handle_delete_workflow(websocket, request_id, payload):
+    filename = payload.get("filename")
+    path = workflow_path(filename)
+
+    if not path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "File not found.")
+        )
+        return
+
+    path.unlink()
+
+    await send_json(
+        websocket,
+        success(request_id, filename=path.name)
+    )
+
+
+async def handle_duplicate_workflow(websocket, request_id, payload):
+    original = payload.get("filename")
+    new_name = (
+        payload.get("newFilename")
+        or payload.get("new_filename")
+        or payload.get("targetFilename")
+    )
+
+    original_path = workflow_path(original)
+    new_path = workflow_path(new_name)
+
+    if not original_path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "Original workflow not found.")
+        )
+        return
+
+    if new_path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "Target workflow already exists.")
+        )
+        return
+
+    shutil.copyfile(original_path, new_path)
+
+    await send_json(
+        websocket,
+        success(
+            request_id,
+            filename=original_path.name,
+            newFilename=new_path.name
+        )
+    )
+
+
 # --- WebSocket Command Router ---
 
 
 async def handle_connection(websocket):
     authenticated = False
-    remote_ip = websocket.remote_address[0]
+    remote_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
+
     logging.info(f"[Network] New connection attempt from {remote_ip}")
 
     try:
         async for message in websocket:
-            data = json.loads(message)
-            command = data.get("command", "UNKNOWN")
-            payload = data.get("payload", {})
-
-            logging.info(
-                f"[Inbound] Received Command: {command} | Payload: {payload}")
-
-            # 1. Enforce Authentication Handshake
-            if command == "AUTH":
-                client_key = payload.get("key")
-                if client_key == PAIRING_KEY:
-                    authenticated = True
-                    await websocket.send(json.dumps({"status": "success", "message": "Authenticated successfully."}))
-                    logging.info(
-                        "[Auth] Extension connected and authenticated securely.")
-                else:
-                    await websocket.send(json.dumps({"status": "failed", "error": "Invalid Pairing Key."}))
-                    logging.warning(
-                        "[Auth] Blocked connection attempt with invalid key.")
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                await send_json(websocket, failure(error="Invalid JSON."))
                 continue
 
-            # Block everything else if not authenticated
+            request_id = data.get("id")
+            command = data.get("command", "UNKNOWN")
+            payload = get_payload(data)
+
+            logging.info(f"[Inbound] Command: {command} | Payload: {payload}")
+
+            if command == "AUTH":
+                authenticated = await handle_auth(websocket, request_id, payload)
+                continue
+
             if not authenticated:
-                await websocket.send(json.dumps({"status": "failed", "error": "Not authenticated."}))
+                await send_json(
+                    websocket,
+                    failure(request_id, "Not authenticated.")
+                )
                 logging.warning(
                     f"[Security] Rejected unauthenticated command: {command}")
                 continue
 
-            # 2. Command Execution
-            if command == "OS_KEYSTROKE":
-                key = payload.get("key", "").lower()
-                try:
-                    logging.info(
-                        f"[Hardware] Dispatching OS keystroke: '{key}'")
-                    pyautogui.press(key)
-                    await websocket.send(json.dumps({"status": "success", "strategy": "Python_OS_Hardware"}))
-                    logging.info(
-                        f"[Hardware] Keystroke '{key}' executed successfully.")
-                except Exception as e:
-                    error_msg = str(e)
-                    await websocket.send(json.dumps({"status": "failed", "error": error_msg}))
-                    logging.error(f"[Hardware] Keystroke failed: {error_msg}")
-            elif command == "LIST_WORKFLOWS":
-                try:
-                    # Look for .json files in the local Workflows directory
-                    os.makedirs("Workflows", exist_ok=True)
-                    files = [f for f in os.listdir(
-                        "Workflows") if f.endswith(".json")]
-                    await websocket.send(json.dumps({"status": "success", "files": files}))
-                except Exception as e:
-                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+            try:
+                if command == "OS_KEYSTROKE":
+                    await handle_os_keystroke(websocket, request_id, payload)
 
-            elif command == "SAVE_WORKFLOW":
-                try:
-                    filename = payload.get("filename")
-                    content = payload.get("content")
-                    with open(f"Workflows/{filename}", "w") as f:
-                        json.dump(content, f, indent=4)
-                    await websocket.send(json.dumps({"status": "success"}))
-                except Exception as e:
-                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+                elif command == "LIST_WORKFLOWS":
+                    await handle_list_workflows(websocket, request_id)
 
-            elif command == "LOAD_WORKFLOW":
-                try:
-                    filename = payload.get("filename")
-                    with open(f"Workflows/{filename}", "r") as f:
-                        content = json.load(f)
-                    await websocket.send(json.dumps({"status": "success", "content": content}))
-                except Exception as e:
-                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+                elif command == "SAVE_WORKFLOW":
+                    await handle_save_workflow(websocket, request_id, payload)
 
-            elif command == "DELETE_WORKFLOW":
-                try:
-                    filename = payload.get("filename")
-                    file_path = f"Workflows/{filename}"
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                        await websocket.send(json.dumps({"status": "success"}))
-                    else:
-                        await websocket.send(json.dumps({"status": "failed", "error": "File not found"}))
-                except Exception as e:
-                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+                elif command == "LOAD_WORKFLOW":
+                    await handle_load_workflow(websocket, request_id, payload)
 
-            elif command == "DUPLICATE_WORKFLOW":
-                try:
-                    original = payload.get("filename")
-                    new_name = payload.get("new_filename")
-                    if not new_name.endswith(".json"):
-                        new_name += ".json"
+                elif command == "DELETE_WORKFLOW":
+                    await handle_delete_workflow(websocket, request_id, payload)
 
-                    # Read the original and write to the new file
-                    with open(f"Workflows/{original}", "r") as f:
-                        content = json.load(f)
-                    with open(f"Workflows/{new_name}", "w") as f:
-                        json.dump(content, f, indent=4)
+                elif command == "DUPLICATE_WORKFLOW":
+                    await handle_duplicate_workflow(websocket, request_id, payload)
 
-                    await websocket.send(json.dumps({"status": "success"}))
-                except Exception as e:
-                    await websocket.send(json.dumps({"status": "failed", "error": str(e)}))
+                else:
+                    await send_json(
+                        websocket,
+                        failure(
+                            request_id,
+                            f"Unknown command: {command}",
+                            status="error"
+                        )
+                    )
+                    logging.warning(
+                        f"[Router] Unhandled command received: {command}")
 
-            else:
-                await websocket.send(json.dumps({"status": "error", "error": f"Unknown command: {command}"}))
-                logging.warning(
-                    f"[Router] Unhandled command received: {command}")
+            except Exception as e:
+                error_msg = str(e)
+                await send_json(websocket, failure(request_id, error_msg))
+                logging.error(f"[Command] {command} failed: {error_msg}")
 
     except websockets.exceptions.ConnectionClosed:
         logging.info("[Network] Extension disconnected.")
+
     except Exception as e:
         logging.error(f"[System] Unexpected error: {str(e)}")
 
 
 async def main():
     async with websockets.serve(handle_connection, "localhost", PORT):
-        await asyncio.Future()  # Run forever
+        await asyncio.Future()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
