@@ -3,11 +3,8 @@
   "name": "BRunner",
   "version": "2.2.0",
   "description": "Enterprise-grade event-driven browser automation engine.",
+
   "permissions": [
-    
-    "host_permissions",
-    "action",
-    "web_accessible_resources",
     "tabs",
     "activeTab",
     "scripting",
@@ -15,21 +12,26 @@
     "sidePanel",
     "debugger"
   ],
+
   "host_permissions": [
     "http://*/*",
     "https://*/*",
     "ws://127.0.0.1:8999/*"
   ],
+
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
+
   "action": {
     "default_title": "BRunner"
   },
+
   "side_panel": {
     "default_path": "sidebar/sidebar.html"
   },
+
   "content_scripts": [
     {
       "matches": [
@@ -43,6 +45,7 @@
       "run_at": "document_idle"
     }
   ],
+
   "web_accessible_resources": [
     {
       "resources": [

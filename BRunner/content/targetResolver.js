@@ -23,118 +23,212 @@
     if (!isElement(element)) {
       return {
         primary: null,
+        candidates: [],
         fallbacks: [],
         snapshot: null,
       };
     }
 
-    const id = cleanValue(element.id);
-    if (id) {
-      candidates.push({
-        strategy: TargetStrategies.Id,
-        value: id,
-        confidence: 1,
-      });
-    }
+    addCandidate(candidates, TargetStrategies.Id, element.id, 100);
 
-    const name = cleanValue(element.getAttribute("name"));
-    if (name) {
-      candidates.push({
-        strategy: TargetStrategies.Name,
-        value: name,
-        confidence: 0.95,
-      });
-    }
+    addCandidate(
+      candidates,
+      TargetStrategies.Name,
+      element.getAttribute("name"),
+      95,
+    );
 
-    const ariaLabel = cleanValue(element.getAttribute("aria-label"));
-    if (ariaLabel) {
-      candidates.push({
-        strategy: TargetStrategies.AriaLabel,
-        value: ariaLabel,
-        confidence: 0.9,
-      });
-    }
+    addCandidate(
+      candidates,
+      TargetStrategies.AriaLabel,
+      element.getAttribute("aria-label"),
+      92,
+    );
+
+    addCandidate(
+      candidates,
+      "placeholder",
+      element.getAttribute("placeholder"),
+      86,
+    );
+
+    addCandidate(candidates, "title", element.getAttribute("title"), 84);
 
     for (const attr of [
       TargetStrategies.DataTestId,
       TargetStrategies.DataTest,
       TargetStrategies.DataQa,
+      "data-cy",
+      "data-automation-id",
+      "data-component",
+      "data-testid",
     ]) {
-      const value = cleanValue(element.getAttribute(attr));
-      if (value) {
-        candidates.push({
-          strategy: attr,
-          value,
-          confidence: 0.88,
-        });
-      }
+      addCandidate(candidates, attr, element.getAttribute(attr), 88);
     }
 
     const labelText = getAssociatedLabelText(element);
-    if (labelText) {
-      candidates.push({
-        strategy: TargetStrategies.LabelText,
-        value: labelText,
-        confidence: 0.82,
-      });
-    }
+    addCandidate(candidates, TargetStrategies.LabelText, labelText, 82);
 
     const stableText = getStableElementText(element);
-    if (stableText) {
-      candidates.push({
-        strategy: TargetStrategies.Text,
-        value: stableText,
-        confidence: 0.72,
-      });
+    addCandidate(candidates, TargetStrategies.Text, stableText, 76);
+
+    const role = element.getAttribute("role");
+    if (role && stableText) {
+      addCandidate(candidates, "role_text", `${role}::${stableText}`, 74);
     }
+
+    const formContextSelector = buildFormContextSelector(element);
+    addCandidate(candidates, "form_context", formContextSelector, 72);
 
     const cssSelector = buildStableCssSelector(element);
-    if (cssSelector) {
-      candidates.push({
-        strategy: TargetStrategies.CssSelector,
-        value: cssSelector,
-        confidence: 0.62,
-      });
-    }
+    addCandidate(candidates, TargetStrategies.CssSelector, cssSelector, 68);
+
+    const domPath = buildDomPath(element);
+    addCandidate(candidates, "dom_path", domPath, 55);
 
     if (ctrlHash) {
-      candidates.push({
-        strategy: TargetStrategies.CtrlHash,
-        value: ctrlHash,
-        confidence: 0.45,
-      });
+      addCandidate(candidates, TargetStrategies.CtrlHash, ctrlHash, 40);
     }
 
+    const uniqueCandidates = dedupeCandidates(candidates);
+
     return {
-      primary: candidates[0] || null,
-      fallbacks: candidates.slice(1),
+      primary: uniqueCandidates[0] || null,
+      candidates: uniqueCandidates,
+      fallbacks: uniqueCandidates.slice(1),
       snapshot: buildElementSnapshot(element),
     };
   }
 
+  function addCandidate(candidates, strategy, rawValue, score) {
+    const value = cleanValue(rawValue);
+
+    if (!strategy || !value) return;
+
+    candidates.push({
+      strategy,
+      value,
+      score,
+    });
+  }
+
+  function dedupeCandidates(candidates) {
+    const seen = new Set();
+
+    return candidates
+      .filter((candidate) => {
+        const key = `${candidate.strategy}::${candidate.value}`;
+
+        if (seen.has(key)) return false;
+
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  }
+
+  function buildDomPath(element) {
+    if (!isElement(element)) return "";
+
+    const parts = [];
+    let current = element;
+
+    while (
+      current &&
+      current.nodeType === Node.ELEMENT_NODE &&
+      current !== document.documentElement &&
+      parts.length < 10
+    ) {
+      const parent = current.parentElement;
+      if (!parent) break;
+
+      const tag = current.tagName.toLowerCase();
+      const index = Array.from(parent.children).indexOf(current);
+
+      parts.unshift(`${tag}:${index}`);
+      current = parent;
+    }
+
+    return parts.join("/");
+  }
+
+  function buildFormContextSelector(element) {
+    if (!isElement(element)) return "";
+
+    const form = element.closest("form");
+    if (!form) return "";
+
+    const elementTag = element.tagName.toLowerCase();
+    const elementType = element.getAttribute("type");
+    const elementText = getStableElementText(element);
+
+    const formId = form.id ? `#${cssEscape(form.id)}` : "";
+    const formName = form.getAttribute("name")
+      ? `form[name="${escapeCssString(form.getAttribute("name"))}"]`
+      : "";
+
+    const formSelector = formId || formName || "form";
+
+    if (element.id) {
+      return `${formSelector} #${cssEscape(element.id)}`;
+    }
+
+    if (element.getAttribute("name")) {
+      return `${formSelector} ${elementTag}[name="${escapeCssString(element.getAttribute("name"))}"]`;
+    }
+
+    if (elementType) {
+      return `${formSelector} ${elementTag}[type="${escapeCssString(elementType)}"]`;
+    }
+
+    if (elementText) {
+      return `${formSelector} ${elementTag}::text(${elementText})`;
+    }
+
+    return "";
+  }
+
   function resolveRecordedTarget(stepOrTarget) {
     const target = normalizeTargetInput(stepOrTarget);
-    const candidates = [];
 
-    if (target.primary) candidates.push(target.primary);
-    if (Array.isArray(target.fallbacks)) candidates.push(...target.fallbacks);
+    const candidates = dedupeCandidates([
+      ...(target.primary ? [target.primary] : []),
+      ...(Array.isArray(target.candidates) ? target.candidates : []),
+      ...(Array.isArray(target.fallbacks) ? target.fallbacks : []),
+    ]);
 
     for (const candidate of candidates) {
       const element = resolveByStrategy(candidate);
 
-      if (element) {
+      if (element && snapshotLooksCompatible(element, target.snapshot)) {
         return {
           element,
           strategy: candidate.strategy,
           value: candidate.value,
+          confidence: candidate.score || 0,
+          mode: "direct",
         };
       }
+    }
+
+    const fuzzy = resolveBySnapshotFuzzy(target.snapshot);
+
+    if (fuzzy.element) {
+      return {
+        element: fuzzy.element,
+        strategy: "snapshot_fuzzy",
+        value: fuzzy.reason,
+        confidence: fuzzy.score,
+        mode: "fuzzy",
+      };
     }
 
     return {
       element: null,
       strategy: null,
       value: null,
+      confidence: 0,
+      mode: "failed",
     };
   }
 
@@ -142,35 +236,79 @@
     if (!stepOrTarget) {
       return {
         primary: null,
+        candidates: [],
         fallbacks: [],
+        snapshot: null,
       };
     }
 
-    // New preferred shape:
+    // New AAA shape:
+    // {
+    //   target: {
+    //     primary,
+    //     candidates,
+    //     snapshot
+    //   }
+    // }
+    if (
+      stepOrTarget.target &&
+      typeof stepOrTarget.target === "object" &&
+      (stepOrTarget.target.primary || stepOrTarget.target.candidates)
+    ) {
+      const target = stepOrTarget.target;
+
+      return {
+        primary: target.primary || null,
+        candidates: Array.isArray(target.candidates) ? target.candidates : [],
+        fallbacks: Array.isArray(target.fallbacks) ? target.fallbacks : [],
+        snapshot: target.snapshot || stepOrTarget.targetSnapshot || null,
+      };
+    }
+
+    // Transitional shape:
     // {
     //   target: { strategy, value },
     //   targetFallbacks: [...]
     // }
     if (stepOrTarget.target && typeof stepOrTarget.target === "object") {
+      const primary = stepOrTarget.target;
+
       return {
-        primary: stepOrTarget.target,
+        primary,
+        candidates: [
+          primary,
+          ...(Array.isArray(stepOrTarget.targetFallbacks)
+            ? stepOrTarget.targetFallbacks
+            : []),
+        ],
         fallbacks: Array.isArray(stepOrTarget.targetFallbacks)
           ? stepOrTarget.targetFallbacks
           : [],
+        snapshot: stepOrTarget.targetSnapshot || null,
       };
     }
 
     // Direct resolver shape:
     // {
-    //   primary: { strategy, value },
-    //   fallbacks: [...]
+    //   primary,
+    //   candidates,
+    //   fallbacks,
+    //   snapshot
     // }
-    if (stepOrTarget.primary || stepOrTarget.fallbacks) {
+    if (
+      stepOrTarget.primary ||
+      stepOrTarget.candidates ||
+      stepOrTarget.fallbacks
+    ) {
       return {
         primary: stepOrTarget.primary || null,
+        candidates: Array.isArray(stepOrTarget.candidates)
+          ? stepOrTarget.candidates
+          : [],
         fallbacks: Array.isArray(stepOrTarget.fallbacks)
           ? stepOrTarget.fallbacks
           : [],
+        snapshot: stepOrTarget.snapshot || null,
       };
     }
 
@@ -180,21 +318,32 @@
     //   targetType: "ctrlHash"
     // }
     if (typeof stepOrTarget.target === "string") {
+      const primary = {
+        strategy:
+          stepOrTarget.targetType || inferLegacyStrategy(stepOrTarget.target),
+        value: stepOrTarget.target,
+      };
+
       return {
-        primary: {
-          strategy:
-            stepOrTarget.targetType || inferLegacyStrategy(stepOrTarget.target),
-          value: stepOrTarget.target,
-        },
+        primary,
+        candidates: [
+          primary,
+          ...(Array.isArray(stepOrTarget.targetFallbacks)
+            ? stepOrTarget.targetFallbacks
+            : []),
+        ],
         fallbacks: Array.isArray(stepOrTarget.targetFallbacks)
           ? stepOrTarget.targetFallbacks
           : [],
+        snapshot: stepOrTarget.targetSnapshot || null,
       };
     }
 
     return {
       primary: null,
+      candidates: [],
       fallbacks: [],
+      snapshot: null,
     };
   }
 
@@ -247,6 +396,47 @@
       case TargetStrategies.CtrlHash:
       case TargetStrategies.FallbackHash:
         return resolveByCtrlHash(value);
+
+      case "placeholder":
+        return firstVisible(
+          document.querySelectorAll(
+            `[placeholder="${escapeCssString(value)}"]`,
+          ),
+        );
+
+      case "title":
+        return firstVisible(
+          document.querySelectorAll(`[title="${escapeCssString(value)}"]`),
+        );
+
+      case "data-cy":
+      case "data-automation-id":
+      case "data-component":
+        return firstVisible(
+          document.querySelectorAll(
+            `[${strategy}="${escapeCssString(value)}"]`,
+          ),
+        );
+
+      case "role_text": {
+        const [role, text] = value.split("::");
+        return firstVisible(
+          Array.from(
+            document.querySelectorAll(`[role="${escapeCssString(role)}"]`),
+          ).filter((element) => {
+            return (
+              normalizeText(getStableElementText(element)) ===
+              normalizeText(text)
+            );
+          }),
+        );
+      }
+
+      case "form_context":
+        return resolveByFormContext(value);
+
+      case "dom_path":
+        return resolveByDomPath(value);
 
       default:
         return null;
@@ -338,7 +528,14 @@
       id: element.id || "",
       name: element.getAttribute("name") || "",
       ariaLabel: element.getAttribute("aria-label") || "",
+      placeholder: element.getAttribute("placeholder") || "",
+      title: element.getAttribute("title") || "",
       text: getStableElementText(element),
+      value: getSafeValue(element),
+      href: element.getAttribute("href") || "",
+      classes: Array.from(element.classList || []).slice(0, 8),
+      domPath: buildDomPath(element),
+      nearbyText: getNearbyText(element),
       bounds: {
         x: Math.round(rect.left),
         y: Math.round(rect.top),
@@ -498,6 +695,285 @@
 
   function escapeCssString(value) {
     return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function getSafeValue(element) {
+    if (!isElement(element)) return "";
+
+    const tag = element.tagName.toLowerCase();
+
+    if (tag === "input") {
+      const type = (element.getAttribute("type") || "").toLowerCase();
+
+      if (["button", "submit", "reset"].includes(type)) {
+        return cleanValue(element.value || element.getAttribute("value"));
+      }
+
+      return "";
+    }
+
+    return "";
+  }
+
+  function getNearbyText(element) {
+    if (!isElement(element)) return "";
+
+    const container =
+      element.closest("form") ||
+      element.closest("section") ||
+      element.closest("main") ||
+      element.parentElement;
+
+    if (!container) return "";
+
+    return cleanValue(container.innerText || container.textContent || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 300);
+  }
+
+  function snapshotLooksCompatible(element, snapshot) {
+    if (!snapshot || !isElement(element)) return true;
+
+    let score = 0;
+    let possible = 0;
+
+    possible += 2;
+    if (element.tagName.toLowerCase() === snapshot.tag) score += 2;
+
+    if (snapshot.type) {
+      possible += 1;
+      if ((element.getAttribute("type") || "") === snapshot.type) score += 1;
+    }
+
+    if (snapshot.role) {
+      possible += 1;
+      if ((element.getAttribute("role") || "") === snapshot.role) score += 1;
+    }
+
+    if (snapshot.text) {
+      possible += 2;
+      if (
+        normalizeText(getStableElementText(element)) ===
+        normalizeText(snapshot.text)
+      ) {
+        score += 2;
+      }
+    }
+
+    if (snapshot.ariaLabel) {
+      possible += 2;
+      if (
+        normalizeText(element.getAttribute("aria-label") || "") ===
+        normalizeText(snapshot.ariaLabel)
+      ) {
+        score += 2;
+      }
+    }
+
+    if (snapshot.placeholder) {
+      possible += 1;
+      if (
+        normalizeText(element.getAttribute("placeholder") || "") ===
+        normalizeText(snapshot.placeholder)
+      ) {
+        score += 1;
+      }
+    }
+
+    // If there was not much to compare, do not reject.
+    if (possible <= 2) return true;
+
+    return score / possible >= 0.45;
+  }
+
+  function resolveBySnapshotFuzzy(snapshot) {
+    if (!snapshot) {
+      return {
+        element: null,
+        score: 0,
+        reason: "no_snapshot",
+      };
+    }
+
+    const candidates = Array.from(
+      document.querySelectorAll(
+        [
+          "button",
+          "a",
+          "input",
+          "textarea",
+          "select",
+          "[role='button']",
+          "[role='link']",
+          "[role='textbox']",
+          "[contenteditable='true']",
+        ].join(","),
+      ),
+    ).filter(isVisibleElement);
+
+    let best = {
+      element: null,
+      score: 0,
+      reason: "",
+    };
+
+    for (const element of candidates) {
+      const result = scoreElementAgainstSnapshot(element, snapshot);
+
+      if (result.score > best.score) {
+        best = {
+          element,
+          score: result.score,
+          reason: result.reason,
+        };
+      }
+    }
+
+    if (best.score < 45) {
+      return {
+        element: null,
+        score: best.score,
+        reason: "below_threshold",
+      };
+    }
+
+    return best;
+  }
+
+  function scoreElementAgainstSnapshot(element, snapshot) {
+    let score = 0;
+    const reasons = [];
+
+    const tag = element.tagName.toLowerCase();
+
+    if (snapshot.tag && tag === snapshot.tag) {
+      score += 15;
+      reasons.push("tag");
+    }
+
+    if (snapshot.type && element.getAttribute("type") === snapshot.type) {
+      score += 10;
+      reasons.push("type");
+    }
+
+    if (
+      snapshot.role &&
+      normalizeText(element.getAttribute("role") || "") ===
+        normalizeText(snapshot.role)
+    ) {
+      score += 10;
+      reasons.push("role");
+    }
+
+    if (
+      snapshot.text &&
+      normalizeText(getStableElementText(element)) ===
+        normalizeText(snapshot.text)
+    ) {
+      score += 25;
+      reasons.push("text");
+    }
+
+    if (
+      snapshot.ariaLabel &&
+      normalizeText(element.getAttribute("aria-label") || "") ===
+        normalizeText(snapshot.ariaLabel)
+    ) {
+      score += 25;
+      reasons.push("ariaLabel");
+    }
+
+    if (
+      snapshot.placeholder &&
+      normalizeText(element.getAttribute("placeholder") || "") ===
+        normalizeText(snapshot.placeholder)
+    ) {
+      score += 20;
+      reasons.push("placeholder");
+    }
+
+    if (
+      snapshot.name &&
+      normalizeText(element.getAttribute("name") || "") ===
+        normalizeText(snapshot.name)
+    ) {
+      score += 20;
+      reasons.push("name");
+    }
+
+    const nearbyText = getNearbyText(element);
+
+    if (
+      snapshot.nearbyText &&
+      nearbyText &&
+      textOverlapScore(snapshot.nearbyText, nearbyText) > 0.35
+    ) {
+      score += 10;
+      reasons.push("nearbyText");
+    }
+
+    return {
+      score,
+      reason: reasons.join("+") || "weak_match",
+    };
+  }
+
+  function textOverlapScore(a, b) {
+    const wordsA = new Set(
+      normalizeText(a)
+        .split(/\s+/)
+        .filter((word) => word.length > 2),
+    );
+
+    const wordsB = new Set(
+      normalizeText(b)
+        .split(/\s+/)
+        .filter((word) => word.length > 2),
+    );
+
+    if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+    let overlap = 0;
+
+    for (const word of wordsA) {
+      if (wordsB.has(word)) overlap++;
+    }
+
+    return overlap / Math.max(wordsA.size, wordsB.size);
+  }
+
+  function resolveByFormContext(value) {
+    if (!value) return null;
+
+    // Only use normal CSS part. Custom ::text(...) is intentionally ignored here.
+    const cssPart = value.replace(/::text\(.*\)$/i, "");
+
+    return safeQuerySelector(cssPart);
+  }
+
+  function resolveByDomPath(path) {
+    if (!path) return null;
+
+    const parts = String(path).split("/").filter(Boolean);
+    let current = document.documentElement;
+
+    for (const part of parts) {
+      const [tag, indexText] = part.split(":");
+      const index = Number(indexText);
+
+      if (!current || !tag || Number.isNaN(index)) return null;
+
+      const children = Array.from(current.children);
+      const next = children[index];
+
+      if (!next || next.tagName.toLowerCase() !== tag) {
+        return null;
+      }
+
+      current = next;
+    }
+
+    return isVisibleElement(current) ? current : null;
   }
 
   window.BRunnerTargetResolver = {

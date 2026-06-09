@@ -1,8 +1,13 @@
 // core/recordingController.js
-// Owns recording state, recorded steps, auto-binding, and auto-save behavior.
+// Owns recording state, recorded steps, auto-binding, page transition capture,
+// and auto-save behavior.
 
-import { Messages } from "./constants.js";
-import { createAutoSaveName, createEmptyWorkflow } from "./workflowUtils.js";
+import { Actions, Messages } from "./constants.js";
+import {
+  createAutoSaveName,
+  createEmptyWorkflow,
+  getPageContextFromUrl,
+} from "./workflowUtils.js";
 import {
   getBestAutomationTab,
   getTabDomain,
@@ -14,10 +19,18 @@ export function createRecordingController({ nativeBridge }) {
   let boundDomain = "";
   let recordedSteps = [];
 
+  let recordingTabId = null;
+  let lastRecordedUrl = "";
+  let lastNavigationRecordedAt = 0;
+
   async function start() {
     const tab = await getBestAutomationTab();
 
     boundDomain = tab ? getTabDomain(tab) : "";
+    recordingTabId = tab?.id || null;
+    lastRecordedUrl = normalizeUrlForCompare(tab?.url || "");
+    lastNavigationRecordedAt = 0;
+
     recordedSteps = [];
     isRecording = true;
 
@@ -47,11 +60,17 @@ export function createRecordingController({ nativeBridge }) {
       }
     }
 
-    return {
+    const finalState = {
       ...getState(),
       workflow,
       saveResult,
     };
+
+    recordingTabId = null;
+    lastRecordedUrl = "";
+    lastNavigationRecordedAt = 0;
+
+    return finalState;
   }
 
   async function toggle(enabled) {
@@ -59,21 +78,97 @@ export function createRecordingController({ nativeBridge }) {
     return stop();
   }
 
-  function addStep(step) {
+  function addStep(step, senderTab = null) {
     if (!isRecording || !step) {
       return getState();
     }
 
-    recordedSteps.push(step);
+    if (senderTab?.id && !recordingTabId) {
+      recordingTabId = senderTab.id;
+    }
+
+    const normalizedStep = {
+      ...step,
+      recordedAt: step.recordedAt || new Date().toISOString(),
+    };
+
+    recordedSteps.push(normalizedStep);
 
     chrome.runtime
       .sendMessage({
         type: Messages.StudioReceiveStep,
-        step,
+        step: normalizedStep,
       })
       .catch(() => {});
 
     return getState();
+  }
+
+  async function handleTabCompleted(tabId, tab) {
+    if (!isRecording) return;
+
+    if (!tabId || !tab || !isAutomationTab(tab)) return;
+
+    // If recording was started from Studio/sidebar and the first real content tab
+    // was not known yet, bind the session to this tab.
+    if (!recordingTabId) {
+      recordingTabId = tabId;
+    }
+
+    // For now, one recording session tracks one main tab.
+    // This avoids accidental recordings from unrelated tabs.
+    if (tabId !== recordingTabId) {
+      return;
+    }
+
+    const currentUrl = normalizeUrlForCompare(tab.url || "");
+
+    if (!currentUrl) {
+      await syncTab(tabId);
+      return;
+    }
+
+    const previousUrl = lastRecordedUrl;
+
+    await syncTab(tabId);
+
+    if (!previousUrl) {
+      lastRecordedUrl = currentUrl;
+      return;
+    }
+
+    if (currentUrl === previousUrl) {
+      return;
+    }
+
+    lastRecordedUrl = currentUrl;
+
+    // Avoid duplicate navigation steps caused by redirects or rapid history updates.
+    const now = Date.now();
+    if (now - lastNavigationRecordedAt < 500) {
+      return;
+    }
+
+    lastNavigationRecordedAt = now;
+
+    const navigationStep = {
+      action: Actions.BrowserNavigate,
+      url: tab.url,
+      openIn: "sameTab",
+      friendlyName: `Navigate: ${tab.url}`,
+      page: getPageContextFromUrl(tab.url, tab.title || ""),
+      recordedAt: new Date().toISOString(),
+      recordedBy: "background.navigation_observer",
+    };
+
+    recordedSteps.push(navigationStep);
+
+    chrome.runtime
+      .sendMessage({
+        type: Messages.StudioReceiveStep,
+        step: navigationStep,
+      })
+      .catch(() => {});
   }
 
   function getState() {
@@ -81,6 +176,8 @@ export function createRecordingController({ nativeBridge }) {
       isRecording,
       boundDomain,
       recordedSteps: [...recordedSteps],
+      recordingTabId,
+      lastRecordedUrl,
     };
   }
 
@@ -115,6 +212,24 @@ export function createRecordingController({ nativeBridge }) {
     }
   }
 
+  function normalizeUrlForCompare(url) {
+    try {
+      const parsed = new URL(url);
+      parsed.hash = "";
+      return parsed.toString();
+    } catch {
+      return "";
+    }
+  }
+
+  function safeUrlPart(url, key) {
+    try {
+      return new URL(url)[key] || "";
+    } catch {
+      return "";
+    }
+  }
+
   return {
     start,
     stop,
@@ -122,5 +237,6 @@ export function createRecordingController({ nativeBridge }) {
     addStep,
     getState,
     syncTab,
+    handleTabCompleted,
   };
 }

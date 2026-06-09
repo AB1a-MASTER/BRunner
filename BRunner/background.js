@@ -15,6 +15,8 @@ import {
   normalizeWorkflow,
   extractDomainFromUrl,
   isStudioUrl,
+  getPageContextFromUrl,
+  pageContextsCompatible,
 } from "./core/workflowUtils.js";
 import {
   createTab,
@@ -23,6 +25,7 @@ import {
   getTabDomain,
   navigateTab,
   waitForTabComplete,
+  normalizeNavigationUrl,
 } from "./core/tabUtils.js";
 
 const recordingController = createRecordingController({
@@ -40,6 +43,14 @@ chrome.runtime.onStartup.addListener(() => {
 
 NativeBridge.connect();
 
+chrome.sidePanel
+  .setPanelBehavior({
+    openPanelOnActionClick: true,
+  })
+  .catch((error) => {
+    console.warn("[BRunner] Failed to set side panel behavior:", error);
+  });
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   handleMessage(request, sender)
     .then((response) => sendResponse(response))
@@ -55,9 +66,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete") return;
-  recordingController.syncTab(tabId);
+
+  recordingController.handleTabCompleted(tabId, tab).catch((error) => {
+    console.warn("[BRunner] Recording tab sync failed:", error);
+  });
 });
 
 async function handleMessage(request, sender) {
@@ -103,7 +117,10 @@ async function handleMessage(request, sender) {
     case Messages.RecordedStep:
       return {
         ok: true,
-        recording: recordingController.addStep(request.step),
+        recording: recordingController.addStep(
+          request.step,
+          sender?.tab || null,
+        ),
       };
 
     case Messages.RunWorkflowByName:
@@ -225,25 +242,62 @@ async function executeStep(currentTab, step) {
     return await executeNavigateStep(currentTab, step);
   }
 
+  const contextReadyTab = await ensureStepPageContext(currentTab, step);
+
   if (action === Actions.LogicWait) {
     await delay(Number(step.ms || step.duration || 1000));
-    return currentTab;
+    return contextReadyTab;
   }
 
   if (action === "keyboard.send_keys") {
     await NativeBridge.osKeystroke(step.keys || step.value || step.text || "");
+    return contextReadyTab;
+  }
+
+  return await executeContentStep(contextReadyTab, step);
+}
+
+async function ensureStepPageContext(currentTab, step) {
+  if (!step?.page?.url) {
     return currentTab;
   }
 
-  return await executeContentStep(currentTab, step);
+  const tab = currentTab?.id
+    ? await chrome.tabs.get(currentTab.id)
+    : currentTab;
+
+  const currentPage = getPageContextFromUrl(tab?.url || "", tab?.title || "");
+  const stepPage = step.page;
+
+  if (pageContextsCompatible(currentPage, stepPage)) {
+    return tab;
+  }
+
+  console.warn(
+    "[BRunner] Step page context mismatch. Recovering by navigation.",
+    {
+      currentPage,
+      stepPage,
+      step,
+    },
+  );
+
+  if (!stepPage.url) {
+    throw new Error(
+      `Step belongs to ${stepPage.host || stepPage.domain || "another page"}, but no recovery URL is available.`,
+    );
+  }
+
+  await navigateTab(tab.id, stepPage.url);
+  await delay(Defaults.PageSettleDelayMs);
+
+  return await chrome.tabs.get(tab.id);
 }
 
 async function executeNavigateStep(currentTab, step) {
-  const url = step.url || step.value;
-
-  if (!url) {
-    throw new Error("browser.navigate step is missing a URL.");
-  }
+  const url = normalizeNavigationUrl(
+    step.url || step.value || step.payload?.primary,
+  );
 
   const openIn = step.openIn || step.targetTab || NavigationTargets.SameTab;
 
@@ -258,10 +312,9 @@ async function executeNavigateStep(currentTab, step) {
   }
 
   await navigateTab(tabId, url);
-  const updatedTab = await waitForTabComplete(tabId);
   await delay(Defaults.PageSettleDelayMs);
 
-  return updatedTab || currentTab;
+  return await chrome.tabs.get(tabId);
 }
 
 async function executeContentStep(tab, step) {

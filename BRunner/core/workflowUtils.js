@@ -92,3 +92,67 @@ export function stepLabel(step = {}) {
   if (step.type) return step.type;
   return "Unknown Step";
 }
+
+export function getRegistrableDomain(hostname) {
+  const host = String(hostname || "").toLowerCase();
+
+  if (!host) return "";
+  if (host === "localhost") return "localhost";
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
+
+  const parts = host.split(".").filter(Boolean);
+
+  if (parts.length <= 2) {
+    return host;
+  }
+
+  // Basic heuristic. Later replace with Public Suffix List logic if needed.
+  return parts.slice(-2).join(".");
+}
+
+export function getPageContextFromUrl(url, title = "") {
+  try {
+    const parsed = new URL(url);
+
+    return {
+      url: parsed.href,
+      origin: parsed.origin,
+      host: parsed.host,
+      hostname: parsed.hostname,
+      domain: getRegistrableDomain(parsed.hostname),
+      path: parsed.pathname,
+      search: parsed.search,
+      title,
+    };
+  } catch {
+    return {
+      url: "",
+      origin: "",
+      host: "",
+      hostname: "",
+      domain: "",
+      path: "",
+      search: "",
+      title,
+    };
+  }
+}
+
+export function pageContextsCompatible(currentPage, stepPage, options = {}) {
+  const strictPath = Boolean(options.strictPath);
+
+  if (!stepPage || !stepPage.url) return true;
+  if (!currentPage || !currentPage.url) return false;
+
+  if (stepPage.domain && currentPage.domain) {
+    if (stepPage.domain !== currentPage.domain) return false;
+  } else if (stepPage.hostname && currentPage.hostname) {
+    if (stepPage.hostname !== currentPage.hostname) return false;
+  }
+
+  if (strictPath && stepPage.path && currentPage.path) {
+    return stepPage.path === currentPage.path;
+  }
+
+  return true;
+}

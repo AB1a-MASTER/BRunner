@@ -87,13 +87,54 @@ export async function waitForTabComplete(tabId, timeoutMs = 15000) {
 }
 
 export async function navigateTab(tabId, url) {
-  const tab = await chrome.tabs.update(tabId, { url });
+  const normalizedUrl = normalizeNavigationUrl(url);
+
+  const tab = await chrome.tabs.update(tabId, {
+    url: normalizedUrl,
+  });
+
   await waitForTabComplete(tabId);
   return tab;
 }
 
 export async function createTab(url, active = true) {
-  const tab = await chrome.tabs.create({ url, active });
+  const normalizedUrl = normalizeNavigationUrl(url);
+
+  const tab = await chrome.tabs.create({
+    url: normalizedUrl,
+    active,
+  });
+
   await waitForTabComplete(tab.id);
   return tab;
+}
+
+export function normalizeNavigationUrl(input) {
+  const raw = String(input || "").trim();
+
+  if (!raw) {
+    throw new Error("Navigation URL is empty.");
+  }
+
+  // Already absolute and valid for browser navigation.
+  if (
+    /^(https?:\/\/|file:\/\/|chrome:\/\/|chrome-extension:\/\/|about:)/i.test(
+      raw,
+    )
+  ) {
+    return raw;
+  }
+
+  // Common user input: www.google.com, google.com, example.org/path
+  if (/^[a-z0-9.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(raw)) {
+    return `https://${raw}`;
+  }
+
+  // If it looks like localhost or an IP, also assume http.
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?([/?#].*)?$/i.test(raw)) {
+    return `http://${raw}`;
+  }
+
+  // Last-resort browser search instead of extension-relative URL.
+  return `https://www.google.com/search?q=${encodeURIComponent(raw)}`;
 }

@@ -229,15 +229,20 @@ function renderWorkflowList(files) {
 
   workflowList.innerHTML = "";
 
-  files.forEach((file) => {
-    const item = document.createElement("button");
-    item.type = "button";
+  files.forEach((fileEntry) => {
+    const file = getWorkflowFilename(fileEntry);
+    if (!file) return;
+
+    const item = document.createElement("div");
     item.className = "workflow-item";
     item.dataset.file = file;
 
     item.innerHTML = `
-      <span class="workflow-name">${escapeHtml(file.replace(/\.json$/i, ""))}</span>
-      <span class="workflow-run">▶</span>
+      <div class="workflow-info">
+        <div class="workflow-name">${escapeHtml(file.replace(/\.json$/i, ""))}</div>
+        <div class="workflow-file">${escapeHtml(file)}</div>
+      </div>
+      <button class="workflow-run-btn" type="button" title="Run workflow">▶</button>
     `;
 
     item.addEventListener("click", () => {
@@ -246,8 +251,16 @@ function renderWorkflowList(files) {
 
     item.addEventListener("dblclick", () => {
       selectWorkflow(file);
-      runSelectedWorkflow();
+      runWorkflow(file);
     });
+
+    item
+      .querySelector(".workflow-run-btn")
+      .addEventListener("click", (event) => {
+        event.stopPropagation();
+        selectWorkflow(file);
+        runWorkflow(file);
+      });
 
     workflowList.appendChild(item);
   });
@@ -269,26 +282,11 @@ function updateSelectedWorkflowVisual() {
 
 async function runSelectedWorkflow() {
   if (!selectedWorkflow) {
-    setSelectedLabel("No workflow selected", true);
+    setSelectedLabel("Select a workflow first.", true);
     return;
   }
 
-  setSelectedLabel(`Running ${selectedWorkflow.replace(/\.json$/i, "")}...`);
-
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: Messages.RunWorkflowByName,
-      filename: selectedWorkflow,
-    });
-
-    if (isSuccess(response)) {
-      setSelectedLabel(`Completed ${selectedWorkflow.replace(/\.json$/i, "")}`);
-    } else {
-      setSelectedLabel(`Failed: ${response?.error || "Unknown error"}`, true);
-    }
-  } catch (error) {
-    setSelectedLabel(`Failed: ${error.message || error}`, true);
-  }
+  await runWorkflow(selectedWorkflow);
 }
 
 function updateRecordButton() {
@@ -323,4 +321,40 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function getWorkflowFilename(fileEntry) {
+  if (typeof fileEntry === "string") {
+    return fileEntry;
+  }
+
+  if (fileEntry && typeof fileEntry === "object") {
+    return fileEntry.filename || fileEntry.name || fileEntry.file || "";
+  }
+
+  return "";
+}
+
+async function runWorkflow(filename) {
+  if (!filename) {
+    setSelectedLabel("No workflow selected.", true);
+    return;
+  }
+
+  setSelectedLabel(`Running ${filename.replace(/\.json$/i, "")}...`);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.RunWorkflowByName,
+      filename,
+    });
+
+    if (isSuccess(response)) {
+      setSelectedLabel(`Completed ${filename.replace(/\.json$/i, "")}`);
+    } else {
+      setSelectedLabel(`Failed: ${response?.error || "Unknown error"}`, true);
+    }
+  } catch (error) {
+    setSelectedLabel(`Failed: ${error.message || error}`, true);
+  }
 }

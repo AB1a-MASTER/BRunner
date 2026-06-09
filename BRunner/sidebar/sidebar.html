@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <title>BRunner Sidebar</title>
     <style>
+        /* ==========================================
+       1. GLOBAL & LAYOUT BASE
+       ========================================== */
         body {
             margin: 0;
             padding: 0;
@@ -16,6 +19,15 @@
             height: 100vh;
         }
 
+        /* Hide the entire body if studio view is active */
+        html.studio-active body {
+            display: none;
+        }
+
+
+        /* ==========================================
+       2. PRIMARY LAYOUT COMPONENTS
+       ========================================== */
         .header {
             padding: 15px;
             background: #1e293b;
@@ -43,6 +55,16 @@
             padding: 10px;
         }
 
+        .footer {
+            padding: 15px;
+            background: #1e293b;
+            border-top: 1px solid #334155;
+        }
+
+
+        /* ==========================================
+       3. WORKFLOW CARDS & LIST ITEMS
+       ========================================== */
         .workflow-item {
             width: 100%;
             display: flex;
@@ -56,64 +78,7 @@
             margin-bottom: 8px;
             cursor: pointer;
             text-align: left;
-        }
-
-        .workflow-item:hover {
-            border-color: #3b82f6;
-        }
-
-        .workflow-item.selected {
-            border-color: #22c55e;
-            background: #0f172a;
-        }
-
-        .footer {
-            padding: 15px;
-            background: #1e293b;
-            border-top: 1px solid #334155;
-        }
-
-        .selected-label {
-            font-size: 0.8rem;
-            color: #94a3b8;
-            margin-bottom: 5px;
-        }
-
-        .btn-play {
-            width: 100%;
-            padding: 10px;
-            background: #10b981;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
-        .btn-play.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .btn-play.active:hover {
-            background: #059669;
-        }
-
-        .btn-record {
-            width: 100%;
-            padding: 8px;
-            margin-top: 10px;
-            background: #ef4444;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        html.studio-active body {
-            display: none;
+            box-sizing: border-box;
         }
 
         .workflow-launch {
@@ -131,19 +96,108 @@
             text-align: left;
         }
 
-        .workflow-launch:hover {
-            border-color: var(--accent, #3b82f6);
+        .workflow-info {
+            min-width: 0;
+            flex: 1;
         }
 
         .workflow-name {
+            font-size: 0.85rem;
+            font-weight: 600;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
+        .workflow-file {
+            font-size: 0.68rem;
+            color: #94a3b8;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+
+        /* ==========================================
+       4. INTERACTIVE BUTTONS & CONTROLS
+       ========================================== */
+        .btn-play {
+            width: 100%;
+            padding: 10px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .btn-record {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .workflow-run-btn {
+            margin-left: 8px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+        }
+
         .workflow-run {
             opacity: 0.8;
             margin-left: 8px;
+        }
+
+        .selected-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 5px;
+        }
+
+
+        /* ==========================================
+       5. HOVER, ACTIVE, & DYNAMIC STATES
+       ========================================== */
+        /* Hover Effects */
+        .workflow-item:hover {
+            border-color: #3b82f6;
+        }
+
+        .workflow-launch:hover {
+            border-color: var(--accent, #3b82f6);
+        }
+
+        .workflow-run-btn:hover {
+            background: #1d4ed8;
+        }
+
+        /* Active States */
+        .btn-play.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .btn-play.active:hover {
+            background: #059669;
+        }
+
+        .workflow-item.selected {
+            border-color: #22c55e;
+            background: #0f172a;
         }
 
         #btn-toggle-record.recording {
@@ -152,14 +206,9 @@
             color: #ef4444;
         }
 
+        /* Status Notifications */
         .empty-state.error,
-        #status-text.error {
-            color: #ef4444;
-        }
-
-        #status-text.ok {
-            color: #22c55e;
-        }
+        #status-text
     </style>
 </head>
 

@@ -41,6 +41,7 @@
       this.installDomObserver();
       this.installMessageListener();
       this.installRecorderListeners();
+      this.installRecorderHighlight();
       this.requestRecordingState();
 
       console.log("[BRunner] Mapper initialized.");
@@ -184,9 +185,14 @@
 
     setRecordingState(enabled) {
       this.isRecording = enabled;
+
       document.documentElement.dataset.brunnerRecording = enabled
         ? "true"
         : "false";
+
+      if (!enabled) {
+        this.hideRecorderHighlight();
+      }
 
       console.log(`[BRunner] Recording ${enabled ? "enabled" : "disabled"}.`);
     }
@@ -222,6 +228,143 @@
         },
         true,
       );
+    }
+
+    installRecorderHighlight() {
+      this.highlightBox = document.createElement("div");
+      this.highlightBox.id = "brunner-recorder-highlight";
+
+      Object.assign(this.highlightBox.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+        border: "2px solid #3b82f6",
+        background: "rgba(59, 130, 246, 0.12)",
+        borderRadius: "6px",
+        boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.25)",
+        display: "none",
+        transition: "all 80ms ease",
+      });
+
+      this.highlightLabel = document.createElement("div");
+      this.highlightLabel.id = "brunner-recorder-highlight-label";
+
+      Object.assign(this.highlightLabel.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+        background: "#1d4ed8",
+        color: "#ffffff",
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "11px",
+        fontWeight: "600",
+        padding: "3px 6px",
+        borderRadius: "4px",
+        display: "none",
+        maxWidth: "300px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      });
+
+      document.documentElement.appendChild(this.highlightBox);
+      document.documentElement.appendChild(this.highlightLabel);
+
+      document.addEventListener(
+        "mouseover",
+        (event) => {
+          if (!this.isRecording) return;
+
+          const element = this.findRecordableElement(event.target);
+          if (!element) {
+            this.hideRecorderHighlight();
+            return;
+          }
+
+          this.showRecorderHighlight(element);
+        },
+        true,
+      );
+
+      document.addEventListener(
+        "mouseout",
+        (event) => {
+          if (!this.isRecording) return;
+
+          const nextTarget = event.relatedTarget;
+
+          if (
+            nextTarget &&
+            nextTarget instanceof Element &&
+            this.findRecordableElement(nextTarget)
+          ) {
+            return;
+          }
+
+          this.hideRecorderHighlight();
+        },
+        true,
+      );
+
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (this.highlightedElement && this.isRecording) {
+            this.showRecorderHighlight(this.highlightedElement);
+          }
+        },
+        true,
+      );
+
+      window.addEventListener("resize", () => {
+        if (this.highlightedElement && this.isRecording) {
+          this.showRecorderHighlight(this.highlightedElement);
+        }
+      });
+    }
+
+    showRecorderHighlight(element) {
+      if (!element || !this.isVisibleElement(element)) {
+        this.hideRecorderHighlight();
+        return;
+      }
+
+      this.highlightedElement = element;
+
+      const rect = element.getBoundingClientRect();
+      const ctrlHash = this.getOrCreateControlHash(element);
+      const targetInfo = resolver.buildElementTarget(element, ctrlHash);
+      const friendlyName = this.getFriendlyName(element, targetInfo);
+
+      Object.assign(this.highlightBox.style, {
+        display: "block",
+        left: `${Math.round(rect.left)}px`,
+        top: `${Math.round(rect.top)}px`,
+        width: `${Math.round(rect.width)}px`,
+        height: `${Math.round(rect.height)}px`,
+      });
+
+      const labelTop = Math.max(0, rect.top - 24);
+
+      this.highlightLabel.textContent = `BRunner: ${friendlyName}`;
+
+      Object.assign(this.highlightLabel.style, {
+        display: "block",
+        left: `${Math.round(rect.left)}px`,
+        top: `${Math.round(labelTop)}px`,
+      });
+    }
+
+    hideRecorderHighlight() {
+      this.highlightedElement = null;
+
+      if (this.highlightBox) {
+        this.highlightBox.style.display = "none";
+      }
+
+      if (this.highlightLabel) {
+        this.highlightLabel.style.display = "none";
+      }
     }
 
     recordClick(event) {
@@ -265,11 +408,22 @@
 
       return {
         action,
-        target: targetInfo.primary,
+        target: {
+          primary: targetInfo.primary,
+          candidates:
+            targetInfo.candidates ||
+            [targetInfo.primary, ...(targetInfo.fallbacks || [])].filter(
+              Boolean,
+            ),
+          fallbacks: targetInfo.fallbacks || [],
+          snapshot: targetInfo.snapshot,
+        },
         targetType: targetInfo.primary?.strategy || "",
-        targetFallbacks: targetInfo.fallbacks,
+        targetFallbacks: targetInfo.fallbacks || [],
         targetSnapshot: targetInfo.snapshot,
         friendlyName,
+        page: this.getCurrentPageContext(),
+        recordedAt: new Date().toISOString(),
         ...extra,
       };
     }
@@ -766,6 +920,12 @@
       const text = resolver.getStableElementText(element);
       if (text) return text;
 
+      const aria = element.getAttribute("aria-label");
+      if (aria) return aria;
+
+      const placeholder = element.getAttribute("placeholder");
+      if (placeholder) return placeholder;
+
       const tag = element.tagName?.toLowerCase?.() || "element";
       return tag;
     }
@@ -852,6 +1012,37 @@
 
     delay(ms) {
       return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    getCurrentPageContext() {
+      return {
+        url: location.href,
+        origin: location.origin,
+        host: location.host,
+        hostname: location.hostname,
+        domain: this.getRegistrableDomain(location.hostname),
+        path: location.pathname,
+        search: location.search,
+        title: document.title,
+      };
+    }
+
+    getRegistrableDomain(hostname) {
+      const host = String(hostname || "").toLowerCase();
+
+      if (!host) return "";
+      if (host === "localhost") return "localhost";
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
+
+      const parts = host.split(".").filter(Boolean);
+
+      if (parts.length <= 2) {
+        return host;
+      }
+
+      // Basic heuristic. Good enough for now.
+      // Later we can use a public suffix list if needed.
+      return parts.slice(-2).join(".");
     }
   }
 
