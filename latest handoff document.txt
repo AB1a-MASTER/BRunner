@@ -11,7 +11,9 @@ stable sequential automation foundation. The latest committed checkpoint is:
 
   74da734 feat(runtime): solidify workflow execution
 
-The project is ready to move into Phase B external/file operations. Do not begin
+Phase B external/file operations are in progress. HTTP Request, clipboard
+read/write, and virtual web file-input upload are implemented and live accepted.
+The next target is download wait plus downloaded-file metadata. Do not begin
 another broad refactor. Continue with small registry-driven nodes and preserve
 legacy workflow compatibility.
 
@@ -76,6 +78,27 @@ WORK COMPLETED
 - docs/specs/03_STUDIO_GRAPH_UX.md defines the later graph editor migration.
 - docs/specs/04_NODE_CATALOG.md defines phased node expansion.
 
+8. Phase B external and file operations
+- HTTP Request runs in the background and supports GET, POST, PUT, PATCH, DELETE,
+  and HEAD; text/JSON bodies and responses; timeout; non-2xx policy; structured
+  output; and AbortController workflow cancellation.
+- HTTP requests omit browser credentials by default. Request headers, bodies,
+  URL query strings, and embedded credentials are excluded from execution logs.
+- Clipboard Read and Clipboard Write use a Chrome offscreen document. Reads
+  default to denied and require explicit node-level approval. Clipboard values
+  are excluded from logs.
+- Clipboard operations use navigator.clipboard when available and an
+  execCommand copy/paste fallback for offscreen-document focus restrictions.
+- Upload Virtual File creates a real File from expression-enabled text or base64
+  content, assigns it to a web input[type=file], dispatches input/change events,
+  and stores name/type/size metadata in a workflow variable.
+- Virtual uploads reject filesystem paths, cap payloads at 10 MB, and exclude
+  file content from logs. Arbitrary local paths/native dialogs remain deferred
+  until native-access permissions are explicitly designed.
+- Toggle true/false behavior for checkbox and radio controls was corrected.
+- Deterministic suite currently passes 17 tests. Toggle, HTTP, clipboard, and
+  virtual file-input workflows all passed live acceptance.
+
 KNOWN DEFERRED UX WORK
 - Add a Variables/Data Inspector in Studio with saved variables, current values,
   types, producing nodes, and expandable object/list/table previews.
@@ -88,44 +111,44 @@ KNOWN DEFERRED UX WORK
 WORKTREE STATE AT HANDOFF
 There are uncommitted changes after commit 74da734:
 
-- BRunner/content/mapper.js: correct explicit checkbox/radio true and false states.
-- BRunner/test.html: add a manual checked-then-unchecked toggle regression test.
-- BRunner_Host/brunner_host.log: generated runtime log changes; normally do not
-  treat these as product source changes.
+- Runtime/registry/UI changes for HTTP, clipboard, and virtual file upload nodes.
+- New core helpers: core/httpRequest.js and core/clipboard.js.
+- New content helper: content/filePayload.js.
+- New offscreen clipboard document under BRunner/offscreen/.
+- Manifest permissions for offscreen clipboard read/write.
+- Deterministic tests under tests/ and live acceptance fixtures/workflows.
+- Updated test harness and docs/specs/04_NODE_CATALOG.md.
+- Updated handoff document and user-created workflow files.
+- BRunner_Host/brunner_host.log contains generated runtime log changes; normally
+  do not treat these as product source changes.
 
-Before starting Phase B, verify the toggle test once in the extension test page,
-then commit the two source/test changes if accepted. Preserve unrelated user work.
+Preserve all unrelated user work. User controls Git operations: do not stage,
+commit, branch, push, or open PRs. Provide a commit message only when explicitly
+asked.
 
 NEXT IMPLEMENTATION PLAN
 
-Step 1 - Finish the small toggle checkpoint
-- Reload the extension/test page.
-- Run Test Toggle States.
-- Confirm the checkbox is checked and then unchecked successfully.
-- Commit mapper.js and test.html; avoid intentionally committing generated logs.
+Step 1 - Implement Download Wait and metadata
+- Design explicit browser download permission and safe filename/path metadata.
+- Add a registry-driven node that waits for a matching download with timeout and
+  cancellation support.
+- Return safe metadata such as id, filename, URL/final URL, MIME type, bytes,
+  state, danger classification, and timestamps where Chrome exposes them.
+- Never log sensitive download URLs or full local paths unless explicitly needed.
+- Distinguish timeout, interruption, danger, cancellation, and missing-permission
+  diagnostics.
+- Add deterministic tests and one live acceptance workflow.
 
-Step 2 - Implement Phase B's first node: HTTP Request
-- Add a registry-driven HTTP Request node with method, URL, headers, body,
-  response type, timeout, HTTP-error policy, and required output variable.
-- Run requests in the background runtime, not the page mapper.
-- Resolve expressions in all request configuration through VariableRegistry.
-- Default credentials to omit so browser cookies are never sent implicitly.
-- Never log authorization headers, request headers, or sensitive bodies.
-- Return a structured value containing status, ok, final URL, response headers,
-  and parsed data.
-- Connect workflow Stop to an AbortController so an active request cancels cleanly.
-- Distinguish timeout, cancellation, invalid JSON, network failure, and HTTP error
-  in diagnostics.
-- Add deterministic tests for GET JSON, POST JSON, non-2xx policy, timeout, and
-  workflow cancellation.
-- Update docs/specs/04_NODE_CATALOG.md after implementation and manual acceptance.
+Step 2 - Implement Screenshot Capture
+- Decide browser-tab capture versus page/element capture and output destination.
+- Add explicit format/quality/full-page behavior where technically supported.
+- Return attachment/path metadata without silently persisting sensitive images.
+- Add cancellation, permission review, deterministic tests, and live acceptance.
 
-Step 3 - Continue Phase B one capability at a time
-- Clipboard read/write through an explicitly approved browser/native path.
-- File upload: web file inputs first, native dialogs only through a designed host
-  permission path.
-- Download wait plus downloaded-file metadata.
-- Screenshot capture plus output metadata.
+Step 3 - Design native file access separately
+- Add arbitrary local-path/native-dialog upload only through an explicit native
+  host permission and approval model.
+- Do not broaden virtual file upload into silent filesystem access.
 
 Each external/file node needs a permission and secret-handling review before code.
 
@@ -150,9 +173,12 @@ DEVELOPMENT RULES
 - Reliability, diagnostics, permissions, and secret safety come before visual polish.
 - Do not infer tab reuse, cookie transmission, or native access; these are explicit
   user choices.
+- Do not perform Git operations. User stages and commits. Generate commit messages
+  only when explicitly requested.
 
 IMMEDIATE NEXT CHAT PROMPT
 Read Design Doc.txt, this handoff, docs/BRUNNER_MASTER_ROADMAP.md, and
 docs/specs/04_NODE_CATALOG.md. Inspect the current worktree without discarding
-changes. Verify/commit the pending toggle fix, then implement the cancellable,
-secure HTTP Request node described above.
+changes. Preserve all accepted HTTP/clipboard/file-upload work and user-created
+workflows. Do not perform Git operations. Implement cancellable Download Wait plus
+safe downloaded-file metadata as the next isolated Phase B node.
