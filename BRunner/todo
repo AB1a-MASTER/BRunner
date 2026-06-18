@@ -1,4 +1,6 @@
 todo:
+add a reliable way to stop a running workflow from both Studio and the sidebar. stopping must cancel long waits/content execution, update both UIs, and report a cancelled state instead of a generic failure.
+
 imporve the recorder and change the way the ids are saved, instead of internal dom id we will save their actual id or name, right now the internal id system fails on recorded macros as the id's end up not found.
 
 the purpose of the internal dom is to accurately allow navigation and assist in visual UI control where needed. i.e., making clicks on screen.
@@ -39,5 +41,3 @@ controls/nodes for data scraping and expression eval for random timings etc.
 sync ui so that running workflows and recordings show up on both the studio and the sidebar.
 
 make sure the studio is exception from being recoreded.
-
-also add the ability to use the default browser search bar.

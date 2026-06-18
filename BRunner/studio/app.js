@@ -14,6 +14,7 @@ const Messages = Object.freeze({
   OsRenameWorkflow: "OS_RENAME_WORKFLOW",
 
   StartWorkflow: "START_WORKFLOW",
+  StopWorkflow: "STOP_WORKFLOW",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
 
   ToggleRecording: "TOGGLE_RECORDING",
@@ -53,16 +54,19 @@ const NavigationTargets = Object.freeze({
 let workflow = {
   boundDomain: "",
   variables: {},
+  settings: { reuseExistingTabs: false },
   steps: [],
 };
 
 let isRecording = false;
+let isWorkflowRunning = false;
 let loadedWorkflowFilename = "";
 const nodeDefinitionsByType = new Map();
 
 const canvas = document.getElementById("workflow-canvas");
 const workflowNameInput = document.getElementById("workflow-name");
 const workflowDomainInput = document.getElementById("workflow-domain");
+const workflowReuseTabsInput = document.getElementById("workflow-reuse-tabs");
 const workflowListContainer = document.getElementById("workflow-list");
 const btnRecord = document.getElementById("btn-record");
 const btnRun = document.getElementById("btn-run");
@@ -109,11 +113,13 @@ function wireLayoutControls() {
     workflow = {
       boundDomain: "",
       variables: {},
+      settings: { reuseExistingTabs: false },
       steps: [],
     };
 
     workflowNameInput.value = "Untitled";
     workflowDomainInput.value = "";
+    workflowReuseTabsInput.checked = false;
     loadedWorkflowFilename = "";
 
     renderCanvas();
@@ -168,7 +174,31 @@ async function loadNodeDefinitions() {
 }
 
 function wireExecutionControls() {
-  btnRun?.addEventListener("click", runCurrentWorkflow);
+  btnRun?.addEventListener("click", () => {
+    if (isWorkflowRunning) {
+      stopCurrentWorkflow();
+    } else {
+      runCurrentWorkflow();
+    }
+  });
+}
+
+async function stopCurrentWorkflow() {
+  if (!isWorkflowRunning) return;
+
+  setRunButtonRunning(true, true);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.StopWorkflow,
+    });
+
+    if (!response?.ok) {
+      alert(`Failed to stop workflow: ${response?.error || "Unknown error"}`);
+    }
+  } catch (error) {
+    alert(`Failed to stop workflow: ${error.message || error}`);
+  }
 }
 
 function wireRecordingControls() {
@@ -333,6 +363,8 @@ async function loadWorkflowFromOS(filename) {
 
     workflowNameInput.value = filename.replace(/\.json$/i, "");
     workflowDomainInput.value = workflow.boundDomain || "";
+    workflowReuseTabsInput.checked =
+      workflow.settings?.reuseExistingTabs === true;
 
     renderCanvas();
   } catch (error) {
@@ -447,6 +479,7 @@ async function runCurrentWorkflow() {
     return;
   }
 
+  isWorkflowRunning = true;
   setRunButtonRunning(true);
 
   try {
@@ -461,6 +494,7 @@ async function runCurrentWorkflow() {
   } catch (error) {
     alert(`Workflow failed: ${error.message || error}`);
   } finally {
+    isWorkflowRunning = false;
     setRunButtonRunning(false);
   }
 }
@@ -555,6 +589,10 @@ function moveStep(index, direction) {
 
 function updateStateFromUI() {
   workflow.boundDomain = workflowDomainInput.value.trim();
+  workflow.settings = {
+    ...(workflow.settings || {}),
+    reuseExistingTabs: Boolean(workflowReuseTabsInput?.checked),
+  };
 
   workflow.steps.forEach((step) => {
     const targetInput = document.getElementById(`target-${step.id}`);
@@ -654,6 +692,7 @@ function getWorkflowFromUI() {
   return {
     boundDomain: workflow.boundDomain || "",
     variables: workflow.variables || {},
+    settings: workflow.settings || { reuseExistingTabs: false },
     steps: workflow.steps.map(normalizeStep),
   };
 }
@@ -663,6 +702,7 @@ function normalizeWorkflow(input) {
     return {
       boundDomain: "",
       variables: {},
+      settings: { reuseExistingTabs: false },
       steps: input.map(normalizeStep),
     };
   }
@@ -673,6 +713,9 @@ function normalizeWorkflow(input) {
       input?.variables && typeof input.variables === "object"
         ? structuredClone(input.variables)
         : {},
+    settings: {
+      reuseExistingTabs: input?.settings?.reuseExistingTabs === true,
+    },
     steps: Array.isArray(input?.steps) ? input.steps.map(normalizeStep) : [],
   };
 }
@@ -794,9 +837,13 @@ function applyRuntimeState(state) {
     recordingTabPolicyInput.disabled = isRecording;
   }
 
-  setRunButtonRunning(state.execution?.status === "running");
-  if (btnRun) btnRun.disabled = isRecording;
-  if (btnRecord) btnRecord.disabled = state.execution?.status === "running";
+  const executionStatus = state.execution?.status || "idle";
+  const running = ["running", "cancelling"].includes(executionStatus);
+  const stopping = executionStatus === "cancelling";
+  isWorkflowRunning = running;
+
+  setRunButtonRunning(running, stopping);
+  if (btnRecord) btnRecord.disabled = running;
 }
 
 function renderCanvas() {
@@ -1047,11 +1094,16 @@ function updateRecordButton() {
   btnRecord.style.border = isRecording ? "1px solid var(--danger)" : "none";
 }
 
-function setRunButtonRunning(running) {
+function setRunButtonRunning(running, stopping = false) {
   if (!btnRun) return;
 
-  btnRun.innerText = running ? "⏳ Running..." : "▶ Run Workflow";
-  btnRun.style.backgroundColor = running ? "#d97706" : "var(--accent)";
+  btnRun.innerText = stopping
+    ? "⏳ Stopping..."
+    : running
+      ? "⏹ Stop Workflow"
+      : "▶ Run Workflow";
+  btnRun.style.backgroundColor = running ? "#dc2626" : "var(--accent)";
+  btnRun.disabled = stopping || isRecording;
 }
 
 function generateStepId() {

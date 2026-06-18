@@ -42,6 +42,7 @@ import {
 } from "./core/tabUtils.js";
 
 const runtimeState = createRuntimeStateStore();
+let activeRun = null;
 
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
@@ -199,6 +200,9 @@ async function handleMessage(request, sender) {
     case Messages.StartWorkflow:
       return await runWorkflow(request.workflow || request.content);
 
+    case Messages.StopWorkflow:
+      return await stopActiveWorkflow();
+
     case Messages.RequestHardwareKeystroke:
       return await NativeBridge.osKeystroke(request.keys);
 
@@ -281,6 +285,10 @@ async function runWorkflow(rawWorkflow, options = {}) {
     error: "",
     diagnostics: null,
   });
+  activeRun = {
+    runId,
+    cancelRequested: false,
+  };
 
   try {
     let tab = await resolveStartingTab(workflow);
@@ -293,6 +301,8 @@ async function runWorkflow(rawWorkflow, options = {}) {
     }
 
     for (let index = 0; index < steps.length; index++) {
+      throwIfRunCancelled(runId);
+
       const step = steps[index];
       let resolvedStep;
 
@@ -335,7 +345,10 @@ async function runWorkflow(rawWorkflow, options = {}) {
         resolvedStep,
         tabsByRef,
         variableRegistry,
+        runId,
       );
+
+      throwIfRunCancelled(runId);
 
       if (
         resolvedStep?.tabRef &&
@@ -347,7 +360,8 @@ async function runWorkflow(rawWorkflow, options = {}) {
       ) {
         tabsByRef.set(resolvedStep.tabRef, tab);
       }
-      await delay(Defaults.StepDelayMs);
+      await delayWithRunCancellation(Defaults.StepDelayMs, runId);
+      throwIfRunCancelled(runId);
     }
 
     runtimeState.updateExecution({
@@ -370,6 +384,26 @@ async function runWorkflow(rawWorkflow, options = {}) {
       variables: variableRegistry.snapshot(),
     };
   } catch (error) {
+    if (
+      error?.name === "WorkflowCancelledError" ||
+      (activeRun?.runId === runId && activeRun.cancelRequested)
+    ) {
+      runtimeState.updateExecution({
+        status: "cancelled",
+        currentAction: "",
+        error: "Workflow stopped by user.",
+        diagnostics: {
+          finalReason: "workflow_cancelled",
+        },
+      });
+
+      return {
+        ok: true,
+        cancelled: true,
+        runId,
+      };
+    }
+
     runtimeState.updateExecution({
       status: "failed",
       currentAction: "",
@@ -377,39 +411,124 @@ async function runWorkflow(rawWorkflow, options = {}) {
       diagnostics: error.diagnostics || null,
     });
     throw error;
+  } finally {
+    if (activeRun?.runId === runId) {
+      activeRun = null;
+    }
   }
+}
+
+async function stopActiveWorkflow() {
+  if (!activeRun || runtimeState.getState().execution.status !== "running") {
+    return {
+      ok: false,
+      error: "No workflow is currently running.",
+    };
+  }
+
+  activeRun.cancelRequested = true;
+  runtimeState.updateExecution({
+    status: "cancelling",
+    currentAction: "",
+    error: "",
+  });
+
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(
+    tabs.filter(isAutomationTab).map((tab) => {
+      return chrome.tabs.sendMessage(tab.id, {
+        type: Messages.CancelExecution,
+        runId: activeRun.runId,
+      });
+    }),
+  );
+
+  return {
+    ok: true,
+    runId: activeRun.runId,
+    status: "cancelling",
+  };
+}
+
+function throwIfRunCancelled(runId) {
+  if (activeRun?.runId === runId && activeRun.cancelRequested) {
+    const error = new Error("Workflow stopped by user.");
+    error.name = "WorkflowCancelledError";
+    throw error;
+  }
+}
+
+async function delayWithRunCancellation(ms, runId) {
+  let remaining = Math.max(Number(ms) || 0, 0);
+
+  while (remaining > 0) {
+    throwIfRunCancelled(runId);
+    const chunk = Math.min(remaining, 100);
+    await delay(chunk);
+    remaining -= chunk;
+  }
+
+  throwIfRunCancelled(runId);
 }
 
 async function resolveStartingTab(workflow) {
   const activeTab = await getActiveTab();
+  const boundDomain = String(workflow.boundDomain || "").trim();
+  const reuseExistingTabs = workflow.settings?.reuseExistingTabs === true;
 
-  if (
-    activeTab &&
-    activeTab.url &&
-    !isStudioUrl(activeTab.url) &&
-    isDomainCompatible(activeTab.url, workflow.boundDomain)
-  ) {
-    return activeTab;
+  if (boundDomain) {
+    const boundUrl = normalizeBoundDomainUrl(boundDomain);
+    const boundHostname = extractDomainFromUrl(boundUrl) || boundDomain;
+
+    if (reuseExistingTabs) {
+      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const matchingTab = tabs.find((tab) => {
+        return (
+          isAutomationTab(tab) &&
+          isDomainCompatible(tab.url || "", boundHostname)
+        );
+      });
+
+      if (matchingTab) {
+        await chrome.tabs.update(matchingTab.id, { active: true });
+        return matchingTab;
+      }
+    }
+
+    if (isReplaceableStartupTab(activeTab)) {
+      if (isDomainCompatible(activeTab.url || "", boundHostname)) {
+        return activeTab;
+      }
+
+      await navigateTab(activeTab.id, boundUrl);
+      await delay(Defaults.PageSettleDelayMs);
+      return await chrome.tabs.get(activeTab.id);
+    }
+
+    return await createTab(boundUrl, true);
   }
 
-  const bestTab = await getBestAutomationTab();
+  if (isAutomationTab(activeTab)) return activeTab;
 
-  if (
-    bestTab &&
-    bestTab.url &&
-    isDomainCompatible(bestTab.url, workflow.boundDomain)
-  ) {
-    return bestTab;
+  if (reuseExistingTabs) {
+    const bestTab = await getBestAutomationTab();
+    if (bestTab) return bestTab;
   }
-
-  if (workflow.boundDomain) {
-    const url = `https://${workflow.boundDomain}`;
-    return await createTab(url, true);
-  }
-
-  if (bestTab) return bestTab;
 
   throw new Error("No suitable browser tab found for workflow execution.");
+}
+
+function normalizeBoundDomainUrl(boundDomain) {
+  const value = String(boundDomain || "").trim();
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function isReplaceableStartupTab(tab) {
+  if (!tab?.id || !tab.url || isStudioUrl(tab.url)) return false;
+  if (isAutomationTab(tab)) return true;
+
+  return /^(chrome|edge):\/\/newtab\/?$/i.test(tab.url) ||
+    /^about:blank$/i.test(tab.url);
 }
 
 function isDomainCompatible(url, boundDomain) {
@@ -428,11 +547,16 @@ async function executeStep(
   step,
   tabsByRef = new Map(),
   variableRegistry = null,
+  runId = "",
 ) {
   const action = step.action || step.type;
 
   if (action === Actions.BrowserTabSwitch) {
     return await executeTabSwitch(currentTab, step, tabsByRef);
+  }
+
+  if (action === Actions.BrowserSearch) {
+    return await executeBrowserSearchStep(currentTab, step);
   }
 
   if (
@@ -454,7 +578,7 @@ async function executeStep(
   const contextReadyTab = await ensureStepPageContext(currentTab, step);
 
   if (action === Actions.LogicWait) {
-    await delay(resolveWaitDuration(step));
+    await delayWithRunCancellation(resolveWaitDuration(step), runId);
     return contextReadyTab;
   }
 
@@ -522,7 +646,7 @@ async function executeStep(
     }
   }
 
-  const response = await executeContentStep(contextReadyTab, step);
+  const response = await executeContentStep(contextReadyTab, step, runId);
 
   if (isExtractionAction(action)) {
     variableRegistry?.set(extractionVariableName, response?.value ?? "");
@@ -599,6 +723,55 @@ async function executeBrowserLifecycleStep(currentTab, step, tabsByRef) {
   }
 
   throw new Error(`Unsupported browser lifecycle action: ${action}`);
+}
+
+async function executeBrowserSearchStep(currentTab, step) {
+  const query = String(step.config?.query || step.query || "").trim();
+
+  if (!query) {
+    throw new Error("Browser Search requires a search query.");
+  }
+
+  const openIn = step.config?.openIn || "currentTab";
+  const useCurrentTab = openIn !== "newTab" && Boolean(currentTab?.id);
+  const tabsBefore = useCurrentTab
+    ? null
+    : new Set(
+        (await chrome.tabs.query({ currentWindow: true })).map((tab) => tab.id),
+      );
+
+  await chrome.search.query({
+    text: query,
+    disposition: useCurrentTab ? "CURRENT_TAB" : "NEW_TAB",
+    ...(useCurrentTab ? { tabId: currentTab.id } : {}),
+  });
+
+  if (useCurrentTab) {
+    await waitForTabComplete(currentTab.id);
+    return await chrome.tabs.get(currentTab.id);
+  }
+
+  const resultTab = await waitForNewTab(tabsBefore, Defaults.TabSwitchWaitMs);
+  if (!resultTab) {
+    throw new Error("Default-provider search did not open a results tab.");
+  }
+
+  await waitForTabComplete(resultTab.id);
+  return await chrome.tabs.get(resultTab.id);
+}
+
+async function waitForNewTab(existingTabIds, timeoutMs) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const newTab = tabs.find((tab) => !existingTabIds.has(tab.id));
+
+    if (newTab) return newTab;
+    await delay(100);
+  }
+
+  return null;
 }
 
 async function navigateBrowserHistory(direction, tab, ifUnavailable) {
@@ -719,7 +892,7 @@ async function executeNavigateStep(currentTab, step) {
   return await chrome.tabs.get(tabId);
 }
 
-async function executeContentStep(tab, step) {
+async function executeContentStep(tab, step, runId = "") {
   if (!tab?.id) {
     throw new Error("Cannot execute content step without a target tab.");
   }
@@ -728,6 +901,7 @@ async function executeContentStep(tab, step) {
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: Messages.ExecuteStep,
       step,
+      runId,
     });
 
     if (response?.ok === false) {

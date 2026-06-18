@@ -50,6 +50,27 @@ const definitions = [
     outputs: ["success"],
   },
   {
+    type: Actions.BrowserSearch,
+    version: 1,
+    category: "Browser",
+    label: "Search with Default Provider",
+    icon: "🔎",
+    description: "Search using the browser's configured default search provider.",
+    targetRequired: false,
+    config: [
+      { key: "query", label: "Search Query", kind: "text", required: true },
+      {
+        key: "openIn",
+        label: "Open Results In",
+        kind: "select",
+        default: "currentTab",
+        options: ["currentTab", "newTab"],
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
     type: Actions.BrowserForward,
     version: 1,
     category: "Browser",

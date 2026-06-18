@@ -63,6 +63,15 @@ Runtime state includes recording status plus execution status: `runId`, workflow
 
 Studio and sidebar query state on initialization and subscribe to changes. Workflow execution and recording are mutually exclusive; concurrent runs are rejected.
 
+Running workflows must support cooperative cancellation from both UIs. Cancellation propagates into page-level conditional waits, prevents later steps from starting, produces `cancelled` runtime state, and remains distinct from execution failure.
+
+## Workflow startup policy
+
+- A bound domain is always honored before the first step executes.
+- By default, BRunner navigates the current usable tab to the bound domain; it never replaces the Studio tab.
+- `settings.reuseExistingTabs` is `false` by default. When explicitly enabled, BRunner may activate an already-open matching tab instead of navigating the current tab.
+- Browser New Tab pages may be navigated to the bound domain. Other restricted/internal pages cause a new target tab to be created.
+
 ## Acceptance tests
 
 1. Same-tab recording remains unchanged.
@@ -74,4 +83,3 @@ Studio and sidebar query state on initialization and subscribe to changes. Workf
 7. Closing a child restores its opener context.
 8. Studio/sidebar state stays synchronized through start, progress, completion, failure, and reload.
 9. Stopping a sidebar recording autosaves one valid workflow.
-

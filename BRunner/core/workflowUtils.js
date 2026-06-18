@@ -8,6 +8,7 @@ export function normalizeWorkflow(input = {}) {
     return {
       boundDomain: "",
       variables: {},
+      settings: createDefaultWorkflowSettings(),
       steps: input,
     };
   }
@@ -18,6 +19,7 @@ export function normalizeWorkflow(input = {}) {
       input.variables && typeof input.variables === "object"
         ? structuredClone(input.variables)
         : {},
+    settings: normalizeWorkflowSettings(input.settings),
     steps: Array.isArray(input.steps) ? input.steps : [],
   };
 }
@@ -26,7 +28,20 @@ export function createEmptyWorkflow(boundDomain = "") {
   return {
     boundDomain,
     variables: {},
+    settings: createDefaultWorkflowSettings(),
     steps: [],
+  };
+}
+
+export function createDefaultWorkflowSettings() {
+  return {
+    reuseExistingTabs: false,
+  };
+}
+
+export function normalizeWorkflowSettings(settings = {}) {
+  return {
+    reuseExistingTabs: settings?.reuseExistingTabs === true,
   };
 }
 

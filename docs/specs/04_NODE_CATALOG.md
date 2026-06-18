@@ -16,7 +16,7 @@ Define the supported automation vocabulary before implementation. Nodes must be 
 
 These do not require graph branching and are the next implementation target.
 
-- Browser: Back, forward, reload, open tab, close current tab. **Implemented.**
+- Browser: Back, forward, reload, default-provider search, open tab, close current tab. **Implemented.**
 - Element: Double-click, hover, clear input, scroll element into view, scroll page. **Implemented.**
 - Wait: Element visible, hidden, enabled, text present, URL match. **Implemented.**
 - Data transforms: JSON parse/stringify, regular-expression match/replace, number conversion, date formatting. **Implemented.**

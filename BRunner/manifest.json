@@ -10,7 +10,8 @@
     "scripting",
     "storage",
     "sidePanel",
-    "debugger"
+    "debugger",
+    "search"
   ],
 
   "host_permissions": [

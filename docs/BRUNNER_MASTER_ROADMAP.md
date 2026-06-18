@@ -66,6 +66,7 @@ See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 | Node catalogue, variables, expressions, scraping | Milestone 2 |
 | Responsive drag/drop UI and comprehensive node panels | Milestone 3 |
 | Saved/runtime variable browser and table/list output previews | Milestone 3 |
+| Stop/cancel running workflow from Studio and sidebar | Runtime foundation; immediate |
 
 ## Development rules
 

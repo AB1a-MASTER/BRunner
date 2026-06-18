@@ -58,7 +58,7 @@ export function createRuntimeStateStore() {
   }
 
   function isRunning() {
-    return state.execution.status === "running";
+    return ["running", "cancelling"].includes(state.execution.status);
   }
 
   function isRecording() {
@@ -82,4 +82,3 @@ export function createRuntimeStateStore() {
     isRecording,
   };
 }
-

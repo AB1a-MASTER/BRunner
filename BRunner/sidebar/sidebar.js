@@ -13,6 +13,7 @@
 const Messages = Object.freeze({
   OsListWorkflows: "OS_LIST_WORKFLOWS",
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
+  StopWorkflow: "STOP_WORKFLOW",
   ToggleRecording: "TOGGLE_RECORDING",
   GetRecordingState: "GET_RECORDING_STATE",
   RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
@@ -22,6 +23,9 @@ const Messages = Object.freeze({
 });
 
 let isRecording = false;
+let isWorkflowRunning = false;
+let activeWorkflowName = "";
+let workflowExecutionStatus = "idle";
 let selectedWorkflow = "";
 let allWorkflows = [];
 
@@ -214,10 +218,28 @@ function applyRuntimeState(state) {
   }
 
   const execution = state.execution || {};
-  const running = execution.status === "running";
+  const running = ["running", "cancelling"].includes(execution.status);
+  const stopping = execution.status === "cancelling";
+  isWorkflowRunning = running;
+  activeWorkflowName = execution.workflowName || "";
+  workflowExecutionStatus = execution.status || "idle";
 
   if (recordButton) recordButton.disabled = running;
-  if (playButton) playButton.disabled = running || isRecording;
+  if (playButton) {
+    playButton.disabled =
+      stopping || isRecording || (!running && !selectedWorkflow);
+    playButton.classList.toggle(
+      "active",
+      running || Boolean(selectedWorkflow),
+    );
+    playButton.textContent = stopping
+      ? "⏳ Stopping..."
+      : running
+        ? "⏹ Stop Workflow"
+      : "▶ Run Selected";
+  }
+
+  updateWorkflowRunControls();
 
   if (running) {
     setSelectedLabel(
@@ -225,6 +247,8 @@ function applyRuntimeState(state) {
     );
   } else if (execution.status === "failed" && execution.error) {
     setSelectedLabel(`Failed: ${execution.error}`, true);
+  } else if (execution.status === "cancelled") {
+    setSelectedLabel("Workflow stopped.");
   }
 }
 
@@ -306,6 +330,12 @@ function renderWorkflowList(files) {
 
     item.addEventListener("dblclick", () => {
       selectWorkflow(file);
+
+      if (isWorkflowRunning) {
+        if (activeWorkflowName === file) stopRunningWorkflow();
+        return;
+      }
+
       runWorkflow(file);
     });
 
@@ -314,6 +344,12 @@ function renderWorkflowList(files) {
       .addEventListener("click", (event) => {
         event.stopPropagation();
         selectWorkflow(file);
+
+        if (isWorkflowRunning) {
+          if (activeWorkflowName === file) stopRunningWorkflow();
+          return;
+        }
+
         runWorkflow(file);
       });
 
@@ -333,15 +369,74 @@ function updateSelectedWorkflowVisual() {
   workflowList.querySelectorAll(".workflow-item").forEach((item) => {
     item.classList.toggle("selected", item.dataset.file === selectedWorkflow);
   });
+
+  if (playButton) {
+    playButton.classList.toggle(
+      "active",
+      isWorkflowRunning || Boolean(selectedWorkflow),
+    );
+    playButton.disabled =
+      workflowExecutionStatus === "cancelling" ||
+      isRecording ||
+      (!isWorkflowRunning && !selectedWorkflow);
+  }
+
+  updateWorkflowRunControls();
+}
+
+function updateWorkflowRunControls() {
+  workflowList.querySelectorAll(".workflow-item").forEach((item) => {
+    const button = item.querySelector(".workflow-run-btn");
+    if (!button) return;
+
+    const isActiveWorkflow =
+      isWorkflowRunning && item.dataset.file === activeWorkflowName;
+    const stopping =
+      isActiveWorkflow && workflowExecutionStatus === "cancelling";
+
+    button.textContent = stopping ? "…" : isActiveWorkflow ? "■" : "▶";
+    button.title = stopping
+      ? "Stopping workflow"
+      : isActiveWorkflow
+        ? "Stop workflow"
+        : "Run workflow";
+    button.disabled =
+      isRecording ||
+      stopping ||
+      (isWorkflowRunning && !isActiveWorkflow);
+    button.classList.toggle("stopping", stopping);
+    button.classList.toggle("running", isActiveWorkflow && !stopping);
+  });
 }
 
 async function runSelectedWorkflow() {
+  if (isWorkflowRunning) {
+    await stopRunningWorkflow();
+    return;
+  }
+
   if (!selectedWorkflow) {
     setSelectedLabel("Select a workflow first.", true);
     return;
   }
 
   await runWorkflow(selectedWorkflow);
+}
+
+async function stopRunningWorkflow() {
+  setSelectedLabel("Stopping workflow...");
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.StopWorkflow,
+    });
+
+    if (!response?.ok) {
+      setSelectedLabel(`Stop failed: ${response?.error || "Unknown error"}`, true);
+    }
+  } catch (error) {
+    setSelectedLabel(`Stop failed: ${error.message || error}`, true);
+  }
 }
 
 function updateRecordButton() {
@@ -397,6 +492,10 @@ async function runWorkflow(filename) {
   }
 
   setSelectedLabel(`Running ${filename.replace(/\.json$/i, "")}...`);
+  isWorkflowRunning = true;
+  activeWorkflowName = filename;
+  workflowExecutionStatus = "running";
+  updateSelectedWorkflowVisual();
 
   try {
     const response = await chrome.runtime.sendMessage({
@@ -405,11 +504,20 @@ async function runWorkflow(filename) {
     });
 
     if (isSuccess(response)) {
-      setSelectedLabel(`Completed ${filename.replace(/\.json$/i, "")}`);
+      setSelectedLabel(
+        response.cancelled
+          ? "Workflow stopped."
+          : `Completed ${filename.replace(/\.json$/i, "")}`,
+      );
     } else {
       setSelectedLabel(`Failed: ${response?.error || "Unknown error"}`, true);
     }
   } catch (error) {
     setSelectedLabel(`Failed: ${error.message || error}`, true);
+  } finally {
+    isWorkflowRunning = false;
+    activeWorkflowName = "";
+    workflowExecutionStatus = "idle";
+    updateSelectedWorkflowVisual();
   }
 }

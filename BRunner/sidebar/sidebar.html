@@ -185,6 +185,16 @@
             background: #1d4ed8;
         }
 
+        .workflow-run-btn.running {
+            background: #dc2626;
+        }
+
+        .workflow-run-btn.stopping,
+        .workflow-run-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
         /* Active States */
         .btn-play.active {
             opacity: 1;

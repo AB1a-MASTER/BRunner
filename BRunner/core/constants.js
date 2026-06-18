@@ -24,6 +24,7 @@ export const Messages = Object.freeze({
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
   StartWorkflow: "START_WORKFLOW",
   WorkflowComplete: "WORKFLOW_COMPLETE",
+  StopWorkflow: "STOP_WORKFLOW",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   BridgeStatus: "BRIDGE_STATUS",
   GetRuntimeState: "GET_RUNTIME_STATE",
@@ -32,6 +33,7 @@ export const Messages = Object.freeze({
 
   // Content script execution
   ExecuteStep: "EXECUTE_STEP",
+  CancelExecution: "CANCEL_EXECUTION",
 
   // Hardware / OS fallback
   RequestHardwareSimulation: "REQUEST_HARDWARE_SIMULATION",
@@ -53,6 +55,7 @@ export const Actions = Object.freeze({
   BrowserReload: "browser.reload",
   BrowserTabOpen: "browser.tab.open",
   BrowserTabClose: "browser.tab.close",
+  BrowserSearch: "browser.search",
 
   ElementClick: "element.click",
   ElementType: "element.type",

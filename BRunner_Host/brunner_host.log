@@ -1268,3 +1268,66 @@
 2026-06-18 16:24:04,550 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
 2026-06-18 16:24:04,550 [INFO] [Auth] Extension connected and authenticated securely.
 2026-06-18 16:25:14,370 [INFO] connection closed
+2026-06-18 16:27:00,751 [INFO] connection open
+2026-06-18 16:27:00,752 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 16:27:00,754 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 16:27:00,754 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 16:27:38,723 [INFO] connection closed
+2026-06-18 16:32:41,025 [INFO] connection open
+2026-06-18 16:32:41,028 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 16:32:41,031 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 16:32:41,031 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 16:33:15,789 [INFO] connection closed
+2026-06-18 18:03:20,795 [INFO] ========================================
+2026-06-18 18:03:20,796 [INFO]  BRunner Native OS Host Started
+2026-06-18 18:03:20,796 [INFO]  Listening on ws://localhost:8999
+2026-06-18 18:03:20,796 [INFO] ========================================
+2026-06-18 18:03:20,797 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-18 18:03:20,797 [INFO] ========================================
+2026-06-18 18:03:20,902 [INFO] server listening on 127.0.0.1:8999
+2026-06-18 18:03:20,902 [INFO] server listening on [::1]:8999
+2026-06-18 18:03:34,958 [INFO] connection open
+2026-06-18 18:03:34,959 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:03:34,963 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:03:34,963 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:03:37,440 [INFO] connection closed
+2026-06-18 18:03:37,601 [INFO] connection open
+2026-06-18 18:03:37,601 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:03:37,607 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:03:37,608 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:03:46,282 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:03:50,549 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:03:54,662 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '3', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
+2026-06-18 18:05:14,913 [INFO] connection closed
+2026-06-18 18:05:47,531 [INFO] connection open
+2026-06-18 18:05:47,531 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:05:47,533 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:05:47,534 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:07:55,428 [INFO] connection closed
+2026-06-18 18:11:28,137 [INFO] connection open
+2026-06-18 18:11:28,138 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:11:28,140 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:11:28,141 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:11:30,714 [INFO] connection closed
+2026-06-18 18:11:30,910 [INFO] connection open
+2026-06-18 18:11:30,910 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:11:30,917 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:11:30,918 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:11:38,561 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:11:46,942 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:11:50,661 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '3', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
+2026-06-18 18:12:52,838 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '4', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
+2026-06-18 18:13:26,291 [INFO] connection closed
+2026-06-18 18:17:06,928 [INFO] connection open
+2026-06-18 18:17:06,929 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:17:06,930 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:17:06,931 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:17:08,057 [INFO] connection closed
+2026-06-18 18:17:08,316 [INFO] connection open
+2026-06-18 18:17:08,316 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:17:08,320 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:17:08,320 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:17:14,282 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:17:16,046 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '2', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
+2026-06-18 18:17:30,287 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '3', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:18:03,862 [INFO] connection closed

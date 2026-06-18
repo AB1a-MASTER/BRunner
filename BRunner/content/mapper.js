@@ -10,6 +10,7 @@
     GetRecordingState: "GET_RECORDING_STATE",
     SetRecordingState: "SET_RECORDING_STATE",
     RecordedStep: "RECORDED_STEP",
+    CancelExecution: "CANCEL_EXECUTION",
   });
 
   const Actions = Object.freeze({
@@ -51,6 +52,7 @@
       this.controls = new Map();
       this.isRecording = false;
       this.lastInputValueByElement = new WeakMap();
+      this.cancelledRunIds = new Set();
 
       this.scanDom();
       this.installDomObserver();
@@ -150,7 +152,15 @@
     async handleMessage(request) {
       switch (request?.type) {
         case Messages.ExecuteStep:
-          return await this.executeStep(request.step);
+          return await this.executeStep(request.step, request.runId || "");
+
+        case Messages.CancelExecution:
+          if (request.runId) this.cancelledRunIds.add(request.runId);
+          return {
+            ok: true,
+            cancelled: true,
+            runId: request.runId || "",
+          };
 
         case Messages.SetRecordingState:
           this.setRecordingState(Boolean(request.isRecording));
@@ -455,7 +465,9 @@
         });
     }
 
-    async executeStep(step = {}) {
+    async executeStep(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
       const action = step.action || step.type;
 
       if (action === Actions.LogicWait) {
@@ -488,7 +500,7 @@
       }
 
       if (this.isConditionalWaitAction(action)) {
-        return await this.executeConditionalWait(step);
+        return await this.executeConditionalWait(step, runId);
       }
 
       const resolved = resolver.resolveRecordedTarget(step, this.controls);
@@ -1051,7 +1063,7 @@
       ].includes(action);
     }
 
-    async executeConditionalWait(step) {
+    async executeConditionalWait(step, runId = "") {
       const action = step.action || step.type;
       const timeoutMs = Number(step.config?.timeoutMs ?? 10000);
       const pollingMs = Number(step.config?.pollingMs ?? 250);
@@ -1082,6 +1094,7 @@
       let attempts = 0;
 
       while (Date.now() - startedAt <= timeoutMs) {
+        this.throwIfExecutionCancelled(runId);
         attempts++;
 
         if (this.isWaitConditionSatisfied(action, step)) {
@@ -1092,7 +1105,10 @@
           };
         }
 
-        await this.delay(Math.min(pollingMs, Math.max(timeoutMs, 1)));
+        await this.delayWithCancellation(
+          Math.min(pollingMs, Math.max(timeoutMs, 1)),
+          runId,
+        );
       }
 
       const error = new Error(`Timed out waiting for ${action}.`);
@@ -1106,6 +1122,31 @@
         finalReason: "wait_condition_timeout",
       };
       throw error;
+    }
+
+    throwIfExecutionCancelled(runId) {
+      if (!runId || !this.cancelledRunIds.has(runId)) return;
+
+      const error = new Error("Workflow stopped by user.");
+      error.name = "WorkflowCancelledError";
+      error.diagnostics = {
+        runId,
+        finalReason: "workflow_cancelled",
+      };
+      throw error;
+    }
+
+    async delayWithCancellation(ms, runId) {
+      let remaining = Math.max(Number(ms) || 0, 0);
+
+      while (remaining > 0) {
+        this.throwIfExecutionCancelled(runId);
+        const chunk = Math.min(remaining, 100);
+        await this.delay(chunk);
+        remaining -= chunk;
+      }
+
+      this.throwIfExecutionCancelled(runId);
     }
 
     isWaitConditionSatisfied(action, step) {
