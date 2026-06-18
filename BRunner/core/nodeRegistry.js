@@ -1,0 +1,627 @@
+// core/nodeRegistry.js
+// Canonical serializable definitions for workflow nodes supported by runtime.
+
+import { Actions, NavigationTargets } from "./constants.js";
+
+const definitions = [
+  {
+    type: Actions.BrowserNavigate,
+    version: 1,
+    category: "Browser",
+    label: "Navigate URL",
+    icon: "🌐",
+    description: "Navigate in the current tab or open a new tab.",
+    targetRequired: false,
+    config: [
+      { key: "url", label: "URL", kind: "text", required: true },
+      {
+        key: "openIn",
+        label: "Open In",
+        kind: "select",
+        default: NavigationTargets.SameTab,
+        options: [NavigationTargets.SameTab, NavigationTargets.NewTab],
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementClick,
+    version: 1,
+    category: "Element",
+    label: "Click Element",
+    icon: "🖱️",
+    description: "Resolve and click a page element.",
+    targetRequired: true,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.BrowserBack,
+    version: 1,
+    category: "Browser",
+    label: "Go Back",
+    icon: "←",
+    description: "Navigate the current tab backward in its history.",
+    targetRequired: false,
+    config: [historyUnavailableField()],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.BrowserForward,
+    version: 1,
+    category: "Browser",
+    label: "Go Forward",
+    icon: "→",
+    description: "Navigate the current tab forward in its history.",
+    targetRequired: false,
+    config: [historyUnavailableField()],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.BrowserReload,
+    version: 1,
+    category: "Browser",
+    label: "Reload Page",
+    icon: "🔄",
+    description: "Reload the current browser tab.",
+    targetRequired: false,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.BrowserTabOpen,
+    version: 1,
+    category: "Browser",
+    label: "Open Tab",
+    icon: "➕",
+    description: "Open a URL in a new tracked browser tab.",
+    targetRequired: false,
+    config: [
+      { key: "url", label: "URL", kind: "text", required: true },
+      {
+        key: "continueIn",
+        label: "Continue Workflow In",
+        kind: "select",
+        default: "newTab",
+        options: ["newTab", "currentTab"],
+      },
+      {
+        key: "tabRef",
+        label: "New Tab Reference",
+        kind: "text",
+        default: "",
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "tab"],
+  },
+  {
+    type: Actions.BrowserTabClose,
+    version: 1,
+    category: "Browser",
+    label: "Close Current Tab",
+    icon: "✕",
+    description: "Close the current tab and return to its opener or another safe tab.",
+    targetRequired: false,
+    config: [
+      {
+        key: "continueIn",
+        label: "After Closing",
+        kind: "select",
+        default: "openerOrAvailable",
+        options: ["openerOrAvailable", "none"],
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementType,
+    version: 1,
+    category: "Element",
+    label: "Type Text",
+    icon: "⌨️",
+    description: "Type text or an expression into an element.",
+    targetRequired: true,
+    config: [{ key: "value", label: "Text", kind: "text", required: true }],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementDoubleClick,
+    version: 1,
+    category: "Element",
+    label: "Double-Click Element",
+    icon: "🖱️",
+    description: "Double-click a resolved page element.",
+    targetRequired: true,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementHover,
+    version: 1,
+    category: "Element",
+    label: "Hover Element",
+    icon: "☝️",
+    description: "Move pointer interaction over a resolved element.",
+    targetRequired: true,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementClear,
+    version: 1,
+    category: "Element",
+    label: "Clear Input",
+    icon: "⌫",
+    description: "Clear an input, textarea, or editable element.",
+    targetRequired: true,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementScrollIntoView,
+    version: 1,
+    category: "Element",
+    label: "Scroll Element Into View",
+    icon: "🎯",
+    description: "Scroll until the target element is visible.",
+    targetRequired: true,
+    config: [
+      {
+        key: "block",
+        label: "Vertical Alignment",
+        kind: "select",
+        default: "center",
+        options: ["start", "center", "end", "nearest"],
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.BrowserScroll,
+    version: 1,
+    category: "Browser",
+    label: "Scroll Page",
+    icon: "↕️",
+    description: "Scroll the page by horizontal and vertical pixel offsets.",
+    targetRequired: false,
+    config: [
+      { key: "x", label: "Horizontal Pixels", kind: "number", default: 0 },
+      { key: "y", label: "Vertical Pixels", kind: "number", default: 500 },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementExtract,
+    version: 1,
+    category: "Data",
+    label: "Extract Data (Legacy)",
+    icon: "✂️",
+    description: "Extract element text/value into a run variable.",
+    targetRequired: true,
+    config: [
+      {
+        key: "variableName",
+        label: "Output Variable",
+        kind: "text",
+        required: true,
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  {
+    type: Actions.KeyboardSendKeys,
+    version: 1,
+    category: "Keyboard",
+    label: "Send Keystroke",
+    icon: "🎹",
+    description: "Send a key or shortcut through the native host.",
+    targetRequired: false,
+    config: [{ key: "keys", label: "Keys", kind: "text", required: true }],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementFocus,
+    version: 1,
+    category: "Element",
+    label: "Focus Element",
+    icon: "🎯",
+    description: "Focus a page element.",
+    targetRequired: true,
+    config: [],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementSelect,
+    version: 1,
+    category: "Element",
+    label: "Select Dropdown",
+    icon: "📋",
+    description: "Select an option in native or ARIA dropdowns.",
+    targetRequired: true,
+    config: [{ key: "value", label: "Option", kind: "text", required: true }],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.ElementToggle,
+    version: 1,
+    category: "Element",
+    label: "Toggle Check/Radio",
+    icon: "☑️",
+    description: "Toggle a checkbox, radio, or ARIA switch.",
+    targetRequired: true,
+    config: [{ key: "value", label: "State", kind: "boolean" }],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.LogicWait,
+    version: 1,
+    category: "Logic",
+    label: "Wait / Pause",
+    icon: "⏳",
+    description: "Pause execution for a fixed duration.",
+    targetRequired: false,
+    config: [
+      {
+        key: "mode",
+        label: "Wait Mode",
+        kind: "select",
+        default: "fixed",
+        options: ["fixed", "random"],
+      },
+      { key: "ms", label: "Milliseconds", kind: "number", default: 1000 },
+      { key: "minMs", label: "Minimum ms", kind: "number", default: 500 },
+      { key: "maxMs", label: "Maximum ms", kind: "number", default: 1500 },
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.DataExtractText,
+    version: 1,
+    category: "Data",
+    label: "Extract Text",
+    icon: "📝",
+    description: "Extract visible text from an element into a variable.",
+    targetRequired: true,
+    config: [outputVariableField()],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  ...createElementWaitDefinitions(),
+  {
+    type: Actions.WaitUrl,
+    version: 1,
+    category: "Wait",
+    label: "Wait for URL",
+    icon: "🔗",
+    description: "Wait until the current URL satisfies a match rule.",
+    targetRequired: false,
+    config: [
+      { key: "expected", label: "Expected URL", kind: "text", required: true },
+      {
+        key: "matchMode",
+        label: "Match Mode",
+        kind: "select",
+        default: "contains",
+        options: ["contains", "exact", "regex"],
+      },
+      ...waitTimingFields(),
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  },
+  {
+    type: Actions.DataExtractAttribute,
+    version: 1,
+    category: "Data",
+    label: "Extract Attribute",
+    icon: "🏷️",
+    description: "Extract an element attribute into a variable.",
+    targetRequired: true,
+    config: [
+      outputVariableField(),
+      {
+        key: "attributeName",
+        label: "Attribute Name",
+        kind: "text",
+        required: true,
+        default: "href",
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  {
+    type: Actions.DataExtractList,
+    version: 1,
+    category: "Data",
+    label: "Extract List",
+    icon: "📚",
+    description: "Extract text or attributes from repeated descendants.",
+    targetRequired: true,
+    config: [
+      outputVariableField(),
+      {
+        key: "itemSelector",
+        label: "Item CSS Selector",
+        kind: "text",
+        required: true,
+        default: "li",
+      },
+      {
+        key: "valueMode",
+        label: "Value Mode",
+        kind: "select",
+        default: "text",
+        options: ["text", "attribute"],
+      },
+      {
+        key: "attributeName",
+        label: "Attribute Name",
+        kind: "text",
+        default: "href",
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "items"],
+  },
+  {
+    type: Actions.DataExtractTable,
+    version: 1,
+    category: "Data",
+    label: "Extract Table",
+    icon: "▦",
+    description: "Extract table headers and rows as structured data.",
+    targetRequired: true,
+    config: [
+      outputVariableField(),
+      {
+        key: "rowSelector",
+        label: "Row CSS Selector",
+        kind: "text",
+        default: "tr",
+      },
+      {
+        key: "cellSelector",
+        label: "Cell CSS Selector",
+        kind: "text",
+        default: "th, td",
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "table"],
+  },
+  {
+    type: Actions.DataExtractPage,
+    version: 1,
+    category: "Data",
+    label: "Extract Page Metadata",
+    icon: "🌍",
+    description: "Extract page URL, title, or complete page metadata.",
+    targetRequired: false,
+    config: [
+      outputVariableField(),
+      {
+        key: "field",
+        label: "Page Field",
+        kind: "select",
+        default: "all",
+        options: ["all", "title", "url", "origin", "hostname", "path", "search"],
+      },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  {
+    type: Actions.DataSet,
+    version: 1,
+    category: "Data",
+    label: "Set Variable",
+    icon: "📌",
+    description: "Store a literal or expression result in a variable.",
+    targetRequired: false,
+    config: [
+      outputVariableField(),
+      { key: "value", label: "Value", kind: "text", required: true },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  {
+    type: Actions.DataTemplate,
+    version: 1,
+    category: "Data",
+    label: "Template Text",
+    icon: "🧩",
+    description: "Render expression-enabled text into a variable.",
+    targetRequired: false,
+    config: [
+      outputVariableField(),
+      { key: "template", label: "Template", kind: "text", required: true },
+    ],
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  },
+  ...createTransformDefinitions(),
+];
+
+function outputVariableField() {
+  return {
+    key: "variableName",
+    label: "Output Variable",
+    kind: "text",
+    required: true,
+  };
+}
+
+function createElementWaitDefinitions() {
+  return [
+    [Actions.WaitElementVisible, "Wait for Visible", "Wait until the target becomes visible."],
+    [Actions.WaitElementHidden, "Wait for Hidden", "Wait until the target disappears or becomes hidden."],
+    [Actions.WaitElementEnabled, "Wait for Enabled", "Wait until the target becomes enabled."],
+    [Actions.WaitElementText, "Wait for Text", "Wait until the target contains expected text."],
+  ].map(([type, label, description]) => ({
+    type,
+    version: 1,
+    category: "Wait",
+    label,
+    icon: "⏱️",
+    description,
+    targetRequired: true,
+    config: [
+      ...(type === Actions.WaitElementText
+        ? [{ key: "expectedText", label: "Expected Text", kind: "text", required: true }]
+        : []),
+      ...waitTimingFields(),
+    ],
+    inputs: ["input"],
+    outputs: ["success"],
+  }));
+}
+
+function waitTimingFields() {
+  return [
+    { key: "timeoutMs", label: "Timeout ms", kind: "number", default: 10000 },
+    { key: "pollingMs", label: "Polling ms", kind: "number", default: 250 },
+  ];
+}
+
+function createTransformDefinitions() {
+  const base = {
+    version: 1,
+    category: "Transform",
+    icon: "🔧",
+    targetRequired: false,
+    inputs: ["input"],
+    outputs: ["success", "value"],
+  };
+
+  return [
+    {
+      ...base,
+      type: Actions.DataJsonParse,
+      label: "Parse JSON",
+      description: "Parse JSON text into an object or list.",
+      config: [outputVariableField(), inputValueField("JSON Input")],
+    },
+    {
+      ...base,
+      type: Actions.DataJsonStringify,
+      label: "Stringify JSON",
+      description: "Convert a value into JSON text.",
+      config: [
+        outputVariableField(),
+        inputValueField("Input Value"),
+        {
+          key: "pretty",
+          label: "Pretty Print",
+          kind: "select",
+          default: "false",
+          options: ["false", "true"],
+        },
+      ],
+    },
+    {
+      ...base,
+      type: Actions.DataRegexMatch,
+      label: "Regex Match",
+      description: "Return regular-expression matches from text.",
+      config: [
+        outputVariableField(),
+        inputValueField("Input Text"),
+        { key: "pattern", label: "Pattern", kind: "text", required: true },
+        { key: "flags", label: "Flags", kind: "text", default: "" },
+      ],
+    },
+    {
+      ...base,
+      type: Actions.DataRegexReplace,
+      label: "Regex Replace",
+      description: "Replace matching text using a regular expression.",
+      config: [
+        outputVariableField(),
+        inputValueField("Input Text"),
+        { key: "pattern", label: "Pattern", kind: "text", required: true },
+        { key: "replacement", label: "Replacement", kind: "text", default: "" },
+        { key: "flags", label: "Flags", kind: "text", default: "g" },
+      ],
+    },
+    {
+      ...base,
+      type: Actions.DataToNumber,
+      label: "Convert to Number",
+      description: "Convert a value to a finite number.",
+      config: [outputVariableField(), inputValueField("Input Value")],
+    },
+    {
+      ...base,
+      type: Actions.DataFormatDate,
+      label: "Format Date",
+      description: "Convert a date into ISO, locale, or timestamp form.",
+      config: [
+        outputVariableField(),
+        inputValueField("Date Input"),
+        {
+          key: "format",
+          label: "Output Format",
+          kind: "select",
+          default: "iso",
+          options: ["iso", "locale", "timestamp"],
+        },
+      ],
+    },
+  ];
+}
+
+function inputValueField(label) {
+  return {
+    key: "input",
+    label,
+    kind: "text",
+    required: true,
+  };
+}
+
+function historyUnavailableField() {
+  return {
+    key: "ifUnavailable",
+    label: "If History Is Unavailable",
+    kind: "select",
+    default: "continue",
+    options: ["continue", "fail"],
+  };
+}
+
+const definitionsByType = new Map(
+  definitions.map((definition) => [definition.type, definition]),
+);
+
+export function getNodeDefinition(type) {
+  return definitionsByType.get(type) || null;
+}
+
+export function getNodeDefinitions() {
+  return definitions.map((definition) => structuredClone(definition));
+}
+
+export function isSupportedNodeType(type) {
+  return definitionsByType.has(type);
+}

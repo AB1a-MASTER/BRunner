@@ -1,20 +1,167 @@
 <!doctype html>
-<html>
-
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BRunner Reliability Harness</title>
+    <style>
+        body { max-width: 760px; margin: 40px auto; padding: 0 20px; font: 16px/1.5 system-ui, sans-serif; }
+        fieldset { display: grid; gap: 12px; margin-bottom: 20px; padding: 20px; }
+        label { display: grid; gap: 4px; }
+        input, select, button { padding: 9px; font: inherit; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+        pre { min-height: 140px; overflow: auto; padding: 14px; background: #111827; color: #d1fae5; }
+        #status[data-state="pass"] { color: #047857; }
+        #status[data-state="fail"] { color: #b91c1c; }
+    </style>
+</head>
 <body>
-    <input id="name-input" placeholder="Name">
+    <h1>BRunner Reliability Harness</h1>
+    <p>Use this page to verify recording shape and fallback replay after extension changes.</p>
 
-    <select id="country">
-        <option value="">Choose</option>
-        <option value="pk">Pakistan</option>
-        <option value="us">United States</option>
-    </select>
+    <div class="toolbar">
+        <button id="start-recording" type="button">Start Recording</button>
+        <button id="stop-recording" type="button">Stop Recording</button>
+        <button id="mutate-target" type="button">Invalidate Primary ID</button>
+        <button id="replay-last-click" type="button">Replay Last Click</button>
+        <button id="clear-results" type="button">Clear</button>
+    </div>
 
-    <input id="agree" type="checkbox">
+    <fieldset>
+        <legend>Deterministic controls</legend>
 
-    <button id="result-button" onclick="document.body.dataset.clicked='yes'">
-        Click Me
-    </button>
+        <label for="name-input">
+            Account name
+            <input
+                id="name-input"
+                name="account_name"
+                aria-label="Account name"
+                data-testid="account-name"
+                placeholder="Enter account name"
+            >
+        </label>
+
+        <label for="country">
+            Country
+            <select id="country" name="country" aria-label="Country">
+                <option value="">Choose</option>
+                <option value="pk">Pakistan</option>
+                <option value="us">United States</option>
+            </select>
+        </label>
+
+        <label for="agree">
+            <input id="agree" name="terms" type="checkbox">
+            Accept terms
+        </label>
+
+        <button
+            id="result-button"
+            name="submit_result"
+            aria-label="Submit reliability test"
+            data-testid="submit-result"
+            type="button"
+        >Submit Test</button>
+    </fieldset>
+
+    <p id="status" role="status">Ready.</p>
+    <pre id="recorded-output">No recorded steps.</pre>
+
+    <script>
+        window.__BRUNNER_TEST_MESSAGES__ = [];
+
+        // Minimal extension API stand-in. Production content scripts can run on
+        // this ordinary page while the harness captures their outbound steps.
+        window.chrome = {
+            runtime: {
+                onMessage: { addListener() {} },
+                async sendMessage(message) {
+                    if (message?.type === "GET_RECORDING_STATE") {
+                        return { ok: true, recording: { isRecording: false } };
+                    }
+
+                    if (message?.type === "RECORDED_STEP") {
+                        window.__BRUNNER_TEST_MESSAGES__.push(message.step);
+                        window.renderRecordedSteps();
+                    }
+
+                    return { ok: true };
+                }
+            }
+        };
+    </script>
+    <script src="content/targetResolver.js"></script>
+    <script src="content/mapper.js"></script>
+    <script>
+        const output = document.getElementById("recorded-output");
+        const status = document.getElementById("status");
+        const resultButton = document.getElementById("result-button");
+
+        window.renderRecordedSteps = function renderRecordedSteps() {
+            output.textContent = window.__BRUNNER_TEST_MESSAGES__.length
+                ? JSON.stringify(window.__BRUNNER_TEST_MESSAGES__, null, 2)
+                : "No recorded steps.";
+        };
+
+        function setStatus(message, state = "") {
+            status.textContent = message;
+            status.dataset.state = state;
+        }
+
+        resultButton.addEventListener("click", () => {
+            const count = Number(resultButton.dataset.clickCount || 0) + 1;
+            resultButton.dataset.clickCount = String(count);
+            setStatus(`Submit Test clicked ${count} time(s).`);
+        });
+
+        document.getElementById("start-recording").addEventListener("click", () => {
+            window.__BRUNNER_MAPPER__.setRecordingState(true);
+            setStatus("Recording enabled.");
+        });
+
+        document.getElementById("stop-recording").addEventListener("click", () => {
+            window.__BRUNNER_MAPPER__.setRecordingState(false);
+            setStatus("Recording disabled.");
+        });
+
+        document.getElementById("mutate-target").addEventListener("click", () => {
+            resultButton.id = "result-button-changed";
+            setStatus("Primary ID invalidated; semantic fallbacks remain.");
+        });
+
+        document.getElementById("replay-last-click").addEventListener("click", async () => {
+            const step = [...window.__BRUNNER_TEST_MESSAGES__]
+                .reverse()
+                .find((item) => item.action === "element.click" && item.friendlyName?.includes("result-button"));
+
+            if (!step) {
+                setStatus("No recorded Submit Test click is available.", "fail");
+                return;
+            }
+
+            const before = Number(resultButton.dataset.clickCount || 0);
+            const response = await window.__BRUNNER_MAPPER__.executeStep(step);
+            const after = Number(resultButton.dataset.clickCount || 0);
+            const passed = response?.ok === true && after > before;
+
+            setStatus(
+                passed
+                    ? `Fallback replay passed using ${response.usedStrategy}.`
+                    : `Fallback replay failed: ${response?.error || "unknown error"}`,
+                passed ? "pass" : "fail"
+            );
+
+            if (!passed && response?.diagnostics) {
+                output.textContent = JSON.stringify(response.diagnostics, null, 2);
+            }
+        });
+
+        document.getElementById("clear-results").addEventListener("click", () => {
+            window.__BRUNNER_TEST_MESSAGES__ = [];
+            resultButton.dataset.clickCount = "0";
+            window.renderRecordedSteps();
+            setStatus("Cleared.");
+        });
+    </script>
 </body>
-
 </html>

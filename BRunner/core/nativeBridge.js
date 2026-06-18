@@ -166,6 +166,14 @@ class NativeBridgeClient {
     });
   }
 
+  async renameWorkflow(filename, newFilename, content) {
+    return this.request(NativeCommands.RenameWorkflow, {
+      filename: ensureJsonFilename(filename),
+      newFilename: ensureJsonFilename(newFilename),
+      content,
+    });
+  }
+
   async osKeystroke(keys) {
     return this.request(NativeCommands.OsKeystroke, {
       keys,

@@ -1,0 +1,232 @@
+BRunner System Design Document — Unified Version
+Overview
+BRunner is an enterprise-grade, event-driven browser automation engine designed for robust, cross-platform, and context-aware browser manipulation. It operates across four isolated subsystems connected through an asynchronous event-driven pipeline. The system supports visual workflow creation, DOM-aware execution, resilient macro recording, cross-tab orchestration, native OS integration, and future-ready headless deployment.
+
+Phase 1: Core System Architecture
+The BRunner ecosystem is divided into four primary environments.
+1. Studio UI
+Files: studio/index.html, app.js
+Role: Frontend workflow builder and execution visualizer
+Environment: Full-page extension tab
+Responsibilities:
+Construct and edit JSON workflow definitions.
+Manage the 3-column IDE layout.
+Support action-node insertion, node reordering, and workflow editing.
+Manage workflow variables and inline expressions.
+Render real-time execution logs.
+Provide a persistent workflow-management interface.
+2. Orchestration Engine
+File: background.js
+Role: Brain, memory bank, and state machine
+Environment: Chrome Background Service Worker
+Responsibilities:
+Manage browser tabs, including auto-navigation and active-tab tracking.
+Maintain the VariableRegistry for cross-site and cross-step data passing.
+Execute workflow state transitions.
+Handle conditional branching and expression evaluation.
+Auto-save recorded macros.
+Route fallback execution to Chrome DevTools Protocol, when required.
+Coordinate messages between the Studio UI, content scripts, and native host.
+3. Execution Agent
+File: content/mapper.js
+Role: DOM observer and page-level interaction executor
+Environment: Injected content script on target webpages
+Responsibilities:
+Scan the DOM and build a deterministic controlsTree.
+Intercept user interactions during macro recording.
+Generate stable element identifiers for recorded actions.
+Execute physical DOM interactions such as clicks, typing, extraction, and form manipulation.
+Perform Just-In-Time occlusion checks before interacting with page elements.
+Fall back to visual or hardware-assisted execution when DOM resolution fails.
+4. Native OS Host
+File: brunner_host.py
+Role: File-system and hardware bridge
+Environment: Local OS WebSocket server at ws://127.0.0.1:8999
+Responsibilities:
+Secure local connections using pairing keys.
+Read and write workflow .json files to disk.
+Provide persistent workflow storage outside the browser sandbox.
+Execute OS-level commands through tools such as pyautogui when browser APIs are insufficient.
+Support native file-dialog automation for strict web applications.
+
+Phase 2: Studio UI & UX
+2.1 IDE Layout
+The Studio uses a 3-column IDE layout optimized for horizontal workspace efficiency.
+Left Column — Palette: Contains available action nodes.
+Center Column — Canvas: Main workflow editing surface with node ordering and configuration.
+Right Column — Workflow Manager / Sidebar: Handles persistent workflow loading, saving, file management, and execution metadata.
+2.2 Workflow Schema
+Workflows are stored as structured JSON objects.
+{
+  "boundDomain": "example.com",
+  "steps": []
+}
+
+The boundDomain property defines the expected domain for execution and allows the orchestration engine to automatically navigate or validate the active tab before running the workflow.
+2.3 Workflow Logic
+The execution model is sequential by default, with support for two logic categories:
+Type 1 — Flow Control: Branching, conditional execution, and future loop support.
+Type 2 — Expression Evaluation: Inline variable replacement using {{variable_name}} syntax.
+Variables are resolved through the VariableRegistry, allowing extracted data from one page or step to be reused later in the workflow.
+2.4 Studio UX Requirements
+Sidebar Auto-Close
+The Workflow Sidebar must detect when the current active tab is the Studio IDE itself and automatically collapse or hide to preserve canvas space.
+This should be implemented using tab lifecycle listeners such as:
+chrome.tabs.onActivated
+chrome.tabs.onUpdated
+When studio/index.html is detected as the active tab, the sidebar should collapse automatically.
+
+Phase 3: DOM Inspector, Recorder, & Execution Engine
+3.1 Capture Suite
+BRunner includes a DOM capture and inspection suite for creating and debugging automations.
+Core tools include:
+Visual Inspector: Floating highlight layer for identifying target elements.
+Control Tree Sidebar: Structured representation of detected interactive elements.
+Manual Override: Allows users to manually select or correct target mappings when automatic detection is insufficient.
+3.2 Recorder Resilience
+The macro recorder must prioritize stable, human-readable identifiers instead of relying primarily on generated internal control hashes.
+Identifier Evolution
+Recorded macros should use stable identifiers in this priority order where available:
+Element id
+Element name
+aria-label
+Other stable semantic attributes
+Text or structural fallback
+Internal ctrl_HASH as a secondary fallback
+The generated ctrl_HASH should still be retained, but only as a secondary fallback for visual UI matching, CDP-based operations, or cases where no stable semantic selector exists.
+This change improves macro durability when the DOM changes between recording and replay.
+3.3 Auto-Binding During Recording
+When a recording session starts, BRunner should automatically capture the current tab’s domain and assign it to the workflow’s boundDomain.
+This ensures that recorded workflows launch consistently against the domain where they were created.
+Required implementation areas:
+sidebar.js
+background.js
+Recording session initialization flow
+3.4 Resolution Engine
+Element resolution should use a cascading strategy:
+Exact stable identifier match
+Semantic selector match
+Fuzzy match
+ctrl_HASH fallback
+Visual coordinate fallback
+Hardware fallback or CDP execution
+This approach allows BRunner to remain resilient across page updates, layout changes, and dynamic DOM rendering.
+3.5 Just-In-Time Occlusion Monitoring
+Before performing physical interactions, BRunner must verify that the target element is not blocked by overlays, modals, sticky headers, or other page elements.
+This is performed using:
+document.elementFromPoint(x, y)
+
+If the returned element is not the intended target or a valid descendant of the target, the engine should delay, retry, scroll, or route to an appropriate fallback.
+3.6 Navigation Flexibility
+Navigation nodes must support explicit tab lifecycle control.
+The browser.navigate node schema should include a target option such as:
+{
+  "type": "browser.navigate",
+  "url": "https://example.com",
+  "openIn": "sameTab"
+}
+
+Supported values:
+sameTab
+newTab
+The execution engine must branch accordingly and update tab-tracking state after navigation.
+
+Phase 4: Native Host Integration & Persistence
+4.1 File Operations
+Workflows are persisted to the local OS disk through the Python native host.
+Supported host commands include:
+SAVE_WORKFLOW
+LOAD_WORKFLOW
+LIST_WORKFLOWS
+The browser extension should mediate file operations through the native host rather than depending solely on browser-local storage.
+4.2 File Uploads
+BRunner supports dual-mode file-upload automation.
+Method A — Virtual Blob Injection
+Used for silent or background-compatible uploads where the browser allows programmatic file injection.
+Best suited for:
+Standard file inputs
+Background execution
+Reduced user interruption
+Method B — Native OS File Dialog Automation
+Uses native OS automation through pyautogui when web applications require real file-dialog interaction.
+Best suited for:
+Strict upload widgets
+Sites blocking synthetic file injection
+Native file-picker workflows
+
+Phase 5: Headless Operations & Resilience
+5.1 Headless Pivoting
+BRunner must detect when no physical browser UI is present and route Tier 3 interactions through the Chrome DevTools Protocol using chrome.debugger.
+This allows workflows to operate in headless, containerized, or cloud-hosted environments where physical mouse and keyboard automation are unavailable.
+5.2 Multi-Monitor Calibration
+The system must neutralize coordinate drift by offsetting browser window bounds against actual screen coordinates.
+This is required for reliable interaction across:
+Multi-monitor setups
+High-DPI displays
+Shifted browser windows
+OS-level scaling differences
+5.3 Fallback Strategy
+Execution should degrade gracefully across multiple levels:
+DOM-native interaction
+Semantic selector fallback
+Fuzzy DOM matching
+Visual coordinate execution
+CDP execution
+Native OS hardware automation
+
+Phase 6: Orchestration & Multi-Tab Memory
+6.1 Domain Binding
+Workflows are bound to a specific domain through the boundDomain property.
+If a workflow is executed on the wrong tab or domain, the orchestration engine should automatically navigate to the correct domain or open the proper target tab according to the workflow configuration.
+6.2 Cross-Site Memory
+BRunner maintains state across navigations, tabs, and domains using the VariableRegistry.
+Example data flow:
+Extraction → Storage → Transformation → Injection
+
+This allows workflows to extract information from one page and reuse it on another, enabling multi-step and cross-site automation.
+6.3 Multi-Tab Tracking
+The orchestration engine must track tab identity, navigation state, and active execution context so workflows can safely move between tabs without losing state.
+This is especially important for:
+openIn: "newTab" navigation
+Authentication flows
+Cross-domain workflows
+Recorded macros that span multiple pages
+
+Phase 7: Future Roadmap
+7.1 Workflow Composability
+Introduce a workflow.call node that allows one workflow to trigger another.
+This enables modular automation design and reusable workflow components.
+7.2 Advanced Logic Engine
+Add structured logic support, including:
+if / else branching
+Loops
+Conditional waits
+Variable-based expressions
+Branch evaluation against the VariableRegistry
+7.3 Headless Deployment
+Harden the CDP-only execution path for Docker, server, and cloud environments.
+The goal is to support reliable execution without any physical browser window or OS-level UI automation.
+7.4 Telemetry & Auditing
+Add enterprise-grade execution observability, including:
+Detailed execution logs
+Step-by-step audit trails
+Error snapshots
+.log file generation
+Compliance-ready reporting
+7.5 Node Configuration UI
+Add a dedicated node properties panel for configuring individual workflow nodes.
+Initial use cases include:
+Navigation target tab selection
+Retry behavior
+Timeout settings
+Variable mappings
+Conditional logic
+Fallback preferences
+
+Unified Design Principle
+BRunner should prioritize semantic, stable, and inspectable automation first, then progressively degrade into visual, CDP, or OS-level automation only when necessary.
+The core design philosophy is:
+Record semantically.
+Execute deterministically.
+Fallback gracefully.
+Persist reliably.

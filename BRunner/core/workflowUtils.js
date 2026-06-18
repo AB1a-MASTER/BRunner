@@ -7,12 +7,17 @@ export function normalizeWorkflow(input = {}) {
   if (Array.isArray(input)) {
     return {
       boundDomain: "",
+      variables: {},
       steps: input,
     };
   }
 
   return {
     boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
+    variables:
+      input.variables && typeof input.variables === "object"
+        ? structuredClone(input.variables)
+        : {},
     steps: Array.isArray(input.steps) ? input.steps : [],
   };
 }
@@ -20,6 +25,7 @@ export function normalizeWorkflow(input = {}) {
 export function createEmptyWorkflow(boundDomain = "") {
   return {
     boundDomain,
+    variables: {},
     steps: [],
   };
 }
@@ -40,9 +46,9 @@ export function sanitizeWorkflowName(name) {
   const cleaned = raw
     .replace(/\.json$/i, "")
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .replace(/\s+/g, " ")
+    .replace(/^\.+|\.+$/g, "")
+    .trim();
 
   return cleaned || Defaults.DefaultWorkflowName;
 }
@@ -155,4 +161,36 @@ export function pageContextsCompatible(currentPage, stepPage, options = {}) {
   }
 
   return true;
+}
+
+export function resolveWaitDuration(step = {}, randomFn = Math.random) {
+  const config = step.config || {};
+  const mode = config.mode || step.mode || "fixed";
+
+  if (mode === "random") {
+    const minMs = Number(config.minMs ?? step.minMs);
+    const maxMs = Number(config.maxMs ?? step.maxMs);
+
+    validateWaitNumber(minMs, "minimum");
+    validateWaitNumber(maxMs, "maximum");
+
+    if (minMs > maxMs) {
+      throw new Error("Random wait minimum cannot exceed maximum.");
+    }
+
+    const unit = Math.min(Math.max(Number(randomFn()), 0), 0.999999999999);
+    return Math.floor(minMs + unit * (maxMs - minMs + 1));
+  }
+
+  const milliseconds = Number(
+    step.ms ?? config.ms ?? step.duration ?? 1000,
+  );
+  validateWaitNumber(milliseconds, "duration");
+  return milliseconds;
+}
+
+function validateWaitNumber(value, label) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Wait ${label} must be a non-negative number.`);
+  }
 }

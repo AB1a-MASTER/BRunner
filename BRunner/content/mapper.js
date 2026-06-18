@@ -19,7 +19,22 @@
     ElementFocus: "element.focus",
     ElementSelect: "element.select",
     ElementToggle: "element.toggle",
+    ElementDoubleClick: "element.double_click",
+    ElementHover: "element.hover",
+    ElementClear: "element.clear",
+    ElementScrollIntoView: "element.scroll_into_view",
+    BrowserScroll: "browser.scroll",
+    DataExtractText: "data.extract.text",
+    DataExtractAttribute: "data.extract.attribute",
+    DataExtractList: "data.extract.list",
+    DataExtractTable: "data.extract.table",
+    DataExtractPage: "data.extract.page",
     LogicWait: "logic.wait",
+    WaitElementVisible: "wait.element.visible",
+    WaitElementHidden: "wait.element.hidden",
+    WaitElementEnabled: "wait.element.enabled",
+    WaitElementText: "wait.element.text",
+    WaitUrl: "wait.url",
   });
 
   const resolver = window.BRunnerTargetResolver;
@@ -124,6 +139,7 @@
             sendResponse({
               ok: false,
               error: error.message || String(error),
+              diagnostics: error.diagnostics || null,
             });
           });
 
@@ -449,21 +465,81 @@
         };
       }
 
-      const resolved = resolver.resolveRecordedTarget(step);
+      if (action === Actions.DataExtractPage) {
+        return {
+          ok: true,
+          value: this.extractPageValue(step.config?.field || "all"),
+          usedStrategy: "page_context",
+          usedValue: step.config?.field || "all",
+        };
+      }
+
+      if (action === Actions.BrowserScroll) {
+        window.scrollBy({
+          left: Number(step.config?.x || 0),
+          top: Number(step.config?.y || 0),
+          behavior: "instant",
+        });
+
+        return {
+          ok: true,
+          usedStrategy: "window.scrollBy",
+        };
+      }
+
+      if (this.isConditionalWaitAction(action)) {
+        return await this.executeConditionalWait(step);
+      }
+
+      const resolved = resolver.resolveRecordedTarget(step, this.controls);
 
       if (!resolved.element) {
         return {
           ok: false,
           error: `Could not resolve target for step: ${action || "unknown"}`,
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            "target_resolution_failed",
+          ),
         };
       }
 
       const element = resolved.element;
 
+      if (action === Actions.ElementScrollIntoView) {
+        element.scrollIntoView({
+          block: step.config?.block || "center",
+          inline: "nearest",
+          behavior: "instant",
+        });
+
+        return {
+          ok: true,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.ElementHover) {
+        await this.executeHover(element);
+
+        return {
+          ok: true,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
       if (!this.passesJitOcclusionCheck(element)) {
         return {
           ok: false,
           error: "Target element is occluded or not interactable.",
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            "target_occluded_or_not_interactable",
+          ),
         };
       }
 
@@ -493,6 +569,70 @@
         return {
           ok: true,
           value,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.ElementDoubleClick) {
+        await this.executeDoubleClick(element);
+
+        return {
+          ok: true,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.ElementClear) {
+        await this.executeType(element, "");
+
+        return {
+          ok: true,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.DataExtractText) {
+        return {
+          ok: true,
+          value: this.extractTextValue(element),
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.DataExtractAttribute) {
+        const attributeName = String(
+          step.config?.attributeName || "",
+        ).trim();
+
+        if (!attributeName) {
+          throw new Error("Extract Attribute requires an attribute name.");
+        }
+
+        return {
+          ok: true,
+          value: element.getAttribute(attributeName) ?? "",
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.DataExtractList) {
+        return {
+          ok: true,
+          value: this.extractListValue(element, step.config || {}),
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
+      if (action === Actions.DataExtractTable) {
+        return {
+          ok: true,
+          value: this.extractTableValue(element, step.config || {}),
           usedStrategy: resolved.strategy,
           usedValue: resolved.value,
         };
@@ -534,6 +674,31 @@
       return {
         ok: false,
         error: `Unsupported content action: ${action || "undefined"}`,
+        diagnostics: this.createExecutionDiagnostics(
+          step,
+          resolved,
+          "unsupported_content_action",
+        ),
+      };
+    }
+
+    createExecutionDiagnostics(step, resolved, finalReason) {
+      return {
+        action: step?.action || step?.type || "unknown",
+        expectedPage: step?.page || null,
+        actualPage: this.getCurrentPageContext(),
+        targetResolution: {
+          mode: resolved?.mode || "failed",
+          strategy: resolved?.strategy || null,
+          value: resolved?.value || null,
+          confidence: resolved?.confidence || 0,
+          attempts: Array.isArray(resolved?.attempts)
+            ? resolved.attempts
+            : [],
+          controlsTreeAttempted: Boolean(resolved?.controlsTreeAttempted),
+          fuzzyAttempted: Boolean(resolved?.fuzzyAttempted),
+        },
+        finalReason,
       };
     }
 
@@ -829,6 +994,230 @@
       }
 
       return element.innerText || element.textContent || "";
+    }
+
+    async executeDoubleClick(element) {
+      await this.executeClick(element);
+      await this.delay(50);
+      await this.executeClick(element);
+
+      const rect = element.getBoundingClientRect();
+      element.dispatchEvent(
+        new MouseEvent("dblclick", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+          detail: 2,
+        }),
+      );
+    }
+
+    async executeHover(element) {
+      element.scrollIntoView({
+        block: "center",
+        inline: "center",
+        behavior: "instant",
+      });
+      await this.delay(50);
+
+      if (!this.passesJitOcclusionCheck(element)) {
+        throw new Error("Hover target is occluded or not interactable.");
+      }
+
+      const rect = element.getBoundingClientRect();
+      const eventInit = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      };
+
+      element.dispatchEvent(new MouseEvent("pointerover", eventInit));
+      element.dispatchEvent(new MouseEvent("mouseover", eventInit));
+      element.dispatchEvent(new MouseEvent("mouseenter", eventInit));
+      element.dispatchEvent(new MouseEvent("mousemove", eventInit));
+    }
+
+    isConditionalWaitAction(action) {
+      return [
+        Actions.WaitElementVisible,
+        Actions.WaitElementHidden,
+        Actions.WaitElementEnabled,
+        Actions.WaitElementText,
+        Actions.WaitUrl,
+      ].includes(action);
+    }
+
+    async executeConditionalWait(step) {
+      const action = step.action || step.type;
+      const timeoutMs = Number(step.config?.timeoutMs ?? 10000);
+      const pollingMs = Number(step.config?.pollingMs ?? 250);
+
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+        throw new Error("Wait timeout must be a non-negative number.");
+      }
+
+      if (!Number.isFinite(pollingMs) || pollingMs <= 0) {
+        throw new Error("Wait polling interval must be greater than zero.");
+      }
+
+      if (
+        action === Actions.WaitUrl &&
+        !String(step.config?.expected || "").trim()
+      ) {
+        throw new Error("Wait for URL requires an expected value.");
+      }
+
+      if (
+        action === Actions.WaitElementText &&
+        !String(step.config?.expectedText || "").trim()
+      ) {
+        throw new Error("Wait for Text requires expected text.");
+      }
+
+      const startedAt = Date.now();
+      let attempts = 0;
+
+      while (Date.now() - startedAt <= timeoutMs) {
+        attempts++;
+
+        if (this.isWaitConditionSatisfied(action, step)) {
+          return {
+            ok: true,
+            attempts,
+            elapsedMs: Date.now() - startedAt,
+          };
+        }
+
+        await this.delay(Math.min(pollingMs, Math.max(timeoutMs, 1)));
+      }
+
+      const error = new Error(`Timed out waiting for ${action}.`);
+      error.diagnostics = {
+        action,
+        expectedPage: step.page || null,
+        actualPage: this.getCurrentPageContext(),
+        attempts,
+        timeoutMs,
+        pollingMs,
+        finalReason: "wait_condition_timeout",
+      };
+      throw error;
+    }
+
+    isWaitConditionSatisfied(action, step) {
+      if (action === Actions.WaitUrl) {
+        const expected = String(step.config?.expected || "");
+        const mode = step.config?.matchMode || "contains";
+
+        if (mode === "exact") return location.href === expected;
+        if (mode === "regex") return new RegExp(expected).test(location.href);
+        return location.href.includes(expected);
+      }
+
+      const resolved = resolver.resolveRecordedTarget(step, this.controls);
+      const element = resolved.element;
+
+      if (action === Actions.WaitElementHidden) {
+        return !element || !this.isVisibleElement(element);
+      }
+      if (!element) return false;
+      if (action === Actions.WaitElementVisible) return this.isVisibleElement(element);
+      if (action === Actions.WaitElementEnabled) {
+        return (
+          this.isVisibleElement(element) &&
+          !element.disabled &&
+          element.getAttribute("aria-disabled") !== "true"
+        );
+      }
+
+      if (action === Actions.WaitElementText) {
+        const expected = String(step.config?.expectedText || "");
+        const actual = String(element.innerText || element.textContent || "");
+        return actual.includes(expected);
+      }
+
+      return false;
+    }
+
+    extractTextValue(element) {
+      if (!element) return "";
+
+      if (element.isContentEditable) {
+        return String(element.innerText || element.textContent || "").trim();
+      }
+
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)) {
+        return String(element.value || "").trim();
+      }
+
+      return String(element.innerText || element.textContent || "").trim();
+    }
+
+    extractListValue(element, config) {
+      const selector = String(config.itemSelector || "li").trim();
+      const valueMode = config.valueMode || "text";
+      const attributeName = String(config.attributeName || "href").trim();
+      const items = Array.from(element.querySelectorAll(selector));
+
+      return items.map((item) => {
+        if (valueMode === "attribute") {
+          return item.getAttribute(attributeName) ?? "";
+        }
+
+        return this.extractTextValue(item);
+      });
+    }
+
+    extractTableValue(element, config) {
+      const rowSelector = String(config.rowSelector || "tr").trim();
+      const cellSelector = String(config.cellSelector || "th, td").trim();
+      const rows = Array.from(element.querySelectorAll(rowSelector)).map(
+        (row) => {
+          return Array.from(row.querySelectorAll(cellSelector)).map((cell) => {
+            return this.extractTextValue(cell);
+          });
+        },
+      ).filter((row) => row.length > 0);
+
+      if (rows.length === 0) {
+        return {
+          headers: [],
+          rows: [],
+        };
+      }
+
+      const firstRowElement = element.querySelector(rowSelector);
+      const hasHeaderCells = Boolean(firstRowElement?.querySelector("th"));
+      const headers = hasHeaderCells ? rows[0] : [];
+      const dataRows = hasHeaderCells ? rows.slice(1) : rows;
+
+      return {
+        headers,
+        rows: headers.length > 0
+          ? dataRows.map((row) => {
+              return Object.fromEntries(
+                headers.map((header, index) => [header || `column_${index + 1}`, row[index] ?? ""]),
+              );
+            })
+          : dataRows,
+      };
+    }
+
+    extractPageValue(field) {
+      const metadata = {
+        title: document.title,
+        url: location.href,
+        origin: location.origin,
+        hostname: location.hostname,
+        path: location.pathname,
+        search: location.search,
+      };
+
+      return field === "all" ? metadata : metadata[field] ?? "";
     }
 
     passesJitOcclusionCheck(element) {

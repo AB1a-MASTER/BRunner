@@ -1,0 +1,136 @@
+{
+    "boundDomain": "www.google.com",
+    "variables": {},
+    "steps": [
+        {
+            "id": "step_ywclkbvqz",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "www.google.com",
+                "openIn": "newTab"
+            },
+            "url": "www.google.com",
+            "openIn": "newTab"
+        },
+        {
+            "id": "step_yziuigpc5",
+            "action": "element.extract",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[class=\"uU7dJb\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "var1"
+            },
+            "variableName": "var1"
+        },
+        {
+            "id": "step_zm8thuj71",
+            "action": "element.focus",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[name=q]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {}
+        },
+        {
+            "id": "step_9iblj4dbt",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[name=q]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "{{var1}}"
+            },
+            "value": "{{var1}}"
+        },
+        {
+            "id": "step_b8j1ptvf1",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[name=\"btnK\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {}
+        },
+        {
+            "id": "step_zdsmrmpw4",
+            "action": "logic.wait",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "5000"
+            },
+            "ms": 5000
+        },
+        {
+            "id": "step_52thd376i",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "https://www.wikipedia.org/",
+                "openIn": "sameTab"
+            },
+            "url": "https://www.wikipedia.org/",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "step_4rwukls3f",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[name=\"search\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "{{var1}}"
+            },
+            "value": "{{var1}}"
+        },
+        {
+            "id": "step_8tgohsvbz",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[type=\"submit\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {}
+        }
+    ]
+}

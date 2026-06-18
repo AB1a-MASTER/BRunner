@@ -17,6 +17,8 @@ const Messages = Object.freeze({
   GetRecordingState: "GET_RECORDING_STATE",
   RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+  GetRuntimeState: "GET_RUNTIME_STATE",
+  RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
 });
 
 let isRecording = false;
@@ -31,6 +33,9 @@ const selectedLabel = document.getElementById("selected-label");
 const playButton = document.getElementById("btn-play");
 const recordButton = document.getElementById("btn-toggle-record");
 const openStudioButton = document.getElementById("btn-open-studio");
+const recordingTabPolicyInput = document.getElementById(
+  "recording-tab-policy",
+);
 
 init();
 
@@ -40,6 +45,7 @@ function init() {
   installTabWatchers();
 
   syncRecordingState();
+  syncRuntimeState();
   refreshWorkflowList();
   syncSidebarVisibilityForActiveTab();
 }
@@ -58,6 +64,12 @@ function wireRuntimeMessages() {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.type === Messages.RefreshWorkflowLists) {
       refreshWorkflowList();
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    if (request?.type === Messages.RuntimeStateChanged) {
+      applyRuntimeState(request.state);
       sendResponse({ ok: true });
       return true;
     }
@@ -142,7 +154,12 @@ async function toggleRecording() {
     const response = await chrome.runtime.sendMessage({
       type: Messages.ToggleRecording,
       enabled: isRecording,
+      tabPolicy: recordingTabPolicyInput?.value || "openerDescendants",
     });
+
+    if (response?.ok === false) {
+      throw new Error(response.error || "Failed to toggle recording.");
+    }
 
     const recording = response?.recording;
     isRecording = Boolean(recording?.isRecording);
@@ -170,6 +187,44 @@ async function syncRecordingState() {
   } catch {
     isRecording = false;
     updateRecordButton();
+  }
+}
+
+async function syncRuntimeState() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GetRuntimeState,
+    });
+
+    if (response?.ok) applyRuntimeState(response.state);
+  } catch {
+    // Background may still be starting.
+  }
+}
+
+function applyRuntimeState(state) {
+  if (!state) return;
+
+  isRecording = Boolean(state.recording?.isRecording);
+  updateRecordButton();
+
+  if (recordingTabPolicyInput && state.recording?.tabPolicy) {
+    recordingTabPolicyInput.value = state.recording.tabPolicy;
+    recordingTabPolicyInput.disabled = isRecording;
+  }
+
+  const execution = state.execution || {};
+  const running = execution.status === "running";
+
+  if (recordButton) recordButton.disabled = running;
+  if (playButton) playButton.disabled = running || isRecording;
+
+  if (running) {
+    setSelectedLabel(
+      `Running ${execution.workflowName || "workflow"} (${Number(execution.currentStepIndex || 0) + 1}/${execution.totalSteps || 0})...`,
+    );
+  } else if (execution.status === "failed" && execution.error) {
+    setSelectedLabel(`Failed: ${execution.error}`, true);
   }
 }
 

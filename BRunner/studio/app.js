@@ -11,6 +11,7 @@ const Messages = Object.freeze({
   OsLoadWorkflow: "OS_LOAD_WORKFLOW",
   OsDeleteWorkflow: "OS_DELETE_WORKFLOW",
   OsDuplicateWorkflow: "OS_DUPLICATE_WORKFLOW",
+  OsRenameWorkflow: "OS_RENAME_WORKFLOW",
 
   StartWorkflow: "START_WORKFLOW",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
@@ -19,10 +20,14 @@ const Messages = Object.freeze({
   StudioReceiveStep: "STUDIO_RECEIVE_STEP",
   RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
   WorkflowComplete: "WORKFLOW_COMPLETE",
+  GetRuntimeState: "GET_RUNTIME_STATE",
+  RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
+  GetNodeDefinitions: "GET_NODE_DEFINITIONS",
 });
 
 const Actions = Object.freeze({
   BrowserNavigate: "browser.navigate",
+  BrowserTabSwitch: "browser.tab.switch",
   ElementClick: "element.click",
   ElementType: "element.type",
   ElementExtract: "element.extract",
@@ -30,6 +35,13 @@ const Actions = Object.freeze({
   ElementFocus: "element.focus",
   ElementSelect: "element.select",
   ElementToggle: "element.toggle",
+  DataExtractText: "data.extract.text",
+  DataExtractAttribute: "data.extract.attribute",
+  DataExtractList: "data.extract.list",
+  DataExtractTable: "data.extract.table",
+  DataExtractPage: "data.extract.page",
+  DataSet: "data.set",
+  DataTemplate: "data.template",
   LogicWait: "logic.wait",
 });
 
@@ -40,10 +52,13 @@ const NavigationTargets = Object.freeze({
 
 let workflow = {
   boundDomain: "",
+  variables: {},
   steps: [],
 };
 
 let isRecording = false;
+let loadedWorkflowFilename = "";
+const nodeDefinitionsByType = new Map();
 
 const canvas = document.getElementById("workflow-canvas");
 const workflowNameInput = document.getElementById("workflow-name");
@@ -52,6 +67,10 @@ const workflowListContainer = document.getElementById("workflow-list");
 const btnRecord = document.getElementById("btn-record");
 const btnRun = document.getElementById("btn-run");
 const statusText = document.getElementById("status-text");
+const recordingTabPolicyInput = document.getElementById(
+  "recording-tab-policy",
+);
+const actionPalette = document.getElementById("action-palette");
 
 init();
 
@@ -59,6 +78,7 @@ function init() {
   wireLayoutControls();
   wireWorkflowFileControls();
   wireActionPalette();
+  loadNodeDefinitions();
   wireExecutionControls();
   wireRecordingControls();
   wireRuntimeMessages();
@@ -71,6 +91,7 @@ function init() {
 
   renderCanvas();
   checkBridgeStatus();
+  syncRuntimeState();
 }
 
 function wireLayoutControls() {
@@ -87,11 +108,13 @@ function wireLayoutControls() {
 
     workflow = {
       boundDomain: "",
+      variables: {},
       steps: [],
     };
 
     workflowNameInput.value = "Untitled";
     workflowDomainInput.value = "";
+    loadedWorkflowFilename = "";
 
     renderCanvas();
   });
@@ -110,11 +133,38 @@ function wireWorkflowFileControls() {
 }
 
 function wireActionPalette() {
-  document.querySelectorAll(".action-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      addStepToWorkflow(button.getAttribute("data-action"));
-    });
+  actionPalette?.addEventListener("click", (event) => {
+    const button = event.target.closest(".action-btn");
+    if (!button || !actionPalette.contains(button)) return;
+    addStepToWorkflow(button.dataset.action);
   });
+}
+
+async function loadNodeDefinitions() {
+  if (!actionPalette) return;
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GetNodeDefinitions,
+    });
+
+    if (!response?.ok || !Array.isArray(response.definitions)) {
+      throw new Error(response?.error || "Node definitions are unavailable.");
+    }
+
+    nodeDefinitionsByType.clear();
+    response.definitions.forEach((definition) => {
+      nodeDefinitionsByType.set(definition.type, definition);
+    });
+
+    actionPalette.innerHTML = response.definitions
+      .map((definition) => {
+        return `<div class="action-btn" data-action="${escapeAttr(definition.type)}" title="${escapeAttr(definition.description || "")}">${escapeHtml(definition.icon || "•")} ${escapeHtml(definition.label || definition.type)}</div>`;
+      })
+      .join("");
+  } catch (error) {
+    actionPalette.innerHTML = `<div class="empty-state" style="color:#ef4444;">Failed to load actions.<br>${escapeHtml(error.message || error)}</div>`;
+  }
 }
 
 function wireExecutionControls() {
@@ -130,7 +180,12 @@ function wireRecordingControls() {
       const response = await chrome.runtime.sendMessage({
         type: Messages.ToggleRecording,
         enabled: isRecording,
+        tabPolicy: recordingTabPolicyInput?.value || "openerDescendants",
       });
+
+      if (response?.ok === false) {
+        throw new Error(response.error || "Failed to toggle recording.");
+      }
 
       const recording = response?.recording;
 
@@ -177,6 +232,12 @@ function wireRuntimeMessages() {
       return true;
     }
 
+    if (request?.type === Messages.RuntimeStateChanged) {
+      applyRuntimeState(request.state);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     return false;
   });
 }
@@ -184,18 +245,37 @@ function wireRuntimeMessages() {
 async function saveWorkflowToOS() {
   updateStateFromUI();
 
-  const filename = ensureJsonFilename(workflowNameInput.value || "Untitled");
+  const desiredFilename = ensureJsonFilename(
+    workflowNameInput.value || "Untitled",
+  );
+  const filename = loadedWorkflowFilename || desiredFilename;
   const content = getWorkflowFromUI();
 
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: Messages.OsSaveWorkflow,
-      filename,
-      content,
-    });
+    const isRename =
+      Boolean(loadedWorkflowFilename) &&
+      desiredFilename !== loadedWorkflowFilename;
+
+    const response = await chrome.runtime.sendMessage(
+      isRename
+        ? {
+            type: Messages.OsRenameWorkflow,
+            filename: loadedWorkflowFilename,
+            newFilename: desiredFilename,
+            content,
+          }
+        : {
+            type: Messages.OsSaveWorkflow,
+            filename,
+            content,
+          },
+    );
 
     if (isSuccess(response)) {
-      alert(`Workflow "${filename}" saved.`);
+      loadedWorkflowFilename =
+        response.newFilename || response.filename || desiredFilename;
+      workflowNameInput.value = loadedWorkflowFilename.replace(/\.json$/i, "");
+      alert(`Workflow "${loadedWorkflowFilename}" saved.`);
       refreshWorkflowList();
     } else {
       alert(`Failed to save: ${response?.error || "Unknown error"}`);
@@ -249,6 +329,7 @@ async function loadWorkflowFromOS(filename) {
       response.content || response.workflow || response.data || response;
 
     workflow = normalizeWorkflow(content);
+    loadedWorkflowFilename = filename;
 
     workflowNameInput.value = filename.replace(/\.json$/i, "");
     workflowDomainInput.value = workflow.boundDomain || "";
@@ -346,6 +427,9 @@ async function deleteWorkflow(filename) {
     });
 
     if (isSuccess(response)) {
+      if (loadedWorkflowFilename === filename) {
+        loadedWorkflowFilename = "";
+      }
       refreshWorkflowList();
     } else {
       alert(`Failed to delete workflow: ${response?.error || "Unknown error"}`);
@@ -389,6 +473,7 @@ function addStepToWorkflow(action) {
 }
 
 function createStep(action) {
+  const definition = nodeDefinitionsByType.get(action);
   const step = {
     id: generateStepId(),
     action,
@@ -398,7 +483,14 @@ function createStep(action) {
     targetSnapshot: null,
     friendlyName: "",
     payload: {},
+    config: {},
   };
+
+  for (const field of definition?.config || []) {
+    if (field.default !== undefined) {
+      step.config[field.key] = structuredClone(field.default);
+    }
+  }
 
   switch (action) {
     case Actions.BrowserNavigate:
@@ -489,6 +581,7 @@ function updateStateFromUI() {
 
     const payloadInput = document.getElementById(`payload1-${step.id}`);
     const openInSelect = document.getElementById(`openin-${step.id}`);
+    const tabRefInput = document.getElementById(`tabref-${step.id}`);
 
     if (payloadInput) {
       applyPayloadValueToStep(step, payloadInput.value);
@@ -498,6 +591,29 @@ function updateStateFromUI() {
       step.openIn = openInSelect.value;
       step.payload = step.payload || {};
       step.payload.openIn = openInSelect.value;
+    }
+
+    if (tabRefInput) {
+      const tabRef = tabRefInput.value.trim();
+      if (tabRef) {
+        step.tabRef = tabRef;
+      } else {
+        delete step.tabRef;
+      }
+    }
+
+    const definition = nodeDefinitionsByType.get(step.action);
+
+    for (const field of definition?.config || []) {
+      const input = document.getElementById(
+        `config-${step.id}-${field.key}`,
+      );
+      if (!input) continue;
+
+      step.config = step.config || {};
+      step.config[field.key] = field.kind === "number"
+        ? parseNumberOrExpression(input.value)
+        : input.value;
     }
   });
 }
@@ -524,7 +640,7 @@ function applyPayloadValueToStep(step, value) {
       break;
 
     case Actions.LogicWait:
-      step.ms = Number(value || 1000);
+      step.ms = parseNumberOrExpression(value || "1000");
       break;
 
     default:
@@ -537,6 +653,7 @@ function getWorkflowFromUI() {
 
   return {
     boundDomain: workflow.boundDomain || "",
+    variables: workflow.variables || {},
     steps: workflow.steps.map(normalizeStep),
   };
 }
@@ -545,56 +662,141 @@ function normalizeWorkflow(input) {
   if (Array.isArray(input)) {
     return {
       boundDomain: "",
+      variables: {},
       steps: input.map(normalizeStep),
     };
   }
 
   return {
     boundDomain: input?.boundDomain || "",
+    variables:
+      input?.variables && typeof input.variables === "object"
+        ? structuredClone(input.variables)
+        : {},
     steps: Array.isArray(input?.steps) ? input.steps.map(normalizeStep) : [],
   };
 }
 
 function normalizeStep(step) {
+  const action = step.action || step.type || Actions.ElementClick;
+  const payload = step.payload && typeof step.payload === "object"
+    ? { ...step.payload }
+    : {};
+  const structuredTarget =
+    step.target && typeof step.target === "object" ? step.target : null;
+
   const normalized = {
     id: step.id || generateStepId(),
-    action: step.action || step.type || Actions.ElementClick,
+    action,
     target: step.target || "",
-    targetType: step.targetType || "",
+    targetType:
+      step.targetType || structuredTarget?.primary?.strategy || "",
     targetFallbacks: Array.isArray(step.targetFallbacks)
       ? step.targetFallbacks
-      : [],
-    targetSnapshot: step.targetSnapshot || null,
+      : Array.isArray(structuredTarget?.fallbacks)
+        ? structuredTarget.fallbacks
+        : [],
+    targetSnapshot:
+      step.targetSnapshot || structuredTarget?.snapshot || null,
     friendlyName: step.friendlyName || "",
-    payload: step.payload || {},
+    payload,
+    config:
+      step.config && typeof step.config === "object"
+        ? structuredClone(step.config)
+        : {},
   };
 
-  if (step.url || normalized.payload.primary) {
-    normalized.url = step.url || normalized.payload.primary;
+  // Recorder metadata is part of the persisted step contract. Studio may edit
+  // the actionable fields, but it must not discard the context needed for
+  // cross-page recovery or diagnostics.
+  for (const key of [
+    "page",
+    "pagePolicy",
+    "recordedAt",
+    "recordedBy",
+    "tabRef",
+    "openerTabRef",
+  ]) {
+    if (step[key] !== undefined) {
+      normalized[key] = step[key];
+    }
   }
 
-  if (step.value || normalized.payload.primary) {
-    normalized.value = step.value || normalized.payload.primary;
-  }
+  const primaryPayload = payload.primary;
 
-  if (step.variableName || normalized.payload.primary) {
-    normalized.variableName = step.variableName || normalized.payload.primary;
-  }
+  switch (action) {
+    case Actions.BrowserNavigate:
+      normalized.url = step.url ?? primaryPayload ?? "";
+      normalized.openIn =
+        step.openIn || payload.openIn || NavigationTargets.SameTab;
+      break;
 
-  if (step.keys || normalized.payload.primary) {
-    normalized.keys = step.keys || normalized.payload.primary;
-  }
+    case Actions.BrowserTabSwitch:
+      normalized.url = step.url ?? primaryPayload ?? "";
+      normalized.createIfMissing = step.createIfMissing !== false;
+      break;
 
-  if (step.ms || normalized.payload.primary) {
-    normalized.ms = Number(step.ms || normalized.payload.primary || 1000);
-  }
+    case Actions.ElementType:
+    case Actions.ElementSelect:
+    case Actions.ElementToggle:
+      if (step.value !== undefined || primaryPayload !== undefined) {
+        normalized.value = step.value ?? primaryPayload;
+      }
+      break;
 
-  if (step.openIn || normalized.payload.openIn) {
-    normalized.openIn =
-      step.openIn || normalized.payload.openIn || NavigationTargets.SameTab;
+    case Actions.ElementExtract:
+      if (step.variableName !== undefined || primaryPayload !== undefined) {
+        normalized.variableName = step.variableName ?? primaryPayload;
+      }
+      break;
+
+    case Actions.KeyboardSendKeys:
+      if (step.keys !== undefined || primaryPayload !== undefined) {
+        normalized.keys = step.keys ?? primaryPayload;
+      }
+      break;
+
+    case Actions.LogicWait:
+      normalized.ms = parseNumberOrExpression(
+        step.ms ?? primaryPayload ?? 1000,
+      );
+      break;
+
+    default:
+      break;
   }
 
   return normalized;
+}
+
+async function syncRuntimeState() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GetRuntimeState,
+    });
+
+    if (response?.ok) {
+      applyRuntimeState(response.state);
+    }
+  } catch {
+    // Background may still be starting. Existing controls remain usable.
+  }
+}
+
+function applyRuntimeState(state) {
+  if (!state) return;
+
+  isRecording = Boolean(state.recording?.isRecording);
+  updateRecordButton();
+
+  if (recordingTabPolicyInput && state.recording?.tabPolicy) {
+    recordingTabPolicyInput.value = state.recording.tabPolicy;
+    recordingTabPolicyInput.disabled = isRecording;
+  }
+
+  setRunButtonRunning(state.execution?.status === "running");
+  if (btnRun) btnRun.disabled = isRecording;
+  if (btnRecord) btnRecord.disabled = state.execution?.status === "running";
 }
 
 function renderCanvas() {
@@ -646,6 +848,14 @@ function renderCanvas() {
 
 function getStepFieldsHtml(step) {
   let html = "";
+  const handledConfigKeys = new Set();
+
+  html += `
+    <div class="node-input-group">
+      <label>Run in Logical Tab (optional)</label>
+      <input type="text" id="tabref-${escapeAttr(step.id)}" value="${escapeAttr(step.tabRef || "")}" placeholder="e.g. results_tab">
+    </div>
+  `;
 
   if (needsTarget(step.action)) {
     html += `
@@ -674,6 +884,7 @@ function getStepFieldsHtml(step) {
   }
 
   if (step.action === Actions.ElementType) {
+    handledConfigKeys.add("value");
     html += `
       <div class="node-input-group">
         <label>Text to Type</label>
@@ -683,6 +894,7 @@ function getStepFieldsHtml(step) {
   }
 
   if (step.action === Actions.ElementExtract) {
+    handledConfigKeys.add("variableName");
     html += `
       <div class="node-input-group">
         <label>Variable Name</label>
@@ -692,6 +904,7 @@ function getStepFieldsHtml(step) {
   }
 
   if (step.action === Actions.KeyboardSendKeys) {
+    handledConfigKeys.add("keys");
     html += `
       <div class="node-input-group">
         <label>Key / Shortcut</label>
@@ -701,6 +914,7 @@ function getStepFieldsHtml(step) {
   }
 
   if (step.action === Actions.LogicWait) {
+    handledConfigKeys.add("ms");
     html += `
       <div class="node-input-group">
         <label>Wait Time (ms)</label>
@@ -709,13 +923,51 @@ function getStepFieldsHtml(step) {
     `;
   }
 
+  const definition = nodeDefinitionsByType.get(step.action);
+
+  for (const field of definition?.config || []) {
+    if (handledConfigKeys.has(field.key)) continue;
+    html += getConfigFieldHtml(step, field);
+  }
+
   return html;
+}
+
+function getConfigFieldHtml(step, field) {
+  const id = `config-${step.id}-${field.key}`;
+  const value = step.config?.[field.key] ?? field.default ?? "";
+  const required = field.required ? " *" : "";
+
+  if (field.kind === "select") {
+    const options = (field.options || [])
+      .map((option) => {
+        const selected = String(option) === String(value) ? "selected" : "";
+        return `<option value="${escapeAttr(option)}" ${selected}>${escapeHtml(option)}</option>`;
+      })
+      .join("");
+
+    return `
+      <div class="node-input-group">
+        <label>${escapeHtml(field.label || field.key)}${required}</label>
+        <select id="${escapeAttr(id)}">${options}</select>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="node-input-group">
+      <label>${escapeHtml(field.label || field.key)}${required}</label>
+      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(value)}">
+    </div>
+  `;
 }
 
 function getInstructionText(action) {
   switch (action) {
     case Actions.BrowserNavigate:
       return "Opens a URL in the same tab or a new tab.";
+    case Actions.BrowserTabSwitch:
+      return "Switches to a recorded browser tab, recreating it when necessary.";
     case Actions.ElementClick:
       return "Finds an element and simulates a click.";
     case Actions.ElementType:
@@ -738,6 +990,9 @@ function getInstructionText(action) {
 }
 
 function needsTarget(action) {
+  const definition = nodeDefinitionsByType.get(action);
+  if (definition) return Boolean(definition.targetRequired);
+
   return [
     Actions.ElementClick,
     Actions.ElementType,
@@ -801,6 +1056,11 @@ function setRunButtonRunning(running) {
 
 function generateStepId() {
   return `step_${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function parseNumberOrExpression(value) {
+  const text = String(value ?? "").trim();
+  return text.includes("{{") ? text : Number(text || 0);
 }
 
 function ensureJsonFilename(name) {

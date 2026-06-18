@@ -1,0 +1,623 @@
+{
+    "boundDomain": "www.google.com",
+    "steps": [
+        {
+            "id": "step_z3xbua07e",
+            "action": "element.type",
+            "target": {
+                "primary": {
+                    "strategy": "id",
+                    "value": "APjFqb",
+                    "score": 100
+                },
+                "candidates": [
+                    {
+                        "strategy": "id",
+                        "value": "APjFqb",
+                        "score": 100
+                    },
+                    {
+                        "strategy": "name",
+                        "value": "q",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Search",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "title",
+                        "value": "Search",
+                        "score": 84
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "form #APjFqb",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "#APjFqb",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_6dcdb163",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "name",
+                        "value": "q",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Search",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "title",
+                        "value": "Search",
+                        "score": 84
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "form #APjFqb",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "#APjFqb",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_6dcdb163",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "textarea",
+                    "role": "combobox",
+                    "type": "",
+                    "id": "APjFqb",
+                    "name": "q",
+                    "ariaLabel": "Search",
+                    "placeholder": "",
+                    "title": "Search",
+                    "text": "",
+                    "value": "",
+                    "href": "",
+                    "classes": [
+                        "gLFyf"
+                    ],
+                    "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                    "nearbyText": "",
+                    "bounds": {
+                        "x": 523,
+                        "y": 377,
+                        "width": 447,
+                        "height": 50
+                    }
+                }
+            },
+            "targetType": "id",
+            "targetFallbacks": [
+                {
+                    "strategy": "name",
+                    "value": "q",
+                    "score": 95
+                },
+                {
+                    "strategy": "ariaLabel",
+                    "value": "Search",
+                    "score": 92
+                },
+                {
+                    "strategy": "title",
+                    "value": "Search",
+                    "score": 84
+                },
+                {
+                    "strategy": "form_context",
+                    "value": "form #APjFqb",
+                    "score": 72
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "#APjFqb",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_6dcdb163",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "textarea",
+                "role": "combobox",
+                "type": "",
+                "id": "APjFqb",
+                "name": "q",
+                "ariaLabel": "Search",
+                "placeholder": "",
+                "title": "Search",
+                "text": "",
+                "value": "",
+                "href": "",
+                "classes": [
+                    "gLFyf"
+                ],
+                "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                "nearbyText": "",
+                "bounds": {
+                    "x": 523,
+                    "y": 377,
+                    "width": 447,
+                    "height": 50
+                }
+            },
+            "friendlyName": "id: APjFqb",
+            "payload": {
+                "primary": ""
+            },
+            "page": {
+                "url": "https://www.google.com/",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/",
+                "search": "",
+                "title": "Google"
+            },
+            "recordedAt": "2026-06-18T09:45:41.385Z",
+            "value": ""
+        },
+        {
+            "id": "step_2oxf160of",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "id: APjFqb"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "n8n"
+            },
+            "value": "n8n"
+        },
+        {
+            "id": "step_exkb8tpex",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "text: AI Workflow Automation Platform - n8nN8Nhttps://n8n.io"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "AI Workflow Automation Platform - n8n\n\nN8N\nhttps://n8n.io",
+                "value": "",
+                "href": "https://n8n.io/",
+                "classes": [
+                    "zReHs"
+                ],
+                "domPath": "div:7/div:1/div:0/div:0/div:0/div:0/div:0/div:0/span:0/a:0",
+                "nearbyText": "AI Workflow Automation Platform - n8n N8N https://n8n.io",
+                "bounds": {
+                    "x": 210,
+                    "y": 375,
+                    "width": 351,
+                    "height": 44
+                }
+            },
+            "friendlyName": "",
+            "payload": {},
+            "page": {
+                "url": "https://www.google.com/search?q=n8n&sca_esv=fd3dfaa5d0878a4a&sxsrf=ANbL-n7XfO5ANxDnbPPzvvNmJGhV_3XnTQ%3A1781775943825&source=hp&ei=R74zao_6LrWekdUP5uaygQw&iflsig=AFdpzrgAAAAAajPMV8TfpNbYdidizgL8hCqtiMkOD_LN&ved=0ahUKEwjPucrRwJCVAxU1T6QEHWazLMAQ4dUDCBg&uact=5&oq=n8n&gs_lp=Egdnd3Mtd2l6IgNuOG4yEBAjGPAFGMkCGIAEGIoFGCcyChAjGIAEGIoFGCcyChAjGIAEGIoFGCcyChAAGIAEGIoFGEMyEBAAGIAEGIoFGEMYsQMYgwEyChAAGIAEGIoFGEMyChAAGIAEGIoFGEMyCBAAGIAEGLEDMhAQABiABBiKBRhDGLEDGIMBMgoQABiABBgUGIcCSLMdULIPWOgYcAF4AJABAJgBuwOgAZkIqgEHMi0xLjEuMbgBA8gBAPgBAZgCBKAC1AioAgrCAgcQIxjqAhgnwgINECMY8AUYyQIY6gIYJ8ICEBAjGMkCGPAFGIAEGIoFGCfCAgoQLhiABBiKBRhDwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBixAxiDAcICDhAuGIAEGLEDGMcBGNEDmAMX8QUYgerNhJEm5pIHCTEuMC4xLjEuMaAHhxiyBwcyLTEuMS4xuAe8CMIHAzMtNMgHL4AIAQ&sclient=gws-wiz",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/search",
+                "search": "?q=n8n&sca_esv=fd3dfaa5d0878a4a&sxsrf=ANbL-n7XfO5ANxDnbPPzvvNmJGhV_3XnTQ%3A1781775943825&source=hp&ei=R74zao_6LrWekdUP5uaygQw&iflsig=AFdpzrgAAAAAajPMV8TfpNbYdidizgL8hCqtiMkOD_LN&ved=0ahUKEwjPucrRwJCVAxU1T6QEHWazLMAQ4dUDCBg&uact=5&oq=n8n&gs_lp=Egdnd3Mtd2l6IgNuOG4yEBAjGPAFGMkCGIAEGIoFGCcyChAjGIAEGIoFGCcyChAjGIAEGIoFGCcyChAAGIAEGIoFGEMyEBAAGIAEGIoFGEMYsQMYgwEyChAAGIAEGIoFGEMyChAAGIAEGIoFGEMyCBAAGIAEGLEDMhAQABiABBiKBRhDGLEDGIMBMgoQABiABBgUGIcCSLMdULIPWOgYcAF4AJABAJgBuwOgAZkIqgEHMi0xLjEuMbgBA8gBAPgBAZgCBKAC1AioAgrCAgcQIxjqAhgnwgINECMY8AUYyQIY6gIYJ8ICEBAjGMkCGPAFGIAEGIoFGCfCAgoQLhiABBiKBRhDwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBixAxiDAcICDhAuGIAEGLEDGMcBGNEDmAMX8QUYgerNhJEm5pIHCTEuMC4xLjEuMaAHhxiyBwcyLTEuMS4xuAe8CMIHAzMtNMgHL4AIAQ&sclient=gws-wiz",
+                "title": "n8n - Google Search"
+            },
+            "recordedAt": "2026-06-18T09:45:54.769Z"
+        },
+        {
+            "id": "step_p7y1g87k0",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "text",
+                    "value": "Get started for free",
+                    "score": 76
+                },
+                "candidates": [
+                    {
+                        "strategy": "text",
+                        "value": "Get started for free",
+                        "score": 76
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div:nth-of-type(2) > header > div > a:nth-of-type(1)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:3/div:0/div:0/div:1/header:0/div:2/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_7457370a",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div:nth-of-type(2) > header > div > a:nth-of-type(1)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:3/div:0/div:0/div:1/header:0/div:2/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_7457370a",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "a",
+                    "role": "",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "Get started for free",
+                    "value": "",
+                    "href": "https://app.n8n.cloud/register?ps_xid=q58suI1fmRcJkC&ps_partner_key=YmI1ZGY1YWM1M2Mx",
+                    "classes": [
+                        "btn",
+                        "relative",
+                        "cursor-pointer",
+                        "flex",
+                        "items-center",
+                        "whitespace-nowrap",
+                        "rounded-lg",
+                        "text-white"
+                    ],
+                    "domPath": "body:1/div:0/section:3/div:0/div:0/div:1/header:0/div:2/a:0",
+                    "nearbyText": "AI agents and workflows you can see and control Build visually, go deep with code, connect to anything. Every step of your agents' reasoning, traceable on the canvas. Deploy on your infrastructure or ours. Get started for free Talk to sales The world's most popular workflow automation platform for t",
+                    "bounds": {
+                        "x": 200,
+                        "y": 360,
+                        "width": 157,
+                        "height": 40
+                    }
+                }
+            },
+            "targetType": "text",
+            "targetFallbacks": [
+                {
+                    "strategy": "css_selector",
+                    "value": "div > div:nth-of-type(2) > header > div > a:nth-of-type(1)",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "body:1/div:0/section:3/div:0/div:0/div:1/header:0/div:2/a:0",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_7457370a",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "Get started for free",
+                "value": "",
+                "href": "https://app.n8n.cloud/register?ps_xid=q58suI1fmRcJkC&ps_partner_key=YmI1ZGY1YWM1M2Mx",
+                "classes": [
+                    "btn",
+                    "relative",
+                    "cursor-pointer",
+                    "flex",
+                    "items-center",
+                    "whitespace-nowrap",
+                    "rounded-lg",
+                    "text-white"
+                ],
+                "domPath": "body:1/div:0/section:3/div:0/div:0/div:1/header:0/div:2/a:0",
+                "nearbyText": "AI agents and workflows you can see and control Build visually, go deep with code, connect to anything. Every step of your agents' reasoning, traceable on the canvas. Deploy on your infrastructure or ours. Get started for free Talk to sales The world's most popular workflow automation platform for t",
+                "bounds": {
+                    "x": 200,
+                    "y": 360,
+                    "width": 157,
+                    "height": 40
+                }
+            },
+            "friendlyName": "text: Get started for free",
+            "payload": {},
+            "page": {
+                "url": "https://n8n.io/",
+                "origin": "https://n8n.io",
+                "host": "n8n.io",
+                "hostname": "n8n.io",
+                "domain": "n8n.io",
+                "path": "/",
+                "search": "",
+                "title": "AI Workflow Automation Platform - n8n"
+            },
+            "recordedAt": "2026-06-18T09:46:05.079Z"
+        },
+        {
+            "id": "step_9h4em02bi",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "css_selector",
+                    "value": "div:nth-of-type(1) > section > div > header > a",
+                    "score": 68
+                },
+                "candidates": [
+                    {
+                        "strategy": "css_selector",
+                        "value": "div:nth-of-type(1) > section > div > header > a",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_3024f324",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_3024f324",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "a",
+                    "role": "",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "",
+                    "value": "",
+                    "href": "/",
+                    "classes": [],
+                    "domPath": "body:1/div:0/section:0/div:0/header:0/a:0",
+                    "nearbyText": "Already have an account? Log in Start automating today Company email Submit By continuing, you agree to our terms and conditions. Privacy policy. Looking to self-host? The Community Edition is for individuals with basic automation needs who are ready to self-host n8n. Open Installation docs",
+                    "bounds": {
+                        "x": 24,
+                        "y": 18,
+                        "width": 100,
+                        "height": 29
+                    }
+                }
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [
+                {
+                    "strategy": "dom_path",
+                    "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_3024f324",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "",
+                "value": "",
+                "href": "/",
+                "classes": [],
+                "domPath": "body:1/div:0/section:0/div:0/header:0/a:0",
+                "nearbyText": "Already have an account? Log in Start automating today Company email Submit By continuing, you agree to our terms and conditions. Privacy policy. Looking to self-host? The Community Edition is for individuals with basic automation needs who are ready to self-host n8n. Open Installation docs",
+                "bounds": {
+                    "x": 24,
+                    "y": 18,
+                    "width": 100,
+                    "height": 29
+                }
+            },
+            "friendlyName": "css_selector: div:nth-of-type(1) > section > div > header > a",
+            "payload": {},
+            "page": {
+                "url": "https://app.n8n.cloud/register?ps_xid=q58suI1fmRcJkC&ps_partner_key=YmI1ZGY1YWM1M2Mx",
+                "origin": "https://app.n8n.cloud",
+                "host": "app.n8n.cloud",
+                "hostname": "app.n8n.cloud",
+                "domain": "n8n.cloud",
+                "path": "/register",
+                "search": "?ps_xid=q58suI1fmRcJkC&ps_partner_key=YmI1ZGY1YWM1M2Mx",
+                "title": "Create account - n8n.cloud"
+            },
+            "recordedAt": "2026-06-18T09:46:20.008Z"
+        },
+        {
+            "id": "step_33g87j5ex",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "css_selector",
+                    "value": "div:nth-of-type(1) > section > div > header > a",
+                    "score": 68
+                },
+                "candidates": [
+                    {
+                        "strategy": "css_selector",
+                        "value": "div:nth-of-type(1) > section > div > header > a",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_3024f324",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_3024f324",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "a",
+                    "role": "",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "",
+                    "value": "",
+                    "href": "/",
+                    "classes": [],
+                    "domPath": "body:1/div:0/section:0/div:0/header:0/a:0",
+                    "nearbyText": "Already have an account? Log in Go to your n8n instance n8n account name .app.n8n.cloud Go to instance New here? Start a free trial Don't know your instance name? Manage billing \u2192",
+                    "bounds": {
+                        "x": 24,
+                        "y": 18,
+                        "width": 100,
+                        "height": 29
+                    }
+                }
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [
+                {
+                    "strategy": "dom_path",
+                    "value": "body:1/div:0/section:0/div:0/header:0/a:0",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_3024f324",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "",
+                "value": "",
+                "href": "/",
+                "classes": [],
+                "domPath": "body:1/div:0/section:0/div:0/header:0/a:0",
+                "nearbyText": "Already have an account? Log in Go to your n8n instance n8n account name .app.n8n.cloud Go to instance New here? Start a free trial Don't know your instance name? Manage billing \u2192",
+                "bounds": {
+                    "x": 24,
+                    "y": 18,
+                    "width": 100,
+                    "height": 29
+                }
+            },
+            "friendlyName": "css_selector: div:nth-of-type(1) > section > div > header > a",
+            "payload": {},
+            "page": {
+                "url": "https://app.n8n.cloud/login",
+                "origin": "https://app.n8n.cloud",
+                "host": "app.n8n.cloud",
+                "hostname": "app.n8n.cloud",
+                "domain": "n8n.cloud",
+                "path": "/login",
+                "search": "",
+                "title": "Sign in - n8n.cloud"
+            },
+            "recordedAt": "2026-06-18T09:46:26.742Z"
+        }
+    ]
+}

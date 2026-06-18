@@ -18,6 +18,7 @@ export const Messages = Object.freeze({
   OsLoadWorkflow: "OS_LOAD_WORKFLOW",
   OsDeleteWorkflow: "OS_DELETE_WORKFLOW",
   OsDuplicateWorkflow: "OS_DUPLICATE_WORKFLOW",
+  OsRenameWorkflow: "OS_RENAME_WORKFLOW",
 
   // Workflow execution
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
@@ -25,6 +26,9 @@ export const Messages = Object.freeze({
   WorkflowComplete: "WORKFLOW_COMPLETE",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   BridgeStatus: "BRIDGE_STATUS",
+  GetRuntimeState: "GET_RUNTIME_STATE",
+  RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
+  GetNodeDefinitions: "GET_NODE_DEFINITIONS",
 
   // Content script execution
   ExecuteStep: "EXECUTE_STEP",
@@ -43,6 +47,12 @@ export const Messages = Object.freeze({
 
 export const Actions = Object.freeze({
   BrowserNavigate: "browser.navigate",
+  BrowserTabSwitch: "browser.tab.switch",
+  BrowserBack: "browser.back",
+  BrowserForward: "browser.forward",
+  BrowserReload: "browser.reload",
+  BrowserTabOpen: "browser.tab.open",
+  BrowserTabClose: "browser.tab.close",
 
   ElementClick: "element.click",
   ElementType: "element.type",
@@ -50,10 +60,34 @@ export const Actions = Object.freeze({
   ElementFocus: "element.focus",
   ElementSelect: "element.select",
   ElementToggle: "element.toggle",
+  ElementDoubleClick: "element.double_click",
+  ElementHover: "element.hover",
+  ElementClear: "element.clear",
+  ElementScrollIntoView: "element.scroll_into_view",
+  BrowserScroll: "browser.scroll",
+
+  DataExtractText: "data.extract.text",
+  DataExtractAttribute: "data.extract.attribute",
+  DataExtractList: "data.extract.list",
+  DataExtractTable: "data.extract.table",
+  DataExtractPage: "data.extract.page",
+  DataSet: "data.set",
+  DataTemplate: "data.template",
+  DataJsonParse: "data.json.parse",
+  DataJsonStringify: "data.json.stringify",
+  DataRegexMatch: "data.regex.match",
+  DataRegexReplace: "data.regex.replace",
+  DataToNumber: "data.number.convert",
+  DataFormatDate: "data.date.format",
 
   KeyboardSendKeys: "keyboard.send_keys",
 
   LogicWait: "logic.wait",
+  WaitElementVisible: "wait.element.visible",
+  WaitElementHidden: "wait.element.hidden",
+  WaitElementEnabled: "wait.element.enabled",
+  WaitElementText: "wait.element.text",
+  WaitUrl: "wait.url",
 });
 
 export const TargetStrategies = Object.freeze({
@@ -82,6 +116,7 @@ export const NativeCommands = Object.freeze({
   LoadWorkflow: "LOAD_WORKFLOW",
   DeleteWorkflow: "DELETE_WORKFLOW",
   DuplicateWorkflow: "DUPLICATE_WORKFLOW",
+  RenameWorkflow: "RENAME_WORKFLOW",
   OsKeystroke: "OS_KEYSTROKE",
 });
 
@@ -96,4 +131,5 @@ export const Defaults = Object.freeze({
   DefaultWorkflowName: "Untitled",
   StepDelayMs: 500,
   PageSettleDelayMs: 1000,
+  TabSwitchWaitMs: 2000,
 });

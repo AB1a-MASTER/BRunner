@@ -323,6 +323,71 @@ async def handle_duplicate_workflow(websocket, request_id, payload):
     )
 
 
+async def handle_rename_workflow(websocket, request_id, payload):
+    original = payload.get("filename")
+    new_name = (
+        payload.get("newFilename")
+        or payload.get("new_filename")
+        or payload.get("targetFilename")
+    )
+    content = payload.get("content")
+
+    original_path = workflow_path(original)
+    new_path = workflow_path(new_name)
+
+    if not original_path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "Original workflow not found.")
+        )
+        return
+
+    if original_path != new_path and new_path.exists():
+        await send_json(
+            websocket,
+            failure(request_id, "A workflow with the new name already exists.")
+        )
+        return
+
+    if content is None:
+        with open(original_path, "r", encoding="utf-8") as f:
+            content = json.load(f)
+
+    token = secrets.token_hex(6)
+    temp_path = WORKFLOWS_DIR / f".{new_path.name}.{token}.tmp"
+    backup_path = WORKFLOWS_DIR / f".{original_path.name}.{token}.bak"
+
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(content, f, indent=4)
+
+        if original_path == new_path:
+            os.replace(temp_path, original_path)
+        else:
+            original_path.rename(backup_path)
+
+            try:
+                os.replace(temp_path, new_path)
+                backup_path.unlink()
+            except Exception:
+                if new_path.exists():
+                    new_path.unlink()
+                backup_path.rename(original_path)
+                raise
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+    await send_json(
+        websocket,
+        success(
+            request_id,
+            filename=original_path.name,
+            newFilename=new_path.name
+        )
+    )
+
+
 # --- WebSocket Command Router ---
 
 
@@ -377,6 +442,9 @@ async def handle_connection(websocket):
 
                 elif command == "DUPLICATE_WORKFLOW":
                     await handle_duplicate_workflow(websocket, request_id, payload)
+
+                elif command == "RENAME_WORKFLOW":
+                    await handle_rename_workflow(websocket, request_id, payload)
 
                 else:
                     await send_json(

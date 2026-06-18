@@ -188,8 +188,9 @@
     return "";
   }
 
-  function resolveRecordedTarget(stepOrTarget) {
+  function resolveRecordedTarget(stepOrTarget, controlsTree = null) {
     const target = normalizeTargetInput(stepOrTarget);
+    const attempts = [];
 
     const candidates = dedupeCandidates([
       ...(target.primary ? [target.primary] : []),
@@ -199,19 +200,71 @@
 
     for (const candidate of candidates) {
       const element = resolveByStrategy(candidate);
+      const compatible =
+        element && snapshotLooksCompatible(element, target.snapshot);
 
-      if (element && snapshotLooksCompatible(element, target.snapshot)) {
+      attempts.push({
+        stage: "direct",
+        strategy: candidate.strategy,
+        value: candidate.value,
+        outcome: !element
+          ? "not_found"
+          : compatible
+            ? "matched"
+            : "snapshot_mismatch",
+      });
+
+      if (compatible) {
         return {
           element,
           strategy: candidate.strategy,
           value: candidate.value,
           confidence: candidate.score || 0,
           mode: "direct",
+          attempts,
+          controlsTreeAttempted: false,
+          fuzzyAttempted: false,
         };
       }
     }
 
+    const controlsTreeMatch = resolveFromControlsTree(
+      controlsTree,
+      candidates,
+      target.snapshot,
+    );
+
+    const controlsTreeAttempted =
+      controlsTreeMatch.mode !== "controls_tree_unavailable";
+
+    attempts.push({
+      stage: "controls_tree",
+      strategy: controlsTreeMatch.strategy,
+      value: controlsTreeMatch.value,
+      outcome: controlsTreeMatch.element
+        ? "matched"
+        : controlsTreeMatch.mode,
+      confidence: controlsTreeMatch.confidence,
+    });
+
+    if (controlsTreeMatch.element) {
+      return {
+        ...controlsTreeMatch,
+        attempts,
+        controlsTreeAttempted,
+        fuzzyAttempted: false,
+      };
+    }
+
     const fuzzy = resolveBySnapshotFuzzy(target.snapshot);
+
+    attempts.push({
+      stage: "document_fuzzy",
+      strategy: "snapshot_fuzzy",
+      value: fuzzy.reason,
+      outcome: fuzzy.element ? "matched" : fuzzy.reason,
+      confidence: fuzzy.score,
+    });
 
     if (fuzzy.element) {
       return {
@@ -220,6 +273,9 @@
         value: fuzzy.reason,
         confidence: fuzzy.score,
         mode: "fuzzy",
+        attempts,
+        controlsTreeAttempted,
+        fuzzyAttempted: true,
       };
     }
 
@@ -229,7 +285,109 @@
       value: null,
       confidence: 0,
       mode: "failed",
+      attempts,
+      controlsTreeAttempted,
+      fuzzyAttempted: true,
     };
+  }
+
+  function resolveFromControlsTree(controlsTree, candidates, snapshot) {
+    const controls = normalizeControlsTree(controlsTree);
+
+    if (controls.length === 0) {
+      return {
+        element: null,
+        strategy: null,
+        value: null,
+        confidence: 0,
+        mode: "controls_tree_unavailable",
+      };
+    }
+
+    const hashCandidates = candidates.filter((candidate) => {
+      return [
+        TargetStrategies.CtrlHash,
+        TargetStrategies.FallbackHash,
+      ].includes(candidate.strategy);
+    });
+
+    for (const candidate of hashCandidates) {
+      const control = controls.find((item) => item.id === candidate.value);
+
+      if (
+        control?.element &&
+        isVisibleElement(control.element) &&
+        snapshotLooksCompatible(control.element, snapshot)
+      ) {
+        return {
+          element: control.element,
+          strategy: "controls_tree_hash",
+          value: candidate.value,
+          confidence: candidate.score || 0,
+          mode: "controls_tree",
+        };
+      }
+    }
+
+    if (!snapshot) {
+      return {
+        element: null,
+        strategy: null,
+        value: null,
+        confidence: 0,
+        mode: "controls_tree_no_snapshot",
+      };
+    }
+
+    let best = {
+      element: null,
+      score: 0,
+      reason: "",
+    };
+
+    for (const control of controls) {
+      if (!control?.element || !isVisibleElement(control.element)) continue;
+
+      const result = scoreElementAgainstSnapshot(control.element, snapshot);
+
+      if (result.score > best.score) {
+        best = {
+          element: control.element,
+          score: result.score,
+          reason: result.reason,
+        };
+      }
+    }
+
+    if (best.score < 45) {
+      return {
+        element: null,
+        strategy: null,
+        value: best.reason || "below_threshold",
+        confidence: best.score,
+        mode: "controls_tree_below_threshold",
+      };
+    }
+
+    return {
+      element: best.element,
+      strategy: "controls_tree_fuzzy",
+      value: best.reason,
+      confidence: best.score,
+      mode: "controls_tree",
+    };
+  }
+
+  function normalizeControlsTree(controlsTree) {
+    if (controlsTree instanceof Map) {
+      return Array.from(controlsTree.values());
+    }
+
+    if (Array.isArray(controlsTree)) {
+      return controlsTree;
+    }
+
+    return [];
   }
 
   function normalizeTargetInput(stepOrTarget) {
@@ -980,6 +1138,7 @@
     TargetStrategies,
     buildElementTarget,
     resolveRecordedTarget,
+    resolveFromControlsTree,
     resolveByStrategy,
     getStableElementText,
     buildStableCssSelector,

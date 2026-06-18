@@ -230,6 +230,11 @@
 
         <div class="footer">
             <div class="selected-label" id="selected-label">No workflow selected</div>
+            <select id="recording-tab-policy" title="Tabs followed while recording"
+                style="width:100%;padding:7px;margin-bottom:8px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;">
+                <option value="openerDescendants">Follow opened tabs</option>
+                <option value="activeTab">Follow active tab</option>
+            </select>
             <button id="btn-play" class="btn-play">▶ Run Selected</button>
             <button id="btn-toggle-record" class="btn-record">🔴 Toggle Recording</button>
         </div>

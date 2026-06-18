@@ -1,0 +1,668 @@
+BRunner Continuation Handoff Document
+Purpose
+This document captures the current BRunner development state after the recent refactor, regression fixes, and reliability discussions. It should be provided alongside:
+The original BRunner Master Design Document.
+The current project code.
+The current native host file.
+The goal is to preserve context so future development resumes from the correct point without repeating the same architectural mistakes or losing decisions made during debugging.
+
+Current Development Status
+BRunner has been refactored into a more modular architecture, but the refactor initially weakened some core reliability behavior. The current goal is to recover and improve BRunner back toward the original AAA-grade automation goal:
+Record once → replay reliably → degrade gracefully → recover when DOM/page context changes.
+
+The project is now in a stabilization phase. Do not add large new features until the reliability layer is restored and tested.
+
+High-Level Architecture After Refactor
+The intended project structure is:
+BRunner/
+  manifest.json
+  background.js
+
+  core/
+    constants.js
+    nativeBridge.js
+    recordingController.js
+    tabUtils.js
+    workflowUtils.js
+
+  content/
+    targetResolver.js
+    mapper.js
+
+  studio/
+    index.html
+    app.js
+    style.css
+
+  sidebar/
+    sidebar.html
+    sidebar.js
+
+BRunner_Host/
+  brunner_host.py
+  Workflows/
+
+
+Current Known Working Fixes
+1. Manifest / Side Panel Fix
+The extension now loads correctly after fixing manifest structure.
+Important manifest rule:
+"host_permissions",
+"action",
+"web_accessible_resources"
+
+are not permissions. They must be top-level manifest keys.
+The only required content script ordering change is:
+"js": [
+  "content/targetResolver.js",
+  "content/mapper.js"
+]
+
+targetResolver.js must load before mapper.js.
+The side panel now opens from the extension icon after adding:
+chrome.sidePanel.setPanelBehavior({
+  openPanelOnActionClick: true
+}).catch((error) => {
+  console.warn("[BRunner] Failed to set side panel behavior:", error);
+});
+
+
+2. Navigation URL Normalization Fix
+A previous bug caused navigation nodes using values like:
+www.google.com
+
+to navigate to:
+chrome-extension://<extension-id>/www.google.com
+
+This was fixed by adding URL normalization in core/tabUtils.js.
+Navigation URLs are now normalized before calling:
+chrome.tabs.update(...)
+
+or:
+chrome.tabs.create(...)
+
+Current behavior:
+www.google.com       → https://www.google.com
+google.com/search    → https://google.com/search
+localhost:3000       → http://localhost:3000
+random search terms  → Google search URL
+
+This fix worked and should be preserved.
+
+3. Sidebar Workflow Loading
+The sidebar currently loads saved workflows from the native host.
+The sidebar HTML uses these IDs:
+main-sidebar-view
+studio-active-view
+btn-open-studio
+search-input
+workflow-list
+selected-label
+btn-play
+btn-toggle-record
+
+Future sidebar code must match these actual IDs. Do not use generic IDs like btn-record unless the HTML is also changed.
+
+4. Sidebar Workflow Running Restored
+The refactor temporarily broke running workflows from the sidebar.
+The intended sidebar behavior is:
+Click workflow row       → select workflow
+Click Run Selected       → run selected workflow
+Double-click workflow    → run workflow immediately
+Click row play button    → run workflow immediately
+
+The sidebar should call:
+chrome.runtime.sendMessage({
+  type: "RUN_WORKFLOW_BY_NAME",
+  filename
+});
+
+The sidebar should support workflow list responses where entries are either strings or objects:
+"workflow.json"
+
+or:
+{
+  filename: "workflow.json"
+}
+
+A helper like this should exist:
+function getWorkflowFilename(fileEntry) {
+  if (typeof fileEntry === "string") {
+    return fileEntry;
+  }
+
+  if (fileEntry && typeof fileEntry === "object") {
+    return (
+      fileEntry.filename ||
+      fileEntry.name ||
+      fileEntry.file ||
+      ""
+    );
+  }
+
+  return "";
+}
+
+
+5. Recorder Highlight Restored
+The visual recorder highlight was removed during refactor and then restored.
+When recording is active, hovering over recordable elements should show:
+Blue outline around the element
+Small BRunner label above the element
+
+This is handled in content/mapper.js.
+The highlight is currently functional but feels janky. Smoothness and polish are not the next priority. Reliability is.
+Future improvement should debounce/reposition the overlay more cleanly, but only after target detection/replay is stable.
+
+Current Major Problem
+The current recorder/executor reliability is not yet good enough.
+The user reported:
+The overlay and workflow interactions feel janky.
+Element recording is too brittle.
+Only one identifier is recorded in some cases.
+If that identifier is not found, the workflow fails.
+Recording across pages is not robust enough.
+The original internal DOM/control tree fallback philosophy has weakened.
+
+This is the central issue to fix next.
+
+Core Reliability Goal
+The intended automation behavior is:
+Every recorded interaction should store multiple target identifiers.
+Every execution should try a cascade of strategies.
+If direct lookup fails, BRunner should use snapshot/fuzzy/internal DOM fallback.
+If the step belongs to another website/page context, BRunner should detect that before interacting.
+
+BRunner should not fail immediately just because one selector fails.
+
+New Target Detection Decision
+Recorded steps must no longer store only:
+{
+  "target": {
+    "strategy": "id",
+    "value": "submit"
+  }
+}
+
+That shape is too weak.
+The new intended target shape is:
+{
+  "target": {
+    "primary": {
+      "strategy": "id",
+      "value": "submit",
+      "score": 100
+    },
+    "candidates": [
+      {
+        "strategy": "id",
+        "value": "submit",
+        "score": 100
+      },
+      {
+        "strategy": "name",
+        "value": "login-submit",
+        "score": 95
+      },
+      {
+        "strategy": "ariaLabel",
+        "value": "Log in",
+        "score": 92
+      },
+      {
+        "strategy": "placeholder",
+        "value": "Search",
+        "score": 86
+      },
+      {
+        "strategy": "data-testid",
+        "value": "submit-button",
+        "score": 88
+      },
+      {
+        "strategy": "labelText",
+        "value": "Email",
+        "score": 82
+      },
+      {
+        "strategy": "text",
+        "value": "Log in",
+        "score": 76
+      },
+      {
+        "strategy": "role_text",
+        "value": "button::Log in",
+        "score": 74
+      },
+      {
+        "strategy": "form_context",
+        "value": "form button[type=\"submit\"]",
+        "score": 72
+      },
+      {
+        "strategy": "css_selector",
+        "value": "#submit",
+        "score": 68
+      },
+      {
+        "strategy": "dom_path",
+        "value": "body:1/main:0/form:0/button:2",
+        "score": 55
+      },
+      {
+        "strategy": "ctrlHash",
+        "value": "ctrl_abc123",
+        "score": 40
+      }
+    ],
+    "fallbacks": [],
+    "snapshot": {
+      "tag": "button",
+      "role": "",
+      "type": "submit",
+      "id": "submit",
+      "name": "login-submit",
+      "ariaLabel": "Log in",
+      "placeholder": "",
+      "title": "",
+      "text": "Log in",
+      "value": "",
+      "href": "",
+      "classes": ["btn", "primary"],
+      "domPath": "body:1/main:0/form:0/button:2",
+      "nearbyText": "Email Password Log in",
+      "bounds": {
+        "x": 420,
+        "y": 510,
+        "width": 120,
+        "height": 40
+      }
+    }
+  }
+}
+
+The full target package must be recorded and persisted.
+
+New Target Resolution Decision
+The resolver should try all target candidates in score order.
+Resolution order should include:
+id
+name
+aria-label
+placeholder
+title
+data-testid
+data-test
+data-qa
+data-cy
+data-automation-id
+data-component
+label text
+visible text
+role + text
+form context
+CSS selector
+DOM path
+ctrlHash
+snapshot fuzzy fallback
+
+If a selector finds an element, the resolver should validate the element against the recorded snapshot before accepting it.
+If all direct selectors fail, the resolver should perform fuzzy snapshot matching over the page’s current controls.
+The fuzzy fallback should score likely controls using:
+tag match
+type match
+role match
+text match
+aria-label match
+placeholder match
+name match
+nearby text overlap
+
+This is critical to restore the original “internal DOM / control tree fallback” philosophy.
+
+Internal DOM / Control Tree Direction
+The original design relied on a deterministic internal DOM/control tree so that BRunner would not get lost in complex pages.
+The refactor weakened this behavior.
+The next reliability work should restore this idea.
+content/mapper.js should maintain a controls tree containing:
+ctrlHash
+element reference
+target package
+snapshot
+friendly name
+bounds
+visibility/interactability
+page context
+
+content/targetResolver.js should use the current controls tree as part of resolution, especially when direct DOM selectors fail.
+Future intended resolution flow:
+1. Try direct candidate selectors.
+2. Verify snapshot compatibility.
+3. Try current controlsTree by ctrlHash.
+4. Try controlsTree fuzzy match by snapshot.
+5. Try document-wide fuzzy match.
+6. If still failing, report graceful failure with diagnostic details.
+7. Later: route to hardware/CDP fallback if appropriate.
+
+
+New Page Context Decision
+Every recorded step must include page context.
+This is now considered part of the step contract.
+Example:
+{
+  "action": "element.click",
+  "page": {
+    "url": "https://www.google.com/search?q=brunner",
+    "origin": "https://www.google.com",
+    "host": "www.google.com",
+    "hostname": "www.google.com",
+    "domain": "google.com",
+    "path": "/search",
+    "search": "?q=brunner",
+    "title": "brunner - Google Search"
+  }
+}
+
+This allows BRunner to know:
+This step was recorded on Google.
+This step should not be blindly executed on another site.
+If the workflow has moved to another site, recover first.
+
+
+Page Context Execution Rule
+Before executing a non-navigation step, background.js should verify that the current tab is compatible with step.page.
+Default behavior:
+Domain mismatch → automatically navigate to step.page.url.
+Same domain but different path → allow for now.
+
+This is intentional because:
+google.com/search?q=abc
+google.com/search?q=xyz
+
+should often still be considered compatible unless the step explicitly requires strict path matching.
+Future optional schema:
+{
+  "pagePolicy": {
+    "strictPath": true,
+    "strictQuery": false,
+    "recover": "navigate"
+  }
+}
+
+Do not implement pagePolicy yet unless explicitly requested.
+
+Page Context Helpers
+content/mapper.js should include:
+getCurrentPageContext() {
+  return {
+    url: location.href,
+    origin: location.origin,
+    host: location.host,
+    hostname: location.hostname,
+    domain: this.getRegistrableDomain(location.hostname),
+    path: location.pathname,
+    search: location.search,
+    title: document.title
+  };
+}
+
+core/workflowUtils.js should include equivalent background-side helpers:
+getRegistrableDomain(hostname)
+getPageContextFromUrl(url, title = "")
+pageContextsCompatible(currentPage, stepPage, options = {})
+
+The domain extraction is currently heuristic:
+Take the last two hostname parts.
+localhost and IPs are preserved as-is.
+
+Later, this can be upgraded to use a proper Public Suffix List approach.
+
+Cross-Page Recording Decision
+Recording must survive navigation.
+When recording starts, the background controller should track:
+recordingTabId
+lastRecordedUrl
+lastNavigationRecordedAt
+
+When the tracked tab finishes navigation, the background should:
+1. Re-sync recording state to the new page.
+2. Detect if URL changed.
+3. Add a browser.navigate step for the new page.
+
+The navigation observer step should look like:
+{
+  "action": "browser.navigate",
+  "url": "https://example.com/next-page",
+  "openIn": "sameTab",
+  "friendlyName": "Navigate: https://example.com/next-page",
+  "page": {
+    "url": "https://example.com/next-page",
+    "origin": "https://example.com",
+    "host": "example.com",
+    "hostname": "example.com",
+    "domain": "example.com",
+    "path": "/next-page",
+    "search": "",
+    "title": "Example"
+  },
+  "recordedAt": "...",
+  "recordedBy": "background.navigation_observer"
+}
+
+This may create a navigation step after a click that already caused navigation. That is acceptable for now because it improves replay recovery:
+click link → page may navigate
+browser.navigate → ensures final URL is correct
+
+Later this can be cleaned up with metadata like:
+{
+  "causedByPreviousStep": true
+}
+
+Do not optimize this yet.
+
+Recording Step Contract
+Every recorded user action should include:
+{
+  "action": "element.click",
+  "target": {
+    "primary": {},
+    "candidates": [],
+    "fallbacks": [],
+    "snapshot": {}
+  },
+  "targetType": "id",
+  "targetFallbacks": [],
+  "targetSnapshot": {},
+  "friendlyName": "id: submit",
+  "page": {},
+  "recordedAt": "2026-...",
+  "value": "optional for type/select/toggle"
+}
+
+Legacy fields like targetType, targetFallbacks, and targetSnapshot may remain for compatibility, but the preferred source of truth should become:
+step.target.primary
+step.target.candidates
+step.target.fallbacks
+step.target.snapshot
+
+
+Current Known Weaknesses
+1. Overlay feels janky
+The recorder highlight works but needs polish.
+Possible improvements later:
+requestAnimationFrame positioning
+better hover debounce
+avoid flicker on nested elements
+single overlay update path
+label placement collision handling
+
+Do not prioritize this before resolver reliability.
+2. Sidebar UX feels rough
+The sidebar can load workflows and should support running them, but the UX needs smoothing.
+Potential improvements later:
+clear selected state
+better status messages
+disable Run Selected while executing
+show execution progress
+show workflow domain/page context
+
+Do not prioritize this before resolver reliability.
+3. Current resolver may still record too few identifiers
+The next task is to confirm the stronger target package is actually written to saved workflow JSON.
+The pass condition is:
+"target": {
+  "primary": {},
+  "candidates": [],
+  "fallbacks": [],
+  "snapshot": {}
+}
+
+If only one identifier is still being recorded, fix content/mapper.js and content/targetResolver.js before moving on.
+4. Internal controlsTree fallback is not fully restored
+The original internal DOM concept needs to become a first-class fallback again.
+Next work should explicitly integrate controlsTree into resolution.
+
+Native Host Status
+The native host supports:
+AUTH
+LIST_WORKFLOWS
+SAVE_WORKFLOW
+LOAD_WORKFLOW
+DELETE_WORKFLOW
+DUPLICATE_WORKFLOW
+OS_KEYSTROKE
+
+The host should support both old and new message shapes:
+Old shape:
+{
+  "command": "SAVE_WORKFLOW",
+  "payload": {
+    "filename": "test.json",
+    "content": {}
+  }
+}
+
+New shape:
+{
+  "id": "1",
+  "command": "SAVE_WORKFLOW",
+  "filename": "test.json",
+  "content": {}
+}
+
+The host should echo request IDs when present.
+The extension pairing key must match the key printed by the host.
+
+Development Rules Going Forward
+Rule 1: No broad rewrites
+The refactor created useful modularity but also broke core behavior. Do not rewrite the architecture again.
+Future work should be small, isolated patches.
+Rule 2: Reliability before polish
+Priority order:
+1. Target capture completeness.
+2. Target resolution fallback cascade.
+3. Internal controlsTree fallback.
+4. Cross-page recording and page context enforcement.
+5. Replay diagnostics.
+6. Overlay/sidebar smoothness.
+
+Rule 3: Every patch must include a test
+Each change should include:
+Files changed
+Patch
+Expected behavior
+Manual test steps
+Failure symptoms
+
+Rule 4: Preserve working behavior
+If workflow listing, side panel opening, navigation normalization, or native host persistence currently works, do not touch those areas unless necessary.
+Rule 5: Keep compatibility
+Support old workflow shapes where possible:
+[
+  {
+    "action": "element.click"
+  }
+]
+
+and older target shapes:
+{
+  "target": {
+    "strategy": "id",
+    "value": "submit"
+  }
+}
+
+but internally prefer the new target package shape.
+
+Immediate Next Steps
+The next development session should begin here.
+Step 1: Verify full target package recording
+Record a button click and an input type.
+Open the saved workflow JSON.
+Pass condition:
+"target": {
+  "primary": {},
+  "candidates": [],
+  "fallbacks": [],
+  "snapshot": {}
+}
+
+Also confirm the step includes:
+"page": {
+  "url": "",
+  "origin": "",
+  "host": "",
+  "hostname": "",
+  "domain": "",
+  "path": "",
+  "search": "",
+  "title": ""
+}
+
+Step 2: Verify fallback replay
+Manually modify or remove the primary identifier from the test page, then replay.
+Expected behavior:
+BRunner tries alternate candidates.
+If direct selectors fail, it uses snapshot/fuzzy fallback.
+Workflow should not fail immediately.
+
+Step 3: Restore controlsTree fallback
+Make mapper.js maintain a strong controls tree and expose it to targetResolver.js.
+Target behavior:
+resolveRecordedTarget should use controlsTree before document-wide fuzzy matching.
+
+Step 4: Verify cross-page recording
+Record:
+Page A action
+Navigation to Page B
+Page B action
+
+Pass condition:
+Workflow includes Page A step with Page A context.
+Workflow includes browser.navigate transition.
+Workflow includes Page B step with Page B context.
+Replay navigates/recover correctly.
+
+Step 5: Add diagnostics
+Every failed step should report:
+action
+page context expected
+page context actual
+candidate strategies tried
+which strategies failed
+whether fuzzy fallback was attempted
+final reason for failure
+
+This will make BRunner much easier to debug.
+
+Summary
+Current BRunner is functional enough to continue, but the reliability layer must be restored before feature development continues.
+The most important current direction is:
+Full target package recording
+Fallback cascade resolution
+Internal controlsTree fallback
+Page-aware execution
+Cross-page recording
+Graceful diagnostics
+
+The project should be treated as in stabilization/reliability recovery mode until these are complete.

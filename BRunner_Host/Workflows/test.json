@@ -1,0 +1,152 @@
+{
+    "boundDomain": "",
+    "variables": {},
+    "steps": [
+        {
+            "id": "step_3q4p30dhk",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "https://elirasupport.com/",
+                "openIn": "newTab"
+            },
+            "config": {
+                "openIn": "sameTab"
+            },
+            "url": "https://elirasupport.com/",
+            "openIn": "newTab"
+        },
+        {
+            "id": "step_gg2nvhijl",
+            "action": "logic.wait",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "1000"
+            },
+            "config": {
+                "ms": 1000
+            },
+            "ms": 1000
+        },
+        {
+            "id": "step_j3rrvzxjt",
+            "action": "data.extract.page",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {},
+            "config": {
+                "field": "all",
+                "variableName": "page_info"
+            }
+        },
+        {
+            "id": "step_26yx30k8u",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[data-brunner-id=\"ctrl_71f14546\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {},
+            "config": {}
+        },
+        {
+            "id": "step_uz4m67yjd",
+            "action": "logic.wait",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "2000"
+            },
+            "config": {
+                "ms": 1000
+            },
+            "ms": 2000
+        },
+        {
+            "id": "step_ie3g59lef",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[id=\"name\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "Page: {{page_info.title}}"
+            },
+            "config": {},
+            "value": "Page: {{page_info.title}}"
+        },
+        {
+            "id": "step_jrz0xr1oo",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[id=\"email\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "abdulbasit1a.skans@gmail.com"
+            },
+            "config": {},
+            "value": "abdulbasit1a.skans@gmail.com"
+        },
+        {
+            "id": "step_kwof4dlo1",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[id=\"company\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "{{page_info.url}}"
+            },
+            "config": {},
+            "value": "{{page_info.url}}"
+        },
+        {
+            "id": "step_xg91oma3q",
+            "action": "element.type",
+            "target": {
+                "strategy": "css_selector",
+                "value": "[id=\"message\"]"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {
+                "primary": "automatic message"
+            },
+            "config": {},
+            "value": "automatic message"
+        }
+    ]
+}

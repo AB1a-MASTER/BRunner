@@ -11,25 +11,41 @@ import {
 } from "./core/constants.js";
 import { NativeBridge } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
+import { createRuntimeStateStore } from "./core/runtimeState.js";
+import { getNodeDefinitions } from "./core/nodeRegistry.js";
+import {
+  VariableRegistry,
+  resolveStepExpressions,
+} from "./core/variableRegistry.js";
+import {
+  executeDataTransform,
+  isDataTransformAction,
+} from "./core/dataTransforms.js";
 import {
   normalizeWorkflow,
   extractDomainFromUrl,
+  isBrowserInternalUrl,
   isStudioUrl,
   getPageContextFromUrl,
   pageContextsCompatible,
+  resolveWaitDuration,
 } from "./core/workflowUtils.js";
 import {
   createTab,
   getActiveTab,
   getBestAutomationTab,
   getTabDomain,
+  isAutomationTab,
   navigateTab,
   waitForTabComplete,
   normalizeNavigationUrl,
 } from "./core/tabUtils.js";
 
+const runtimeState = createRuntimeStateStore();
+
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
+  onStateChanged: (recording) => runtimeState.updateRecording(recording),
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -60,6 +76,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({
         ok: false,
         error: error.message || String(error),
+        diagnostics: error.diagnostics || null,
       });
     });
 
@@ -72,6 +89,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   recordingController.handleTabCompleted(tabId, tab).catch((error) => {
     console.warn("[BRunner] Recording tab sync failed:", error);
   });
+});
+
+chrome.tabs.onCreated.addListener((tab) => {
+  recordingController.handleTabCreated(tab).catch((error) => {
+    console.warn("[BRunner] Recording new-tab tracking failed:", error);
+  });
+});
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  recordingController.handleTabActivated(activeInfo).catch((error) => {
+    console.warn("[BRunner] Recording tab activation failed:", error);
+  });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  recordingController.handleTabRemoved(tabId);
 });
 
 async function handleMessage(request, sender) {
@@ -91,21 +124,58 @@ async function handleMessage(request, sender) {
       return await NativeBridge.loadWorkflow(request.filename);
 
     case Messages.OsSaveWorkflow:
-      return await NativeBridge.saveWorkflow(request.filename, request.content);
+      return await persistAndRefresh(() => {
+        return NativeBridge.saveWorkflow(request.filename, request.content);
+      });
 
     case Messages.OsDeleteWorkflow:
-      return await NativeBridge.deleteWorkflow(request.filename);
+      return await persistAndRefresh(() => {
+        return NativeBridge.deleteWorkflow(request.filename);
+      });
 
     case Messages.OsDuplicateWorkflow:
-      return await NativeBridge.duplicateWorkflow(
-        request.filename,
-        request.newFilename,
-      );
+      return await persistAndRefresh(() => {
+        return NativeBridge.duplicateWorkflow(
+          request.filename,
+          request.newFilename,
+        );
+      });
+
+    case Messages.OsRenameWorkflow:
+      return await persistAndRefresh(() => {
+        return NativeBridge.renameWorkflow(
+          request.filename,
+          request.newFilename,
+          request.content,
+        );
+      });
 
     case Messages.ToggleRecording:
+      if (request.enabled && runtimeState.isRunning()) {
+        return {
+          ok: false,
+          error: "Cannot start recording while a workflow is running.",
+        };
+      }
+
       return {
         ok: true,
-        recording: await recordingController.toggle(Boolean(request.enabled)),
+        recording: await recordingController.toggle(
+          Boolean(request.enabled),
+          request.tabPolicy,
+        ),
+      };
+
+    case Messages.GetRuntimeState:
+      return {
+        ok: true,
+        state: runtimeState.getState(),
+      };
+
+    case Messages.GetNodeDefinitions:
+      return {
+        ok: true,
+        definitions: getNodeDefinitions(),
       };
 
     case Messages.GetRecordingState:
@@ -137,6 +207,7 @@ async function handleMessage(request, sender) {
         ok: true,
         bridge: NativeBridge.getStatus(),
         recording: recordingController.getState(),
+        runtime: runtimeState.getState(),
       };
 
     default:
@@ -148,16 +219,44 @@ async function handleMessage(request, sender) {
   }
 }
 
+async function persistAndRefresh(operation) {
+  const result = await operation();
+
+  chrome.runtime
+    .sendMessage({
+      type: Messages.RefreshWorkflowLists,
+    })
+    .catch(() => {});
+
+  return result;
+}
+
 async function runWorkflowByName(filename) {
   const loaded = await NativeBridge.loadWorkflow(filename);
 
   const workflow =
     loaded?.content || loaded?.workflow || loaded?.data || loaded;
 
-  return await runWorkflow(workflow);
+  return await runWorkflow(workflow, {
+    workflowName: filename,
+  });
 }
 
-async function runWorkflow(rawWorkflow) {
+async function runWorkflow(rawWorkflow, options = {}) {
+  if (runtimeState.isRunning()) {
+    return {
+      ok: false,
+      error: "Another workflow is already running.",
+    };
+  }
+
+  if (runtimeState.isRecording()) {
+    return {
+      ok: false,
+      error: "Stop recording before running a workflow.",
+    };
+  }
+
   const workflow = normalizeWorkflow(rawWorkflow);
   const steps = workflow.steps;
 
@@ -168,28 +267,117 @@ async function runWorkflow(rawWorkflow) {
     };
   }
 
-  let tab = await resolveStartingTab(workflow);
+  const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const workflowName =
+    options.workflowName || rawWorkflow?.name || "Unsaved Workflow";
 
-  for (let index = 0; index < steps.length; index++) {
-    const step = steps[index];
+  runtimeState.updateExecution({
+    status: "running",
+    runId,
+    workflowName,
+    currentStepIndex: -1,
+    totalSteps: steps.length,
+    currentAction: "",
+    error: "",
+    diagnostics: null,
+  });
 
-    console.log(`[BRunner] Executing step ${index + 1}/${steps.length}:`, step);
+  try {
+    let tab = await resolveStartingTab(workflow);
+    const tabsByRef = new Map();
+    const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
 
-    tab = await executeStep(tab, step);
-    await delay(Defaults.StepDelayMs);
+    const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
+    if (initialTabRef && tab?.id) {
+      tabsByRef.set(initialTabRef, tab);
+    }
+
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index];
+      let resolvedStep;
+
+      try {
+        resolvedStep = resolveStepExpressions(step, variableRegistry);
+      } catch (error) {
+        error.diagnostics = {
+          action: step?.action || step?.type || "unknown",
+          stepIndex: index,
+          variableName: error.variableName || "",
+          valuePath: error.valuePath || "",
+          finalReason: "variable_resolution_failed",
+        };
+        throw error;
+      }
+
+      runtimeState.updateExecution({
+        currentStepIndex: index,
+        currentAction:
+          resolvedStep?.action || resolvedStep?.type || "unknown",
+      });
+
+      console.log(
+        `[BRunner] Executing step ${index + 1}/${steps.length}:`,
+        resolvedStep,
+      );
+
+      if (resolvedStep?.tabRef && tabsByRef.has(resolvedStep.tabRef)) {
+        const referencedTab = tabsByRef.get(resolvedStep.tabRef);
+
+        try {
+          tab = await chrome.tabs.get(referencedTab.id);
+        } catch {
+          tabsByRef.delete(resolvedStep.tabRef);
+        }
+      }
+
+      tab = await executeStep(
+        tab,
+        resolvedStep,
+        tabsByRef,
+        variableRegistry,
+      );
+
+      if (
+        resolvedStep?.tabRef &&
+        tab?.id &&
+        ![
+          Actions.BrowserTabOpen,
+          Actions.BrowserTabClose,
+        ].includes(resolvedStep.action || resolvedStep.type)
+      ) {
+        tabsByRef.set(resolvedStep.tabRef, tab);
+      }
+      await delay(Defaults.StepDelayMs);
+    }
+
+    runtimeState.updateExecution({
+      status: "completed",
+      currentStepIndex: steps.length - 1,
+      currentAction: "",
+    });
+
+    chrome.runtime
+      .sendMessage({
+        type: Messages.WorkflowComplete,
+        workflow,
+      })
+      .catch(() => {});
+
+    return {
+      ok: true,
+      executed: steps.length,
+      runId,
+      variables: variableRegistry.snapshot(),
+    };
+  } catch (error) {
+    runtimeState.updateExecution({
+      status: "failed",
+      currentAction: "",
+      error: error.message || String(error),
+      diagnostics: error.diagnostics || null,
+    });
+    throw error;
   }
-
-  chrome.runtime
-    .sendMessage({
-      type: Messages.WorkflowComplete,
-      workflow,
-    })
-    .catch(() => {});
-
-  return {
-    ok: true,
-    executed: steps.length,
-  };
 }
 
 async function resolveStartingTab(workflow) {
@@ -235,8 +423,29 @@ function isDomainCompatible(url, boundDomain) {
   );
 }
 
-async function executeStep(currentTab, step) {
+async function executeStep(
+  currentTab,
+  step,
+  tabsByRef = new Map(),
+  variableRegistry = null,
+) {
   const action = step.action || step.type;
+
+  if (action === Actions.BrowserTabSwitch) {
+    return await executeTabSwitch(currentTab, step, tabsByRef);
+  }
+
+  if (
+    [
+      Actions.BrowserBack,
+      Actions.BrowserForward,
+      Actions.BrowserReload,
+      Actions.BrowserTabOpen,
+      Actions.BrowserTabClose,
+    ].includes(action)
+  ) {
+    return await executeBrowserLifecycleStep(currentTab, step, tabsByRef);
+  }
 
   if (action === Actions.BrowserNavigate) {
     return await executeNavigateStep(currentTab, step);
@@ -245,7 +454,7 @@ async function executeStep(currentTab, step) {
   const contextReadyTab = await ensureStepPageContext(currentTab, step);
 
   if (action === Actions.LogicWait) {
-    await delay(Number(step.ms || step.duration || 1000));
+    await delay(resolveWaitDuration(step));
     return contextReadyTab;
   }
 
@@ -254,7 +463,200 @@ async function executeStep(currentTab, step) {
     return contextReadyTab;
   }
 
-  return await executeContentStep(contextReadyTab, step);
+  if ([Actions.DataSet, Actions.DataTemplate].includes(action)) {
+    const variableName = String(
+      step.config?.variableName || step.variableName || "",
+    ).trim();
+
+    if (!variableName) {
+      throw new Error(`${action} requires an output variable name.`);
+    }
+
+    const value = action === Actions.DataTemplate
+      ? step.config?.template ?? ""
+      : step.config?.value;
+
+    variableRegistry?.set(variableName, value);
+    return contextReadyTab;
+  }
+
+  if (isDataTransformAction(action)) {
+    const variableName = String(step.config?.variableName || "").trim();
+
+    if (!variableName) {
+      throw new Error(`${action} requires an output variable name.`);
+    }
+
+    const value = executeDataTransform(action, step.config || {});
+    variableRegistry?.set(variableName, value);
+    return contextReadyTab;
+  }
+
+  if (
+    step?.page?.access === "restricted" ||
+    isBrowserInternalUrl(contextReadyTab?.url || "")
+  ) {
+    const error = new Error(
+      `Content action ${action || "unknown"} cannot run on a restricted browser page.`,
+    );
+    error.diagnostics = {
+      action: action || "unknown",
+      expectedPage: step?.page || null,
+      actualPage: getPageContextFromUrl(
+        contextReadyTab?.url || "",
+        contextReadyTab?.title || "",
+      ),
+      finalReason: "restricted_page_content_action",
+    };
+    throw error;
+  }
+
+  let extractionVariableName = "";
+  if (isExtractionAction(action)) {
+    extractionVariableName = String(
+      step.config?.variableName || step.variableName || "",
+    ).trim();
+
+    if (!extractionVariableName) {
+      throw new Error("Extract Data requires an output variable name.");
+    }
+  }
+
+  const response = await executeContentStep(contextReadyTab, step);
+
+  if (isExtractionAction(action)) {
+    variableRegistry?.set(extractionVariableName, response?.value ?? "");
+  }
+
+  return contextReadyTab;
+}
+
+async function executeBrowserLifecycleStep(currentTab, step, tabsByRef) {
+  const action = step.action || step.type;
+
+  if (action === Actions.BrowserTabOpen) {
+    const url = normalizeNavigationUrl(step.config?.url || step.url || "");
+    const continueIn = step.config?.continueIn || (
+      step.config?.switchToNewTab === "false" ? "currentTab" : "newTab"
+    );
+    const switchToNewTab = continueIn === "newTab";
+    const openedTab = await createTab(url, switchToNewTab);
+    const logicalRef = String(step.config?.tabRef || step.tabRef || "").trim();
+
+    if (logicalRef) tabsByRef.set(logicalRef, openedTab);
+    return switchToNewTab ? openedTab : currentTab;
+  }
+
+  if (!currentTab?.id) {
+    throw new Error(`${action} requires a current browser tab.`);
+  }
+
+  if (action === Actions.BrowserBack) {
+    const navigated = await navigateBrowserHistory(
+      "back",
+      currentTab,
+      step.config?.ifUnavailable || "continue",
+    );
+    if (!navigated) return await chrome.tabs.get(currentTab.id);
+    await waitForTabComplete(currentTab.id);
+    return await chrome.tabs.get(currentTab.id);
+  }
+
+  if (action === Actions.BrowserForward) {
+    const navigated = await navigateBrowserHistory(
+      "forward",
+      currentTab,
+      step.config?.ifUnavailable || "continue",
+    );
+    if (!navigated) return await chrome.tabs.get(currentTab.id);
+    await waitForTabComplete(currentTab.id);
+    return await chrome.tabs.get(currentTab.id);
+  }
+
+  if (action === Actions.BrowserReload) {
+    await chrome.tabs.reload(currentTab.id);
+    await waitForTabComplete(currentTab.id);
+    return await chrome.tabs.get(currentTab.id);
+  }
+
+  if (action === Actions.BrowserTabClose) {
+    const shouldContinue =
+      (step.config?.continueIn || "openerOrAvailable") !== "none";
+    const fallbackTab = shouldContinue
+      ? await resolveCloseFallback(currentTab)
+      : null;
+
+    for (const [tabRef, mappedTab] of tabsByRef.entries()) {
+      if (mappedTab?.id === currentTab.id) tabsByRef.delete(tabRef);
+    }
+
+    await chrome.tabs.remove(currentTab.id);
+
+    if (!fallbackTab?.id) return null;
+
+    await chrome.tabs.update(fallbackTab.id, { active: true });
+    return await chrome.tabs.get(fallbackTab.id);
+  }
+
+  throw new Error(`Unsupported browser lifecycle action: ${action}`);
+}
+
+async function navigateBrowserHistory(direction, tab, ifUnavailable) {
+  try {
+    if (direction === "back") {
+      await chrome.tabs.goBack(tab.id);
+    } else {
+      await chrome.tabs.goForward(tab.id);
+    }
+
+    return true;
+  } catch (error) {
+    const message = error?.message || String(error);
+    const unavailable = /history|next page|previous page/i.test(message);
+
+    if (unavailable && ifUnavailable !== "fail") {
+      console.warn(
+        `[BRunner] Browser ${direction} skipped because no history entry is available.`,
+      );
+      return false;
+    }
+
+    if (unavailable) {
+      throw new Error(
+        `Cannot navigate ${direction}: no matching page exists in tab history.`,
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function resolveCloseFallback(currentTab) {
+  if (currentTab.openerTabId) {
+    try {
+      return await chrome.tabs.get(currentTab.openerTabId);
+    } catch {
+      // The opener may already be closed. Continue to another safe tab.
+    }
+  }
+
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const fallback = tabs.find((tab) => {
+    return tab.id !== currentTab.id && isAutomationTab(tab);
+  });
+
+  return fallback || null;
+}
+
+function isExtractionAction(action) {
+  return [
+    Actions.ElementExtract,
+    Actions.DataExtractText,
+    Actions.DataExtractAttribute,
+    Actions.DataExtractList,
+    Actions.DataExtractTable,
+    Actions.DataExtractPage,
+  ].includes(action);
 }
 
 async function ensureStepPageContext(currentTab, step) {
@@ -329,17 +731,103 @@ async function executeContentStep(tab, step) {
     });
 
     if (response?.ok === false) {
-      throw new Error(response.error || "Content step failed.");
+      const executionError = new Error(
+        response.error || "Content step failed.",
+      );
+      executionError.diagnostics = response.diagnostics || null;
+      throw executionError;
     }
 
-    return tab;
+    return response || { ok: true };
   } catch (error) {
     console.warn("[BRunner] Content step failed:", error);
 
-    throw new Error(
+    const wrappedError = new Error(
       `Failed to execute step in tab ${tab.id}: ${error.message || error}`,
     );
+    wrappedError.diagnostics = error.diagnostics || {
+      action: step?.action || step?.type || "unknown",
+      expectedPage: step?.page || null,
+      actualPage: getPageContextFromUrl(tab.url || "", tab.title || ""),
+      finalReason: "content_script_transport_failed",
+    };
+    throw wrappedError;
   }
+}
+
+async function executeTabSwitch(currentTab, step, tabsByRef) {
+  const tabRef = step.tabRef;
+  const mappedTab = tabRef ? tabsByRef.get(tabRef) : null;
+
+  if (mappedTab?.id) {
+    try {
+      const tab = await chrome.tabs.get(mappedTab.id);
+      await chrome.tabs.update(tab.id, { active: true });
+      return tab;
+    } catch {
+      tabsByRef.delete(tabRef);
+    }
+  }
+
+  const recoveryUrl = step.url || step.page?.url || "";
+  const matchingTab = await waitForMatchingTab(
+    currentTab,
+    recoveryUrl,
+    Defaults.TabSwitchWaitMs,
+    Boolean(step.openerTabRef),
+  );
+
+  if (matchingTab) {
+    await chrome.tabs.update(matchingTab.id, { active: true });
+    if (tabRef) tabsByRef.set(tabRef, matchingTab);
+    return matchingTab;
+  }
+
+  if (step.createIfMissing === false || !recoveryUrl) {
+    throw new Error(
+      `Recorded tab ${tabRef || "unknown"} is unavailable and cannot be recovered.`,
+    );
+  }
+
+  const createdTab = await createTab(recoveryUrl, true);
+  if (tabRef) tabsByRef.set(tabRef, createdTab);
+  return createdTab;
+}
+
+async function waitForMatchingTab(
+  currentTab,
+  expectedUrl,
+  timeoutMs,
+  requireOpenerMatch,
+) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const candidates = tabs.filter((tab) => {
+      if (!tab?.id || tab.id === currentTab?.id) return false;
+
+      const openerMatches =
+        currentTab?.id && tab.openerTabId === currentTab.id;
+      const urlMatches =
+        expectedUrl && pageContextsCompatible(
+          getPageContextFromUrl(tab.url || ""),
+          getPageContextFromUrl(expectedUrl),
+        );
+
+      return requireOpenerMatch
+        ? openerMatches && (!expectedUrl || urlMatches)
+        : !expectedUrl || urlMatches;
+    });
+
+    const match =
+      candidates.find((tab) => tab.url === expectedUrl) || candidates[0];
+
+    if (match) return match;
+    await delay(100);
+  }
+
+  return null;
 }
 
 function delay(ms) {
