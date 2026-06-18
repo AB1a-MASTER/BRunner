@@ -1,0 +1,35 @@
+{
+  "name": "HTTP Request Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "http_acceptance_request",
+      "action": "http.request",
+      "config": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8765/tests/fixtures/http-response.json",
+        "headers": "{}",
+        "body": "",
+        "bodyType": "auto",
+        "responseType": "json",
+        "timeoutMs": 5000,
+        "httpErrorPolicy": "fail",
+        "variableName": "http_result"
+      }
+    },
+    {
+      "id": "http_acceptance_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "value": "{{http_result.data.source}}",
+      "friendlyName": "HTTP output: Account name"
+    }
+  ]
+}

@@ -21,6 +21,8 @@ import {
   executeDataTransform,
   isDataTransformAction,
 } from "./core/dataTransforms.js";
+import { executeHttpRequest } from "./core/httpRequest.js";
+import { executeClipboardAction } from "./core/clipboard.js";
 import {
   normalizeWorkflow,
   extractDomainFromUrl,
@@ -43,6 +45,7 @@ import {
 
 const runtimeState = createRuntimeStateStore();
 let activeRun = null;
+let offscreenClipboardCreation = null;
 
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
@@ -288,6 +291,7 @@ async function runWorkflow(rawWorkflow, options = {}) {
   activeRun = {
     runId,
     cancelRequested: false,
+    abortControllers: new Set(),
   };
 
   try {
@@ -327,7 +331,7 @@ async function runWorkflow(rawWorkflow, options = {}) {
 
       console.log(
         `[BRunner] Executing step ${index + 1}/${steps.length}:`,
-        resolvedStep,
+        sanitizeStepForLog(resolvedStep),
       );
 
       if (resolvedStep?.tabRef && tabsByRef.has(resolvedStep.tabRef)) {
@@ -426,7 +430,11 @@ async function stopActiveWorkflow() {
     };
   }
 
+  const runId = activeRun.runId;
   activeRun.cancelRequested = true;
+  for (const controller of activeRun.abortControllers || []) {
+    controller.abort();
+  }
   runtimeState.updateExecution({
     status: "cancelling",
     currentAction: "",
@@ -438,14 +446,14 @@ async function stopActiveWorkflow() {
     tabs.filter(isAutomationTab).map((tab) => {
       return chrome.tabs.sendMessage(tab.id, {
         type: Messages.CancelExecution,
-        runId: activeRun.runId,
+        runId,
       });
     }),
   );
 
   return {
     ok: true,
-    runId: activeRun.runId,
+    runId,
     status: "cancelling",
   };
 }
@@ -575,6 +583,16 @@ async function executeStep(
     return await executeNavigateStep(currentTab, step);
   }
 
+  if (action === Actions.HttpRequest) {
+    await executeHttpRequestStep(step, variableRegistry, runId);
+    return currentTab;
+  }
+
+  if ([Actions.ClipboardRead, Actions.ClipboardWrite].includes(action)) {
+    await executeClipboardStep(action, step, variableRegistry, runId);
+    return currentTab;
+  }
+
   const contextReadyTab = await ensureStepPageContext(currentTab, step);
 
   if (action === Actions.LogicWait) {
@@ -646,13 +664,191 @@ async function executeStep(
     }
   }
 
+  let fileUploadVariableName = "";
+  if (action === Actions.FileInputUpload) {
+    fileUploadVariableName = String(
+      step.config?.variableName || step.variableName || "",
+    ).trim();
+
+    if (!fileUploadVariableName) {
+      const error = new Error("File Input Upload requires an output variable name.");
+      error.diagnostics = {
+        action,
+        finalReason: "file_upload_output_variable_missing",
+      };
+      throw error;
+    }
+  }
+
   const response = await executeContentStep(contextReadyTab, step, runId);
 
   if (isExtractionAction(action)) {
     variableRegistry?.set(extractionVariableName, response?.value ?? "");
   }
 
+  if (action === Actions.FileInputUpload) {
+    variableRegistry?.set(fileUploadVariableName, response?.value ?? null);
+  }
+
   return contextReadyTab;
+}
+
+async function executeHttpRequestStep(step, variableRegistry, runId) {
+  const variableName = String(
+    step.config?.variableName || step.variableName || "",
+  ).trim();
+
+  if (!variableName) {
+    const error = new Error("HTTP Request requires an output variable name.");
+    error.diagnostics = {
+      action: Actions.HttpRequest,
+      finalReason: "http_output_variable_missing",
+    };
+    throw error;
+  }
+
+  throwIfRunCancelled(runId);
+  const controller = new AbortController();
+  const controllers = activeRun?.runId === runId
+    ? activeRun.abortControllers
+    : null;
+  controllers?.add(controller);
+
+  try {
+    const value = await executeHttpRequest(step.config || {}, {
+      signal: controller.signal,
+    });
+    throwIfRunCancelled(runId);
+    variableRegistry?.set(variableName, value);
+  } finally {
+    controllers?.delete(controller);
+  }
+}
+
+function sanitizeStepForLog(step) {
+  const action = step?.action || step?.type;
+
+  if (action === Actions.ClipboardWrite) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        value: step.config?.value ? "[REDACTED]" : "",
+      },
+    };
+  }
+
+  if (action === Actions.FileInputUpload) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        content: step.config?.content ? "[REDACTED]" : "",
+      },
+    };
+  }
+
+  if (action !== Actions.HttpRequest) return step;
+
+  return {
+    ...step,
+    config: {
+      ...step.config,
+      url: sanitizeHttpUrlForLog(step.config?.url),
+      headers: step.config?.headers ? "[REDACTED]" : "",
+      body: step.config?.body ? "[REDACTED]" : "",
+    },
+  };
+}
+
+async function executeClipboardStep(action, step, variableRegistry, runId) {
+  const variableName = String(
+    step.config?.variableName || step.variableName || "",
+  ).trim();
+
+  if (action === Actions.ClipboardRead && !variableName) {
+    const error = new Error("Clipboard Read requires an output variable name.");
+    error.diagnostics = {
+      action,
+      finalReason: "clipboard_output_variable_missing",
+    };
+    throw error;
+  }
+
+  throwIfRunCancelled(runId);
+  const result = await executeClipboardAction(action, step.config || {}, {
+    readText: () => sendOffscreenClipboardOperation("readText"),
+    writeText: (value) => {
+      return sendOffscreenClipboardOperation("writeText", value);
+    },
+  });
+  throwIfRunCancelled(runId);
+
+  if (variableName) variableRegistry?.set(variableName, result);
+}
+
+async function sendOffscreenClipboardOperation(operation, value = "") {
+  await ensureClipboardOffscreenDocument();
+
+  const response = await chrome.runtime.sendMessage({
+    target: "offscreen.clipboard",
+    operation,
+    ...(operation === "writeText" ? { value } : {}),
+  });
+
+  if (!response?.ok) {
+    throw new Error(response?.error || "Clipboard operation failed.");
+  }
+
+  return operation === "readText" ? String(response.value ?? "") : undefined;
+}
+
+async function ensureClipboardOffscreenDocument() {
+  if (!chrome.offscreen?.createDocument) {
+    throw new Error("Chrome offscreen documents are unavailable.");
+  }
+
+  const documentUrl = chrome.runtime.getURL("offscreen/clipboard.html");
+  let exists = false;
+
+  if (chrome.runtime.getContexts) {
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ["OFFSCREEN_DOCUMENT"],
+      documentUrls: [documentUrl],
+    });
+    exists = contexts.length > 0;
+  } else if (chrome.offscreen.hasDocument) {
+    exists = await chrome.offscreen.hasDocument();
+  }
+
+  if (exists) return;
+
+  if (!offscreenClipboardCreation) {
+    offscreenClipboardCreation = chrome.offscreen.createDocument({
+      url: "offscreen/clipboard.html",
+      reasons: ["CLIPBOARD"],
+      justification: "Read or write clipboard text for an explicit workflow node.",
+    });
+  }
+
+  try {
+    await offscreenClipboardCreation;
+  } finally {
+    offscreenClipboardCreation = null;
+  }
+}
+
+function sanitizeHttpUrlForLog(value) {
+  try {
+    const url = new URL(String(value || ""));
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  } catch {
+    return "[INVALID URL]";
+  }
 }
 
 async function executeBrowserLifecycleStep(currentTab, step, tabsByRef) {

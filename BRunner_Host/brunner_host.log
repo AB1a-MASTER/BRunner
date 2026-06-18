@@ -1331,3 +1331,112 @@
 2026-06-18 18:17:16,046 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '2', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
 2026-06-18 18:17:30,287 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '3', 'command': 'LIST_WORKFLOWS'}
 2026-06-18 18:18:03,862 [INFO] connection closed
+2026-06-18 18:33:01,658 [INFO] connection open
+2026-06-18 18:33:01,664 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:33:01,671 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:33:01,672 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:33:48,163 [INFO] connection closed
+2026-06-18 18:50:16,556 [INFO] connection open
+2026-06-18 18:50:16,557 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:50:16,559 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:50:16,559 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:50:18,015 [INFO] connection closed
+2026-06-18 18:50:18,214 [INFO] connection open
+2026-06-18 18:50:18,215 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:50:18,220 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:50:18,221 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:50:20,205 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:50:21,195 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:50:51,270 [INFO] connection closed
+2026-06-18 18:51:20,966 [INFO] connection open
+2026-06-18 18:51:20,966 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:51:20,968 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:51:20,969 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:52:12,363 [INFO] connection closed
+2026-06-18 18:52:22,121 [INFO] connection open
+2026-06-18 18:52:22,121 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:52:22,123 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:52:22,123 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:53:30,517 [INFO] connection closed
+2026-06-18 18:53:33,959 [INFO] connection open
+2026-06-18 18:53:33,959 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:53:33,960 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:53:33,961 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:55:18,428 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:55:21,859 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '2', 'command': 'LOAD_WORKFLOW', 'filename': 'apple_site_test.json'}
+2026-06-18 18:57:10,646 [INFO] connection closed
+2026-06-18 18:58:14,384 [INFO] connection open
+2026-06-18 18:58:14,386 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:58:14,387 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:58:14,388 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:58:50,146 [INFO] connection closed
+2026-06-18 18:59:09,614 [INFO] connection open
+2026-06-18 18:59:09,616 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:59:09,618 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:59:09,618 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:59:11,509 [INFO] connection closed
+2026-06-18 18:59:11,738 [INFO] connection open
+2026-06-18 18:59:11,738 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:59:11,742 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:59:11,743 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:59:18,610 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:59:19,676 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:59:49,760 [INFO] connection closed
+2026-06-18 18:59:55,485 [INFO] connection open
+2026-06-18 18:59:55,485 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 18:59:55,486 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 18:59:55,487 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 18:59:55,586 [INFO] [Inbound] Command: SAVE_WORKFLOW | Payload: {'id': '1', 'command': 'SAVE_WORKFLOW', 'filename': 'http test.json', 'content': {'boundDomain': 'www.google.com', 'variables': {}, 'settings': {'reuseExistingTabs': False}, 'steps': [{'id': 'step_vs36dtcmg', 'action': 'http.request', 'target': '', 'targetType': '', 'targetFallbacks': [], 'targetSnapshot': None, 'friendlyName': '', 'payload': {}, 'config': {'method': 'GET', 'headers': '{}', 'body': '', 'bodyType': 'auto', 'responseType': 'auto', 'timeoutMs': 30000, 'httpErrorPolicy': 'fail', 'url': 'https://jsonplaceholder.typicode.com/posts/1', 'variableName': 'var1'}}]}}
+2026-06-18 18:59:55,592 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:59:55,595 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '3', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 18:59:57,307 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '4', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 19:00:27,326 [INFO] connection closed
+2026-06-18 19:01:19,175 [INFO] connection open
+2026-06-18 19:01:19,175 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:01:19,177 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:01:19,177 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:01:57,303 [INFO] connection closed
+2026-06-18 19:05:41,603 [INFO] connection open
+2026-06-18 19:05:41,603 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:05:41,605 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:05:41,605 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:05:41,705 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '1', 'command': 'LOAD_WORKFLOW', 'filename': 'http_request_acceptance.json'}
+2026-06-18 19:06:18,484 [INFO] connection closed
+2026-06-18 19:10:01,244 [INFO] connection open
+2026-06-18 19:10:01,245 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:10:01,248 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:10:01,249 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:10:02,370 [INFO] connection closed
+2026-06-18 19:10:02,480 [INFO] connection open
+2026-06-18 19:10:02,480 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:10:02,496 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:10:02,498 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:10:04,528 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 19:10:06,277 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '2', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 19:10:10,634 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '3', 'command': 'LOAD_WORKFLOW', 'filename': 'clipboard_acceptance.json'}
+2026-06-18 19:10:40,961 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '4', 'command': 'LOAD_WORKFLOW', 'filename': 'clipboard_acceptance.json'}
+2026-06-18 19:11:10,983 [INFO] connection closed
+2026-06-18 19:11:49,473 [INFO] connection open
+2026-06-18 19:11:49,474 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:11:49,476 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:11:49,476 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:11:56,396 [INFO] connection closed
+2026-06-18 19:12:09,266 [INFO] connection open
+2026-06-18 19:12:09,267 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:12:09,273 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:12:09,274 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:12:15,001 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 19:12:22,129 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '2', 'command': 'LOAD_WORKFLOW', 'filename': 'clipboard_acceptance.json'}
+2026-06-18 19:12:54,124 [INFO] connection closed
+2026-06-18 19:20:17,911 [INFO] connection open
+2026-06-18 19:20:17,911 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:20:17,915 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:20:17,915 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:20:19,460 [INFO] connection closed
+2026-06-18 19:20:19,645 [INFO] connection open
+2026-06-18 19:20:19,646 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-18 19:20:19,652 [INFO] [Inbound] Command: AUTH | Payload: {'command': 'AUTH', 'key': 'ac1890957e38af28cd5d0961e6d0d530'}
+2026-06-18 19:20:19,652 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-18 19:20:23,501 [INFO] [Inbound] Command: LIST_WORKFLOWS | Payload: {'id': '1', 'command': 'LIST_WORKFLOWS'}
+2026-06-18 19:20:26,785 [INFO] [Inbound] Command: LOAD_WORKFLOW | Payload: {'id': '2', 'command': 'LOAD_WORKFLOW', 'filename': 'file_input_acceptance.json'}
+2026-06-18 19:20:58,697 [INFO] connection closed

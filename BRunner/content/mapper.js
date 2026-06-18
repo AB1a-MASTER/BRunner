@@ -30,6 +30,7 @@
     DataExtractList: "data.extract.list",
     DataExtractTable: "data.extract.table",
     DataExtractPage: "data.extract.page",
+    FileInputUpload: "file.input.upload",
     LogicWait: "logic.wait",
     WaitElementVisible: "wait.element.visible",
     WaitElementHidden: "wait.element.hidden",
@@ -39,6 +40,7 @@
   });
 
   const resolver = window.BRunnerTargetResolver;
+  const filePayload = window.BRunnerFilePayload;
 
   if (!resolver) {
     console.error(
@@ -519,6 +521,17 @@
 
       const element = resolved.element;
 
+      if (action === Actions.FileInputUpload) {
+        const value = this.executeFileInputUpload(element, step.config || {});
+
+        return {
+          ok: true,
+          value,
+          usedStrategy: resolved.strategy,
+          usedValue: resolved.value,
+        };
+      }
+
       if (action === Actions.ElementScrollIntoView) {
         element.scrollIntoView({
           block: step.config?.block || "center",
@@ -906,19 +919,22 @@
         tag === "input" && ["checkbox", "radio"].includes(type);
 
       if (isCheckable) {
-        const shouldToggle =
-          desiredState === undefined ||
-          desiredState === "" ||
-          desiredState === null
-            ? true
-            : Boolean(
-                desiredState === true ||
-                desiredState === "true" ||
-                desiredState === "checked",
-              );
+        const hasDesiredState = ![
+          undefined,
+          null,
+          "",
+        ].includes(desiredState);
+        const desiredChecked = hasDesiredState
+          ? [true, 1, "1", "true", "checked", "on"].includes(desiredState)
+          : !element.checked;
 
-        if (shouldToggle || !element.checked) {
-          element.click();
+        if (element.checked !== desiredChecked) {
+          if (type === "radio" && !desiredChecked) {
+            element.checked = false;
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+          } else {
+            element.click();
+          }
         }
 
         element.dispatchEvent(
@@ -953,6 +969,41 @@
       window.setTimeout(() => {
         delete element.dataset.brunnerSuppressRecord;
       }, 250);
+    }
+
+    executeFileInputUpload(element, config) {
+      if (!filePayload) {
+        throw new Error("BRunner file payload helper is unavailable.");
+      }
+
+      if (
+        element.tagName?.toLowerCase() !== "input" ||
+        String(element.type || "").toLowerCase() !== "file"
+      ) {
+        throw new Error("File Input Upload target must be <input type=\"file\">.");
+      }
+
+      const payload = filePayload.buildFilePayload(config);
+      const file = new File([payload.bytes], payload.filename, {
+        type: payload.mimeType,
+      });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+
+      element.dataset.brunnerSuppressRecord = "true";
+      element.files = transfer.files;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+
+      window.setTimeout(() => {
+        delete element.dataset.brunnerSuppressRecord;
+      }, 250);
+
+      return {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      };
     }
 
     findVisibleOptionByText(text) {

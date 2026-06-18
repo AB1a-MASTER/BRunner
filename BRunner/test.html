@@ -24,6 +24,7 @@
         <button id="stop-recording" type="button">Stop Recording</button>
         <button id="mutate-target" type="button">Invalidate Primary ID</button>
         <button id="replay-last-click" type="button">Replay Last Click</button>
+        <button id="test-toggle" type="button">Test Toggle States</button>
         <button id="clear-results" type="button">Clear</button>
     </div>
 
@@ -54,6 +55,12 @@
             <input id="agree" name="terms" type="checkbox">
             Accept terms
         </label>
+
+        <label for="upload-file">
+            Upload test file
+            <input id="upload-file" name="upload_file" type="file">
+        </label>
+        <p id="uploaded-file-result">No uploaded file.</p>
 
         <button
             id="result-button"
@@ -91,11 +98,15 @@
         };
     </script>
     <script src="content/targetResolver.js"></script>
+    <script src="content/filePayload.js"></script>
     <script src="content/mapper.js"></script>
     <script>
         const output = document.getElementById("recorded-output");
         const status = document.getElementById("status");
         const resultButton = document.getElementById("result-button");
+        const agreeCheckbox = document.getElementById("agree");
+        const uploadFileInput = document.getElementById("upload-file");
+        const uploadedFileResult = document.getElementById("uploaded-file-result");
 
         window.renderRecordedSteps = function renderRecordedSteps() {
             output.textContent = window.__BRUNNER_TEST_MESSAGES__.length
@@ -112,6 +123,13 @@
             const count = Number(resultButton.dataset.clickCount || 0) + 1;
             resultButton.dataset.clickCount = String(count);
             setStatus(`Submit Test clicked ${count} time(s).`);
+        });
+
+        uploadFileInput.addEventListener("change", async () => {
+            const file = uploadFileInput.files?.[0];
+            uploadedFileResult.textContent = file
+                ? `${file.name} | ${file.type} | ${file.size} bytes | ${await file.text()}`
+                : "No uploaded file.";
         });
 
         document.getElementById("start-recording").addEventListener("click", () => {
@@ -154,6 +172,32 @@
             if (!passed && response?.diagnostics) {
                 output.textContent = JSON.stringify(response.diagnostics, null, 2);
             }
+        });
+
+        document.getElementById("test-toggle").addEventListener("click", async () => {
+            agreeCheckbox.checked = false;
+            const target = { strategy: "id", value: "agree" };
+            const enabled = await window.__BRUNNER_MAPPER__.executeStep({
+                action: "element.toggle",
+                target,
+                value: true
+            });
+            const enabledPassed = enabled?.ok === true && agreeCheckbox.checked;
+
+            const disabled = await window.__BRUNNER_MAPPER__.executeStep({
+                action: "element.toggle",
+                target,
+                value: false
+            });
+            const disabledPassed = disabled?.ok === true && !agreeCheckbox.checked;
+            const passed = enabledPassed && disabledPassed;
+
+            setStatus(
+                passed
+                    ? "Toggle states passed: checked, then unchecked."
+                    : `Toggle states failed: on=${enabledPassed}, off=${disabledPassed}.`,
+                passed ? "pass" : "fail"
+            );
         });
 
         document.getElementById("clear-results").addEventListener("click", () => {

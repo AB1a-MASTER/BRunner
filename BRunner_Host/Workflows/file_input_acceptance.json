@@ -1,0 +1,26 @@
+{
+  "name": "File Input Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "file_input_acceptance_upload",
+      "action": "file.input.upload",
+      "target": {
+        "strategy": "id",
+        "value": "upload-file"
+      },
+      "config": {
+        "sourceType": "text",
+        "filename": "brunner-acceptance.txt",
+        "mimeType": "text/plain",
+        "content": "BRunner virtual upload accepted",
+        "variableName": "uploaded_file"
+      },
+      "friendlyName": "Upload virtual acceptance file"
+    }
+  ]
+}

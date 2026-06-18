@@ -1,0 +1,30 @@
+{
+    "boundDomain": "www.google.com",
+    "variables": {},
+    "settings": {
+        "reuseExistingTabs": false
+    },
+    "steps": [
+        {
+            "id": "step_vs36dtcmg",
+            "action": "http.request",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "",
+            "payload": {},
+            "config": {
+                "method": "GET",
+                "headers": "{}",
+                "body": "",
+                "bodyType": "auto",
+                "responseType": "auto",
+                "timeoutMs": 30000,
+                "httpErrorPolicy": "fail",
+                "url": "https://jsonplaceholder.typicode.com/posts/1",
+                "variableName": "var1"
+            }
+        }
+    ]
+}

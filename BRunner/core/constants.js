@@ -83,6 +83,13 @@ export const Actions = Object.freeze({
   DataToNumber: "data.number.convert",
   DataFormatDate: "data.date.format",
 
+  HttpRequest: "http.request",
+
+  ClipboardRead: "clipboard.read",
+  ClipboardWrite: "clipboard.write",
+
+  FileInputUpload: "file.input.upload",
+
   KeyboardSendKeys: "keyboard.send_keys",
 
   LogicWait: "logic.wait",

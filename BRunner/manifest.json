@@ -11,7 +11,10 @@
     "storage",
     "sidePanel",
     "debugger",
-    "search"
+    "search",
+    "offscreen",
+    "clipboardRead",
+    "clipboardWrite"
   ],
 
   "host_permissions": [
@@ -41,6 +44,7 @@
       ],
       "js": [
         "content/targetResolver.js",
+        "content/filePayload.js",
         "content/mapper.js"
       ],
       "run_at": "document_idle"

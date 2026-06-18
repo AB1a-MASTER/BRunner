@@ -43,6 +43,10 @@ const Actions = Object.freeze({
   DataExtractPage: "data.extract.page",
   DataSet: "data.set",
   DataTemplate: "data.template",
+  HttpRequest: "http.request",
+  ClipboardRead: "clipboard.read",
+  ClipboardWrite: "clipboard.write",
+  FileInputUpload: "file.input.upload",
   LogicWait: "logic.wait",
 });
 
@@ -983,12 +987,15 @@ function getStepFieldsHtml(step) {
 function getConfigFieldHtml(step, field) {
   const id = `config-${step.id}-${field.key}`;
   const value = step.config?.[field.key] ?? field.default ?? "";
+  const displayValue = value && typeof value === "object"
+    ? JSON.stringify(value, null, 2)
+    : value;
   const required = field.required ? " *" : "";
 
   if (field.kind === "select") {
     const options = (field.options || [])
       .map((option) => {
-        const selected = String(option) === String(value) ? "selected" : "";
+        const selected = String(option) === String(displayValue) ? "selected" : "";
         return `<option value="${escapeAttr(option)}" ${selected}>${escapeHtml(option)}</option>`;
       })
       .join("");
@@ -1001,10 +1008,19 @@ function getConfigFieldHtml(step, field) {
     `;
   }
 
+  if (field.kind === "textarea") {
+    return `
+      <div class="node-input-group">
+        <label>${escapeHtml(field.label || field.key)}${required}</label>
+        <textarea id="${escapeAttr(id)}" rows="4">${escapeHtml(displayValue)}</textarea>
+      </div>
+    `;
+  }
+
   return `
     <div class="node-input-group">
       <label>${escapeHtml(field.label || field.key)}${required}</label>
-      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(value)}">
+      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(displayValue)}">
     </div>
   `;
 }
@@ -1031,6 +1047,14 @@ function getInstructionText(action) {
       return "Toggles a checkbox or radio input.";
     case Actions.LogicWait:
       return "Pauses execution for a fixed amount of time.";
+    case Actions.HttpRequest:
+      return "Sends a background HTTP request and stores its structured response.";
+    case Actions.ClipboardRead:
+      return "Reads clipboard text only when this node explicitly allows access.";
+    case Actions.ClipboardWrite:
+      return "Writes expression-enabled text to the system clipboard.";
+    case Actions.FileInputUpload:
+      return "Creates a text/base64 file and assigns it to a web file input.";
     default:
       return "Interact with the specified target element.";
   }

@@ -191,7 +191,9 @@ main {
 
 .node-input-group { display: flex; flex-direction: column; margin-top: 0.5rem; }
 .node-input-group label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem; }
-.node-input-group input { box-sizing: border-box; width: 100%; background-color: var(--bg-main); border: 1px solid var(--border); color: white; padding: 0.5rem; border-radius: 4px; font-family: monospace; }
+.node-input-group input,
+.node-input-group textarea { box-sizing: border-box; width: 100%; background-color: var(--bg-main); border: 1px solid var(--border); color: white; padding: 0.5rem; border-radius: 4px; font-family: monospace; }
+.node-input-group textarea { resize: vertical; min-height: 5rem; }
 
 /* The Workflow Card (Sidebar) */
 .workflow-card {
