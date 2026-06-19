@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio:dev": "vite --config vite.studio.config.js",
+    "studio:build": "vite build --config vite.studio.config.js"
+  },
+  "dependencies": {
+    "@xyflow/react": "12.11.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.0.2",
+    "vite": "8.0.16"
+  }
+}

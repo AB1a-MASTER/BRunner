@@ -1,36 +1,88 @@
 {
-  "name": "Clipboard Acceptance",
-  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
-  "variables": {},
-  "settings": {
-    "reuseExistingTabs": false
-  },
-  "steps": [
-    {
-      "id": "clipboard_acceptance_write",
-      "action": "clipboard.write",
-      "config": {
-        "value": "BRunner clipboard acceptance",
-        "variableName": "clipboard_write_result"
-      }
+    "schemaVersion": 2,
+    "id": "workflow-v2",
+    "name": "clipboard_acceptance",
+    "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+    "settings": {
+        "reuseExistingTabs": false
     },
-    {
-      "id": "clipboard_acceptance_read",
-      "action": "clipboard.read",
-      "config": {
-        "allowClipboardRead": "allow",
-        "variableName": "clipboard_text"
-      }
-    },
-    {
-      "id": "clipboard_acceptance_visible_output",
-      "action": "element.type",
-      "target": {
-        "strategy": "id",
-        "value": "name-input"
-      },
-      "value": "{{clipboard_text}}",
-      "friendlyName": "Clipboard output: Account name"
-    }
-  ]
+    "variables": {},
+    "entryNodeId": "clipboard_acceptance_write",
+    "nodes": [
+        {
+            "id": "clipboard_acceptance_write",
+            "type": "clipboard.write",
+            "version": 1,
+            "position": {
+                "x": 80,
+                "y": 80
+            },
+            "config": {
+                "value": "BRunner clipboard acceptance",
+                "variableName": "clipboard_write_result"
+            },
+            "data": {
+                "target": "",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": true
+            }
+        },
+        {
+            "id": "clipboard_acceptance_read",
+            "type": "clipboard.read",
+            "version": 1,
+            "position": {
+                "x": 78.57638936447867,
+                "y": 285.1114666560965
+            },
+            "config": {
+                "allowClipboardRead": "allow",
+                "variableName": "clipboard_text"
+            },
+            "data": {
+                "target": "",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": true
+            }
+        },
+        {
+            "id": "clipboard_acceptance_visible_output",
+            "type": "element.type",
+            "version": 1,
+            "position": {
+                "x": 79.21738355897881,
+                "y": 523.6894890077219
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "strategy": "id",
+                    "value": "name-input"
+                },
+                "value": "{{clipboard_text}}",
+                "friendlyName": "Clipboard output: Account name",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": true
+            }
+        }
+    ],
+    "edges": [
+        {
+            "id": "edge-clipboard_acceptance_read-clipboard_acceptance_visible_output",
+            "source": "clipboard_acceptance_read",
+            "sourceHandle": "success",
+            "target": "clipboard_acceptance_visible_output",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-clipboard_acceptance_write-clipboard_acceptance_read",
+            "source": "clipboard_acceptance_write",
+            "sourceHandle": "success",
+            "target": "clipboard_acceptance_read",
+            "targetHandle": "input"
+        }
+    ]
 }

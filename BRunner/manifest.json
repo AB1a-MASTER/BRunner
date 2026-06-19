@@ -58,6 +58,8 @@
         "studio/app.js",
         "studio/studioValidation.js",
         "studio/style.css",
+        "studio-graph/index.html",
+        "studio-graph/assets/*",
         "sidebar/sidebar.html",
         "sidebar/sidebar.js"
       ],

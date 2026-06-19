@@ -1,0 +1,36 @@
+{
+  "name": "Clipboard Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "clipboard_acceptance_write",
+      "action": "clipboard.write",
+      "config": {
+        "value": "BRunner clipboard acceptance",
+        "variableName": "clipboard_write_result"
+      }
+    },
+    {
+      "id": "clipboard_acceptance_read",
+      "action": "clipboard.read",
+      "config": {
+        "allowClipboardRead": "allow",
+        "variableName": "clipboard_text"
+      }
+    },
+    {
+      "id": "clipboard_acceptance_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "value": "{{clipboard_text}}",
+      "friendlyName": "Clipboard output: Account name"
+    }
+  ]
+}

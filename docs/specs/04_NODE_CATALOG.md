@@ -67,6 +67,25 @@ HTTP Request live acceptance:
 
 Phase B is complete. Native OS dialog automation remains deferred to Milestone 4.
 
+## Deferred node execution preconditions
+
+Add registry-level interaction metadata identifying nodes that require a visible
+foreground tab, focused window, in-viewport target, or physical pointer path.
+The runtime must enforce these preconditions before dispatch and produce clear
+diagnostics when activation, focus, scrolling, visibility, or obstruction checks
+cannot be satisfied.
+
+Initial audit candidates:
+
+- Hover Mouse and future pointer movement/drag nodes;
+- hardware keyboard or mouse simulation;
+- visible-tab screenshots and other viewport-dependent capture;
+- element interactions whose browser behavior requires an unobscured target.
+
+This audit must avoid foregrounding tabs for background-safe network, clipboard,
+file, wait, or data-transformation nodes unless their individual contract requires
+it.
+
 Clipboard live acceptance:
 
 1. Reload the extension and approve its clipboard permissions.

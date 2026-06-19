@@ -1,0 +1,1100 @@
+{
+    "schemaVersion": 2,
+    "id": "workflow-v2",
+    "name": "apple_site_testv2",
+    "boundDomain": "www.google.com",
+    "settings": {
+        "graphLayoutDirection": "horizontal"
+    },
+    "variables": {},
+    "entryNodeId": "step_zn4pethbu",
+    "nodes": [
+        {
+            "id": "step_zn4pethbu",
+            "type": "element.click",
+            "version": 1,
+            "position": {
+                "x": 90,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "primary": {
+                        "strategy": "id",
+                        "value": "APjFqb",
+                        "score": 100
+                    },
+                    "candidates": [
+                        {
+                            "strategy": "id",
+                            "value": "APjFqb",
+                            "score": 100
+                        },
+                        {
+                            "strategy": "name",
+                            "value": "q",
+                            "score": 95
+                        },
+                        {
+                            "strategy": "ariaLabel",
+                            "value": "Search",
+                            "score": 92
+                        },
+                        {
+                            "strategy": "title",
+                            "value": "Search",
+                            "score": 84
+                        },
+                        {
+                            "strategy": "form_context",
+                            "value": "form #APjFqb",
+                            "score": 72
+                        },
+                        {
+                            "strategy": "css_selector",
+                            "value": "#APjFqb",
+                            "score": 68
+                        },
+                        {
+                            "strategy": "dom_path",
+                            "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                            "score": 55
+                        },
+                        {
+                            "strategy": "ctrlHash",
+                            "value": "ctrl_6dcdb163",
+                            "score": 40
+                        }
+                    ],
+                    "fallbacks": [
+                        {
+                            "strategy": "name",
+                            "value": "q",
+                            "score": 95
+                        },
+                        {
+                            "strategy": "ariaLabel",
+                            "value": "Search",
+                            "score": 92
+                        },
+                        {
+                            "strategy": "title",
+                            "value": "Search",
+                            "score": 84
+                        },
+                        {
+                            "strategy": "form_context",
+                            "value": "form #APjFqb",
+                            "score": 72
+                        },
+                        {
+                            "strategy": "css_selector",
+                            "value": "#APjFqb",
+                            "score": 68
+                        },
+                        {
+                            "strategy": "dom_path",
+                            "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                            "score": 55
+                        },
+                        {
+                            "strategy": "ctrlHash",
+                            "value": "ctrl_6dcdb163",
+                            "score": 40
+                        }
+                    ],
+                    "snapshot": {
+                        "tag": "textarea",
+                        "role": "combobox",
+                        "type": "",
+                        "id": "APjFqb",
+                        "name": "q",
+                        "ariaLabel": "Search",
+                        "placeholder": "",
+                        "title": "Search",
+                        "text": "",
+                        "value": "",
+                        "href": "",
+                        "classes": [
+                            "gLFyf"
+                        ],
+                        "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "nearbyText": "",
+                        "bounds": {
+                            "x": 523,
+                            "y": 377,
+                            "width": 447,
+                            "height": 50
+                        }
+                    }
+                },
+                "targetType": "id",
+                "targetFallbacks": [
+                    {
+                        "strategy": "name",
+                        "value": "q",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Search",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "title",
+                        "value": "Search",
+                        "score": 84
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "form #APjFqb",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "#APjFqb",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_6dcdb163",
+                        "score": 40
+                    }
+                ],
+                "targetSnapshot": {
+                    "tag": "textarea",
+                    "role": "combobox",
+                    "type": "",
+                    "id": "APjFqb",
+                    "name": "q",
+                    "ariaLabel": "Search",
+                    "placeholder": "",
+                    "title": "Search",
+                    "text": "",
+                    "value": "",
+                    "href": "",
+                    "classes": [
+                        "gLFyf"
+                    ],
+                    "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                    "nearbyText": "",
+                    "bounds": {
+                        "x": 523,
+                        "y": 377,
+                        "width": 447,
+                        "height": 50
+                    }
+                },
+                "friendlyName": "id: APjFqb",
+                "payload": {},
+                "page": {
+                    "url": "https://www.google.com/",
+                    "origin": "https://www.google.com",
+                    "host": "www.google.com",
+                    "hostname": "www.google.com",
+                    "domain": "google.com",
+                    "path": "/",
+                    "search": "",
+                    "title": "Google"
+                },
+                "recordedAt": "2026-06-18T08:35:48.000Z",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": true
+            }
+        },
+        {
+            "id": "step_jgejr10l6",
+            "type": "browser.navigate",
+            "version": 1,
+            "position": {
+                "x": 430,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "Navigate: https://www.google.com/search?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                "payload": {
+                    "primary": "https://www.google.com/search?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                    "openIn": "sameTab"
+                },
+                "page": {
+                    "url": "https://www.google.com/search?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                    "origin": "https://www.google.com",
+                    "host": "www.google.com",
+                    "hostname": "www.google.com",
+                    "domain": "google.com",
+                    "path": "/search",
+                    "search": "?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                    "title": "apple.com - Google Search"
+                },
+                "recordedAt": "2026-06-18T08:35:55.121Z",
+                "recordedBy": "background.navigation_observer",
+                "url": "https://www.google.com/search?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                "openIn": "sameTab",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": true
+            }
+        },
+        {
+            "id": "step_3zmezz94l",
+            "type": "element.click",
+            "version": 1,
+            "position": {
+                "x": 770,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "strategy": "css_selector",
+                    "value": "text: AppleApplehttps://www.apple.com"
+                },
+                "targetType": "css_selector",
+                "targetFallbacks": [],
+                "targetSnapshot": {
+                    "tag": "a",
+                    "role": "",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "Apple\n\nApple\nhttps://www.apple.com",
+                    "value": "",
+                    "href": "https://www.apple.com/",
+                    "classes": [
+                        "zReHs"
+                    ],
+                    "domPath": "div:0/div:1/div:0/div:0/div:0/div:0/div:0/div:0/span:0/a:0",
+                    "nearbyText": "Apple Apple https://www.apple.com",
+                    "bounds": {
+                        "x": 210,
+                        "y": 179,
+                        "width": 160,
+                        "height": 44
+                    }
+                },
+                "friendlyName": "",
+                "payload": {},
+                "page": {
+                    "url": "https://www.google.com/search?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                    "origin": "https://www.google.com",
+                    "host": "www.google.com",
+                    "hostname": "www.google.com",
+                    "domain": "google.com",
+                    "path": "/search",
+                    "search": "?q=apple.com&sca_esv=9809b91374a36a02&sxsrf=ANbL-n6UX8pdjFGlUZbp0j-BS-MhtsRYXA%3A1781771739047&source=hp&ei=2q0zaqTvPIiSkdUPzJ6lWA&iflsig=AFdpzrgAAAAAajO76yIABcN1Qu4z6CXU1hoYRHpbKTTD&ved=0ahUKEwikxMv8sJCVAxUISaQEHUxPCQsQ4dUDCBg&uact=5&oq=apple.com&gs_lp=Egdnd3Mtd2l6IglhcHBsZS5jb20yCxAAGIAEGLEDGIMBMggQABiABBixAzILEAAYgAQYsQMYgwEyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAESLEnUIYVWIglcAF4AJABAJgBugKgAfYRqgEFMi02LjK4AQPIAQD4AQGYAgmgAsESqAIKwgIHECMY6gIYJ8ICChAjGPAFGOoCGCfCAgoQIxiABBiKBRgnwgIEECMYJ8ICCxAAGIAEGIoFGJECwgIOEAAYgAQYigUYsQMYgwHCAgsQABiABBiKBRixA8ICDhAuGIAEGLEDGMcBGNEDmAMS8QV6A9GsQSY6kpIHBzEuMC42LjKgB6M6sgcFMi02LjK4B68SwgcFMi04LjHIBzuACAE&sclient=gws-wiz",
+                    "title": "apple.com - Google Search"
+                },
+                "recordedAt": "2026-06-18T08:35:56.758Z",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_ssz9fezgs",
+            "type": "browser.navigate",
+            "version": 1,
+            "position": {
+                "x": 1110,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "Navigate: https://www.apple.com/",
+                "payload": {
+                    "primary": "https://www.apple.com/",
+                    "openIn": "sameTab"
+                },
+                "page": {
+                    "url": "https://www.apple.com/",
+                    "origin": "https://www.apple.com",
+                    "host": "www.apple.com",
+                    "hostname": "www.apple.com",
+                    "domain": "apple.com",
+                    "path": "/",
+                    "search": "",
+                    "title": "Apple"
+                },
+                "recordedAt": "2026-06-18T08:36:00.006Z",
+                "recordedBy": "background.navigation_observer",
+                "url": "https://www.apple.com/",
+                "openIn": "sameTab",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_ujg1u3s2h",
+            "type": "element.click",
+            "version": 1,
+            "position": {
+                "x": 1450,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "primary": {
+                        "strategy": "ariaLabel",
+                        "value": "Shop, Father's Day gifts",
+                        "score": 92
+                    },
+                    "candidates": [
+                        {
+                            "strategy": "ariaLabel",
+                            "value": "Shop, Father's Day gifts",
+                            "score": 92
+                        },
+                        {
+                            "strategy": "text",
+                            "value": "Shop",
+                            "score": 76
+                        },
+                        {
+                            "strategy": "css_selector",
+                            "value": "section:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > a",
+                            "score": 68
+                        },
+                        {
+                            "strategy": "dom_path",
+                            "value": "body:1/main:8/section:0/div:0/div:1/div:1/a:0",
+                            "score": 55
+                        },
+                        {
+                            "strategy": "ctrlHash",
+                            "value": "ctrl_38eba62f",
+                            "score": 40
+                        }
+                    ],
+                    "fallbacks": [
+                        {
+                            "strategy": "text",
+                            "value": "Shop",
+                            "score": 76
+                        },
+                        {
+                            "strategy": "css_selector",
+                            "value": "section:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > a",
+                            "score": 68
+                        },
+                        {
+                            "strategy": "dom_path",
+                            "value": "body:1/main:8/section:0/div:0/div:1/div:1/a:0",
+                            "score": 55
+                        },
+                        {
+                            "strategy": "ctrlHash",
+                            "value": "ctrl_38eba62f",
+                            "score": 40
+                        }
+                    ],
+                    "snapshot": {
+                        "tag": "a",
+                        "role": "",
+                        "type": "",
+                        "id": "",
+                        "name": "",
+                        "ariaLabel": "Shop, Father's Day gifts",
+                        "placeholder": "",
+                        "title": "",
+                        "text": "Shop",
+                        "value": "",
+                        "href": "/us/shop/goto/store",
+                        "classes": [
+                            "button"
+                        ],
+                        "domPath": "body:1/main:8/section:0/div:0/div:1/div:1/a:0",
+                        "nearbyText": "Father\u2019s Day It\u2019s not too late to find the perfect gift. Shop Apple for College Mac and iPad. Major in any field. Learn more iPhone Meet the latest iPhone lineup. Learn more Shop iPhone",
+                        "bounds": {
+                            "x": 718,
+                            "y": 215,
+                            "width": 84,
+                            "height": 44
+                        }
+                    }
+                },
+                "targetType": "ariaLabel",
+                "targetFallbacks": [
+                    {
+                        "strategy": "text",
+                        "value": "Shop",
+                        "score": 76
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "section:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > a",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/main:8/section:0/div:0/div:1/div:1/a:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_38eba62f",
+                        "score": 40
+                    }
+                ],
+                "targetSnapshot": {
+                    "tag": "a",
+                    "role": "",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "Shop, Father's Day gifts",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "Shop",
+                    "value": "",
+                    "href": "/us/shop/goto/store",
+                    "classes": [
+                        "button"
+                    ],
+                    "domPath": "body:1/main:8/section:0/div:0/div:1/div:1/a:0",
+                    "nearbyText": "Father\u2019s Day It\u2019s not too late to find the perfect gift. Shop Apple for College Mac and iPad. Major in any field. Learn more iPhone Meet the latest iPhone lineup. Learn more Shop iPhone",
+                    "bounds": {
+                        "x": 718,
+                        "y": 215,
+                        "width": 84,
+                        "height": 44
+                    }
+                },
+                "friendlyName": "ariaLabel: Shop, Father's Day gifts",
+                "payload": {},
+                "page": {
+                    "url": "https://www.apple.com/",
+                    "origin": "https://www.apple.com",
+                    "host": "www.apple.com",
+                    "hostname": "www.apple.com",
+                    "domain": "apple.com",
+                    "path": "/",
+                    "search": "",
+                    "title": "Apple"
+                },
+                "recordedAt": "2026-06-18T08:36:02.623Z",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_hmk29hscl",
+            "type": "browser.navigate",
+            "version": 1,
+            "position": {
+                "x": 1790,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "Navigate: https://www.apple.com/store",
+                "payload": {
+                    "primary": "https://www.apple.com/store",
+                    "openIn": "sameTab"
+                },
+                "page": {
+                    "url": "https://www.apple.com/store",
+                    "origin": "https://www.apple.com",
+                    "host": "www.apple.com",
+                    "hostname": "www.apple.com",
+                    "domain": "apple.com",
+                    "path": "/store",
+                    "search": "",
+                    "title": "Apple Store Online - Apple"
+                },
+                "recordedAt": "2026-06-18T08:36:08.304Z",
+                "recordedBy": "background.navigation_observer",
+                "url": "https://www.apple.com/store",
+                "openIn": "sameTab",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_n2vp588yq",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 2130,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_vhhxwzp8a",
+            "type": "browser.back",
+            "version": 1,
+            "position": {
+                "x": 2470,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_wsdw8bi5m",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 2810,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_qfshxfxqh",
+            "type": "browser.forward",
+            "version": 1,
+            "position": {
+                "x": 3150,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_1zqbaiu3q",
+            "type": "browser.tab.close",
+            "version": 1,
+            "position": {
+                "x": 3490,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_oldrj8lge",
+            "type": "browser.tab.open",
+            "version": 1,
+            "position": {
+                "x": 3830,
+                "y": 120
+            },
+            "config": {
+                "switchToNewTab": "false",
+                "tabRef": "",
+                "url": "www.google.com"
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_wp8fjwt40",
+            "type": "element.hover",
+            "version": 1,
+            "position": {
+                "x": 4170,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "strategy": "css_selector",
+                    "value": "[name=q]"
+                },
+                "targetType": "css_selector",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_a6xbw1gs2",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 4510,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_64a9ez4ml",
+            "type": "browser.navigate",
+            "version": 1,
+            "position": {
+                "x": 4850,
+                "y": 120
+            },
+            "config": {
+                "openIn": "sameTab"
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "www.elirasupport.com",
+                    "openIn": "sameTab"
+                },
+                "url": "www.elirasupport.com",
+                "openIn": "sameTab",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_rbk7nnu2o",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 5190,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_0720mpcc1",
+            "type": "element.scroll_into_view",
+            "version": 1,
+            "position": {
+                "x": 5530,
+                "y": 120
+            },
+            "config": {
+                "block": "center"
+            },
+            "data": {
+                "target": {
+                    "strategy": "css_selector",
+                    "value": "[id=\"pricing\"]"
+                },
+                "targetType": "css_selector",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_6unfxkphh",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 5870,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_0v0np5g30",
+            "type": "element.scroll_into_view",
+            "version": 1,
+            "position": {
+                "x": 6210,
+                "y": 120
+            },
+            "config": {
+                "block": "center"
+            },
+            "data": {
+                "target": {
+                    "strategy": "css_selector",
+                    "value": "[id=\"contact\"]"
+                },
+                "targetType": "css_selector",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_o9x3gmh9m",
+            "type": "element.click",
+            "version": 1,
+            "position": {
+                "x": 6550,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": {
+                    "strategy": "css_selector",
+                    "value": "[id=\"name\"]"
+                },
+                "targetType": "css_selector",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_oye87oxus",
+            "type": "logic.wait",
+            "version": 1,
+            "position": {
+                "x": 6890,
+                "y": 120
+            },
+            "config": {
+                "mode": "fixed",
+                "ms": 1000,
+                "minMs": 500,
+                "maxMs": 1500
+            },
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {
+                    "primary": "1000"
+                },
+                "ms": 1000,
+                "executionMode": "disabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        },
+        {
+            "id": "step_xoqz0330d",
+            "type": "browser.tab.close",
+            "version": 1,
+            "position": {
+                "x": 7230,
+                "y": 120
+            },
+            "config": {},
+            "data": {
+                "target": "",
+                "targetType": "",
+                "targetFallbacks": [],
+                "targetSnapshot": null,
+                "friendlyName": "",
+                "payload": {},
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false
+            }
+        }
+    ],
+    "edges": [
+        {
+            "id": "edge-step_zn4pethbu-step_jgejr10l6",
+            "source": "step_zn4pethbu",
+            "sourceHandle": "success",
+            "target": "step_jgejr10l6",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_jgejr10l6-step_3zmezz94l",
+            "source": "step_jgejr10l6",
+            "sourceHandle": "success",
+            "target": "step_3zmezz94l",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_3zmezz94l-step_ssz9fezgs",
+            "source": "step_3zmezz94l",
+            "sourceHandle": "success",
+            "target": "step_ssz9fezgs",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_ssz9fezgs-step_ujg1u3s2h",
+            "source": "step_ssz9fezgs",
+            "sourceHandle": "success",
+            "target": "step_ujg1u3s2h",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_ujg1u3s2h-step_hmk29hscl",
+            "source": "step_ujg1u3s2h",
+            "sourceHandle": "success",
+            "target": "step_hmk29hscl",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_hmk29hscl-step_n2vp588yq",
+            "source": "step_hmk29hscl",
+            "sourceHandle": "success",
+            "target": "step_n2vp588yq",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_n2vp588yq-step_vhhxwzp8a",
+            "source": "step_n2vp588yq",
+            "sourceHandle": "success",
+            "target": "step_vhhxwzp8a",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_vhhxwzp8a-step_wsdw8bi5m",
+            "source": "step_vhhxwzp8a",
+            "sourceHandle": "success",
+            "target": "step_wsdw8bi5m",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_wsdw8bi5m-step_qfshxfxqh",
+            "source": "step_wsdw8bi5m",
+            "sourceHandle": "success",
+            "target": "step_qfshxfxqh",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_qfshxfxqh-step_1zqbaiu3q",
+            "source": "step_qfshxfxqh",
+            "sourceHandle": "success",
+            "target": "step_1zqbaiu3q",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_1zqbaiu3q-step_oldrj8lge",
+            "source": "step_1zqbaiu3q",
+            "sourceHandle": "success",
+            "target": "step_oldrj8lge",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_oldrj8lge-step_wp8fjwt40",
+            "source": "step_oldrj8lge",
+            "sourceHandle": "success",
+            "target": "step_wp8fjwt40",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_wp8fjwt40-step_a6xbw1gs2",
+            "source": "step_wp8fjwt40",
+            "sourceHandle": "success",
+            "target": "step_a6xbw1gs2",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_a6xbw1gs2-step_64a9ez4ml",
+            "source": "step_a6xbw1gs2",
+            "sourceHandle": "success",
+            "target": "step_64a9ez4ml",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_64a9ez4ml-step_rbk7nnu2o",
+            "source": "step_64a9ez4ml",
+            "sourceHandle": "success",
+            "target": "step_rbk7nnu2o",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_0720mpcc1-step_6unfxkphh",
+            "source": "step_0720mpcc1",
+            "sourceHandle": "success",
+            "target": "step_6unfxkphh",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_6unfxkphh-step_0v0np5g30",
+            "source": "step_6unfxkphh",
+            "sourceHandle": "success",
+            "target": "step_0v0np5g30",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_0v0np5g30-step_o9x3gmh9m",
+            "source": "step_0v0np5g30",
+            "sourceHandle": "success",
+            "target": "step_o9x3gmh9m",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_o9x3gmh9m-step_oye87oxus",
+            "source": "step_o9x3gmh9m",
+            "sourceHandle": "success",
+            "target": "step_oye87oxus",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_oye87oxus-step_xoqz0330d",
+            "source": "step_oye87oxus",
+            "sourceHandle": "success",
+            "target": "step_xoqz0330d",
+            "targetHandle": "input"
+        },
+        {
+            "id": "edge-step_rbk7nnu2o-step_0720mpcc1",
+            "source": "step_rbk7nnu2o",
+            "sourceHandle": "success",
+            "target": "step_0720mpcc1",
+            "targetHandle": "input"
+        }
+    ]
+}

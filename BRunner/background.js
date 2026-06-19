@@ -25,6 +25,7 @@ import { executeHttpRequest } from "./core/httpRequest.js";
 import { executeClipboardAction } from "./core/clipboard.js";
 import { waitForDownload } from "./core/downloadWait.js";
 import { captureScreenshot } from "./core/screenshot.js";
+import { resolveStepBypass } from "./core/stepBypass.js";
 import {
   inferOutputVariableName,
   summarizeVariables,
@@ -297,11 +298,15 @@ async function runWorkflow(rawWorkflow, options = {}) {
     runId,
     workflowName,
     currentStepIndex: -1,
+    currentNodeId: "",
     totalSteps: steps.length,
     currentAction: "",
     error: "",
     diagnostics: null,
     variables: [],
+    skippedSteps: 0,
+    completedNodeIds: [],
+    skippedNodeIds: [],
   });
   const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
   const variableOrigins = Object.fromEntries(
@@ -326,6 +331,10 @@ async function runWorkflow(rawWorkflow, options = {}) {
   });
 
   try {
+    let executedCount = 0;
+    let skippedCount = 0;
+    const completedNodeIds = [];
+    const skippedNodeIds = [];
     let tab = await resolveStartingTab(workflow);
     const tabsByRef = new Map();
     const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
@@ -338,6 +347,43 @@ async function runWorkflow(rawWorkflow, options = {}) {
 
       const step = steps[index];
       let resolvedStep;
+
+      runtimeState.updateExecution({
+        currentStepIndex: index,
+        currentNodeId: step?.id || "",
+        currentAction: step?.action || step?.type || "unknown",
+      });
+
+      let bypassDecision;
+      try {
+        bypassDecision = resolveStepBypass(step, variableRegistry);
+      } catch (error) {
+        error.diagnostics = {
+          action: step?.action || step?.type || "unknown",
+          stepIndex: index,
+          valuePath: `step.${step?.id || "unknown"}.skipWhen`,
+          finalReason: "bypass_condition_failed",
+        };
+        throw error;
+      }
+
+      if (bypassDecision.skip) {
+        skippedCount += 1;
+        if (step?.id) skippedNodeIds.push(step.id);
+        runtimeState.updateExecution({
+          skippedSteps: skippedCount,
+          skippedNodeIds: [...skippedNodeIds],
+        });
+        console.log(
+          `[BRunner] Bypassing step ${index + 1}/${steps.length}:`,
+          {
+            id: step?.id || "",
+            action: step?.action || step?.type || "unknown",
+            mode: bypassDecision.mode,
+          },
+        );
+        continue;
+      }
 
       try {
         resolvedStep = resolveStepExpressions(step, variableRegistry);
@@ -380,6 +426,11 @@ async function runWorkflow(rawWorkflow, options = {}) {
         variableRegistry,
         runId,
       );
+      executedCount += 1;
+      if (resolvedStep?.id) completedNodeIds.push(resolvedStep.id);
+      runtimeState.updateExecution({
+        completedNodeIds: [...completedNodeIds],
+      });
 
       const outputVariableName = inferOutputVariableName(resolvedStep);
       if (outputVariableName) {
@@ -415,6 +466,7 @@ async function runWorkflow(rawWorkflow, options = {}) {
     runtimeState.updateExecution({
       status: "completed",
       currentStepIndex: steps.length - 1,
+      currentNodeId: "",
       currentAction: "",
     });
 
@@ -427,7 +479,8 @@ async function runWorkflow(rawWorkflow, options = {}) {
 
     return {
       ok: true,
-      executed: steps.length,
+      executed: executedCount,
+      skipped: skippedCount,
       runId,
       variables: variableRegistry.snapshot(),
     };

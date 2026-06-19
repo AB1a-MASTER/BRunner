@@ -112,6 +112,7 @@ export function resolveStepExpressions(step, registry) {
     "variableName",
     "payload",
     "config",
+    "skipWhen",
   ];
 
   for (const key of expressionFields) {
@@ -164,4 +165,3 @@ function cloneValue(value) {
   if (value === undefined) return undefined;
   return structuredClone(value);
 }
-

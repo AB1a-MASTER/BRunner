@@ -47,8 +47,10 @@ allowlisted file-input injection is safer and deterministic.
 Move Studio to React Flow and Vite, add graph schema v2, explicit v1 upgrades with backups, node properties, validation, and live execution visualization.
 
 The schema-v2 adapter, initial single-success-path validator, sequential runtime
-view, and atomic native-host v1 backup/upgrade command are implemented. The
-visual graph editor and user-facing upgrade action remain pending.
+view, atomic native-host v1 backup/upgrade command, visual graph scaffold,
+registry-driven properties, graph persistence, user-facing upgrade action, and
+graph execution visualization are implemented. Structured graph logs, final
+accessibility polish, and the complete graph-editor acceptance gate remain pending.
 
 **Gate:** v1 compatibility, safe upgrades, graph save/reload fidelity, editing, validation, and execution highlighting pass.
 
@@ -58,6 +60,8 @@ See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 
 - Conditions, loops, merge paths, and sub-workflows.
 - File upload strategies and native-dialog automation.
+- Registry-driven foreground-tab, focused-window, visible-target, and pointer
+  preconditions for viewport-dependent nodes such as Hover Mouse.
 - CDP/headless execution and multi-monitor calibration.
 - Audit trails, snapshots, telemetry, and compliance reporting.
 

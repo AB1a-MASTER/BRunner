@@ -17,11 +17,15 @@ export function createRuntimeStateStore() {
       runId: "",
       workflowName: "",
       currentStepIndex: -1,
+      currentNodeId: "",
       totalSteps: 0,
       currentAction: "",
       error: "",
       diagnostics: null,
       variables: [],
+      skippedSteps: 0,
+      completedNodeIds: [],
+      skippedNodeIds: [],
     },
   };
 

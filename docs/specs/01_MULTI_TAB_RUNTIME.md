@@ -65,6 +65,29 @@ Studio and sidebar query state on initialization and subscribe to changes. Workf
 
 Running workflows must support cooperative cancellation from both UIs. Cancellation propagates into page-level conditional waits, prevents later steps from starting, produces `cancelled` runtime state, and remains distinct from execution failure.
 
+## Deferred interaction visibility requirements
+
+The canonical node registry must eventually declare execution preconditions for
+nodes that depend on actual on-screen browser state. This must be capability
+metadata rather than action-name checks. Candidate requirements include:
+
+- active/foreground browser tab;
+- focused browser window;
+- target visible in the viewport;
+- target scrolled into view and unobscured;
+- pointer-capable or hardware-level interaction.
+
+Before executing a node with these requirements, the orchestrator must activate
+the correct logical tab, focus its window when needed, scroll/verify the target,
+wait for stable visibility, and return distinct precondition diagnostics if the
+browser cannot satisfy the requirement. Hover Mouse is the primary example:
+executing it against a background tab or off-screen element must not fail merely
+because the runtime did not first present the target on screen.
+
+Background-safe nodes such as HTTP Request and pure data transforms must not force
+tab activation or window focus. Screenshot, hardware pointer/keyboard, hover,
+drag, and similar future nodes require an explicit capability review.
+
 ## Workflow startup policy
 
 - A bound domain is always honored before the first step executes.
