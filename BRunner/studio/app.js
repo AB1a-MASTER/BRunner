@@ -47,6 +47,9 @@ const Actions = Object.freeze({
   ClipboardRead: "clipboard.read",
   ClipboardWrite: "clipboard.write",
   FileInputUpload: "file.input.upload",
+  FileLocalUpload: "file.local.upload",
+  DownloadWait: "download.wait",
+  ScreenshotCapture: "screenshot.capture",
   LogicWait: "logic.wait",
 });
 
@@ -1055,6 +1058,12 @@ function getInstructionText(action) {
       return "Writes expression-enabled text to the system clipboard.";
     case Actions.FileInputUpload:
       return "Creates a text/base64 file and assigns it to a web file input.";
+    case Actions.FileLocalUpload:
+      return "Reads an allowlisted file through the native host and assigns it to a web file input.";
+    case Actions.DownloadWait:
+      return "Waits for a recent browser download and stores safe metadata.";
+    case Actions.ScreenshotCapture:
+      return "Captures the visible workflow tab to memory or Downloads.";
     default:
       return "Interact with the specified target element.";
   }

@@ -14,12 +14,12 @@
     "search",
     "offscreen",
     "clipboardRead",
-    "clipboardWrite"
+    "clipboardWrite",
+    "downloads"
   ],
 
   "host_permissions": [
-    "http://*/*",
-    "https://*/*",
+    "<all_urls>",
     "ws://127.0.0.1:8999/*"
   ],
 

@@ -7,6 +7,7 @@ import secrets
 import logging
 import shutil
 from pathlib import Path
+from file_access import read_allowed_file
 
 # --- Paths ---
 
@@ -40,7 +41,11 @@ def load_or_create_config():
     new_key = secrets.token_hex(16)
     config = {
         "pairing_key": new_key,
-        "paired_extension_id": None
+        "paired_extension_id": None,
+        "local_file_access": {
+            "enabled": False,
+            "allowed_roots": ["AllowedFiles"]
+        }
     }
 
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -212,6 +217,25 @@ async def handle_os_keystroke(websocket, request_id, payload):
     )
 
     logging.info(f"[Hardware] Keystroke executed successfully: {keys}")
+
+
+async def handle_read_file(websocket, request_id, payload):
+    file_data = read_allowed_file(
+        config,
+        BASE_DIR,
+        payload.get("path") or payload.get("filePath")
+    )
+
+    await send_json(
+        websocket,
+        success(request_id, **file_data)
+    )
+
+    logging.info(
+        "[File] Read approved local file: name=%s size=%s",
+        file_data["filename"],
+        file_data["size"]
+    )
 
 
 async def handle_list_workflows(websocket, request_id):
@@ -409,7 +433,11 @@ async def handle_connection(websocket):
             command = data.get("command", "UNKNOWN")
             payload = get_payload(data)
 
-            logging.info(f"[Inbound] Command: {command} | Payload: {payload}")
+            logging.info(
+                "[Inbound] Command: %s | Request ID: %s",
+                command,
+                request_id or "none"
+            )
 
             if command == "AUTH":
                 authenticated = await handle_auth(websocket, request_id, payload)
@@ -427,6 +455,9 @@ async def handle_connection(websocket):
             try:
                 if command == "OS_KEYSTROKE":
                     await handle_os_keystroke(websocket, request_id, payload)
+
+                elif command == "READ_FILE":
+                    await handle_read_file(websocket, request_id, payload)
 
                 elif command == "LIST_WORKFLOWS":
                     await handle_list_workflows(websocket, request_id)

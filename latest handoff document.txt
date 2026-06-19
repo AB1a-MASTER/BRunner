@@ -12,10 +12,11 @@ stable sequential automation foundation. The latest committed checkpoint is:
   74da734 feat(runtime): solidify workflow execution
 
 Phase B external/file operations are in progress. HTTP Request, clipboard
-read/write, and virtual web file-input upload are implemented and live accepted.
-The next target is download wait plus downloaded-file metadata. Do not begin
-another broad refactor. Continue with small registry-driven nodes and preserve
-legacy workflow compatibility.
+read/write, virtual web file-input upload, Download Wait, and Screenshot Capture
+and allowlisted Local File Upload are implemented and live accepted. Phase B is
+complete. Stop here for the user's commit before beginning Milestone 3. Do not
+begin another broad refactor. Continue later with small, tested changes and
+preserve legacy workflow compatibility.
 
 WORK COMPLETED
 
@@ -95,9 +96,19 @@ WORK COMPLETED
 - Virtual uploads reject filesystem paths, cap payloads at 10 MB, and exclude
   file content from logs. Arbitrary local paths/native dialogs remain deferred
   until native-access permissions are explicitly designed.
+- Download Wait supports recent-download recovery, filename/URL matching,
+  timeout, cancellation, danger/interruption diagnostics, and safe metadata.
+  Full local paths and URL query strings are excluded from output and logs.
+- Screenshot Capture records the visible HTTP(S) workflow tab as PNG/JPEG. Output
+  is either run-scoped image data or an explicit Downloads file. Restricted pages
+  are rejected, and downloaded screenshot metadata omits embedded image data.
+- Local File Upload requires explicit node approval plus an enabled native-host
+  allowlist. Host path resolution blocks traversal/symlink escapes, caps reads at
+  10 MB, omits paths/content from logs, and reuses virtual file-input injection.
 - Toggle true/false behavior for checkbox and radio controls was corrected.
-- Deterministic suite currently passes 17 tests. Toggle, HTTP, clipboard, and
-  virtual file-input workflows all passed live acceptance.
+- Deterministic suite currently passes 34 tests: 30 JavaScript and 4 Python.
+  Toggle, HTTP, clipboard, virtual file-input, Download Wait, and Screenshot
+  Capture workflows passed live acceptance. Local File Upload also passed.
 
 KNOWN DEFERRED UX WORK
 - Add a Variables/Data Inspector in Studio with saved variables, current values,
@@ -111,8 +122,10 @@ KNOWN DEFERRED UX WORK
 WORKTREE STATE AT HANDOFF
 There are uncommitted changes after commit 74da734:
 
-- Runtime/registry/UI changes for HTTP, clipboard, and virtual file upload nodes.
-- New core helpers: core/httpRequest.js and core/clipboard.js.
+- Runtime/registry/UI changes for HTTP, clipboard, virtual file upload, Download
+  Wait, and Screenshot Capture nodes.
+- New core helpers: core/httpRequest.js, core/clipboard.js,
+  core/downloadWait.js, and core/screenshot.js; native file_access.py helper.
 - New content helper: content/filePayload.js.
 - New offscreen clipboard document under BRunner/offscreen/.
 - Manifest permissions for offscreen clipboard read/write.
@@ -128,27 +141,17 @@ asked.
 
 NEXT IMPLEMENTATION PLAN
 
-Step 1 - Implement Download Wait and metadata
-- Design explicit browser download permission and safe filename/path metadata.
-- Add a registry-driven node that waits for a matching download with timeout and
-  cancellation support.
-- Return safe metadata such as id, filename, URL/final URL, MIME type, bytes,
-  state, danger classification, and timestamps where Chrome exposes them.
-- Never log sensitive download URLs or full local paths unless explicitly needed.
-- Distinguish timeout, interruption, danger, cancellation, and missing-permission
-  diagnostics.
-- Add deterministic tests and one live acceptance workflow.
+Step 1 - User commit checkpoint
+- Do not stage or commit. User owns all Git operations.
+- Provide a commit message only when explicitly requested.
+- Do not begin Milestone 3 until the user confirms the Phase B commit is done.
 
-Step 2 - Implement Screenshot Capture
-- Decide browser-tab capture versus page/element capture and output destination.
-- Add explicit format/quality/full-page behavior where technically supported.
-- Return attachment/path metadata without silently persisting sensitive images.
-- Add cancellation, permission review, deterministic tests, and live acceptance.
-
-Step 3 - Design native file access separately
-- Add arbitrary local-path/native-dialog upload only through an explicit native
-  host permission and approval model.
-- Do not broaden virtual file upload into silent filesystem access.
+Step 2 - First Milestone 3 slice after commit
+- Add a Variables/Data Inspector for seed variables and safe current/last-run
+  summaries, producing-node origin, search, and expression-copy actions.
+- Avoid broadcasting large screenshot/file payloads through shared runtime state.
+- Preserve current sequential editor; React Flow/schema v2 migration remains a
+  later explicit step in Milestone 3.
 
 Each external/file node needs a permission and secret-handling review before code.
 
@@ -180,5 +183,7 @@ IMMEDIATE NEXT CHAT PROMPT
 Read Design Doc.txt, this handoff, docs/BRUNNER_MASTER_ROADMAP.md, and
 docs/specs/04_NODE_CATALOG.md. Inspect the current worktree without discarding
 changes. Preserve all accepted HTTP/clipboard/file-upload work and user-created
-workflows. Do not perform Git operations. Implement cancellable Download Wait plus
-safe downloaded-file metadata as the next isolated Phase B node.
+workflows. Preserve Download Wait, Screenshot Capture, and allowlisted local-file
+changes. Phase B is complete and live accepted. Do not perform Git operations or
+begin Milestone 3 until the user confirms the Phase B commit. After that checkpoint,
+start the Variables/Data Inspector as the first isolated Milestone 3 slice.

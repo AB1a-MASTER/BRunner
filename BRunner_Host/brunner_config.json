@@ -1,1 +1,10 @@
-{"pairing_key": "ac1890957e38af28cd5d0961e6d0d530", "paired_extension_id": "fihaandflhogafpibmkadkkacicclblh"}
+{
+  "pairing_key": "ac1890957e38af28cd5d0961e6d0d530",
+  "paired_extension_id": "fihaandflhogafpibmkadkkacicclblh",
+  "local_file_access": {
+    "enabled": true,
+    "allowed_roots": [
+      "AllowedFiles"
+    ]
+  }
+}

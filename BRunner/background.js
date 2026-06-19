@@ -23,6 +23,8 @@ import {
 } from "./core/dataTransforms.js";
 import { executeHttpRequest } from "./core/httpRequest.js";
 import { executeClipboardAction } from "./core/clipboard.js";
+import { waitForDownload } from "./core/downloadWait.js";
+import { captureScreenshot } from "./core/screenshot.js";
 import {
   normalizeWorkflow,
   extractDomainFromUrl,
@@ -593,6 +595,36 @@ async function executeStep(
     return currentTab;
   }
 
+  if (action === Actions.DownloadWait) {
+    await executeDownloadWaitStep(step, variableRegistry, runId);
+    return currentTab;
+  }
+
+  if (action === Actions.ScreenshotCapture) {
+    const captureTab = step?.page?.url
+      ? await ensureStepPageContext(currentTab, step)
+      : currentTab?.id ? await chrome.tabs.get(currentTab.id) : currentTab;
+
+    if (!isAutomationTab(captureTab) || isStudioUrl(captureTab?.url || "")) {
+      const error = new Error(
+        "Screenshot Capture supports only normal HTTP(S) workflow tabs.",
+      );
+      error.diagnostics = {
+        action,
+        finalReason: "screenshot_restricted_page",
+      };
+      throw error;
+    }
+
+    await executeScreenshotCaptureStep(
+      captureTab,
+      step,
+      variableRegistry,
+      runId,
+    );
+    return captureTab;
+  }
+
   const contextReadyTab = await ensureStepPageContext(currentTab, step);
 
   if (action === Actions.LogicWait) {
@@ -653,6 +685,16 @@ async function executeStep(
     throw error;
   }
 
+  if (action === Actions.FileLocalUpload) {
+    await executeLocalFileUploadStep(
+      contextReadyTab,
+      step,
+      variableRegistry,
+      runId,
+    );
+    return contextReadyTab;
+  }
+
   let extractionVariableName = "";
   if (isExtractionAction(action)) {
     extractionVariableName = String(
@@ -678,6 +720,16 @@ async function executeStep(
       };
       throw error;
     }
+  }
+
+  if (action === Actions.FileLocalUpload) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        path: step.config?.path ? "[REDACTED]" : "",
+      },
+    };
   }
 
   const response = await executeContentStep(contextReadyTab, step, runId);
@@ -748,6 +800,16 @@ function sanitizeStepForLog(step) {
     };
   }
 
+  if (action === Actions.DownloadWait) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        urlContains: step.config?.urlContains ? "[REDACTED]" : "",
+      },
+    };
+  }
+
   if (action !== Actions.HttpRequest) return step;
 
   return {
@@ -785,6 +847,138 @@ async function executeClipboardStep(action, step, variableRegistry, runId) {
   throwIfRunCancelled(runId);
 
   if (variableName) variableRegistry?.set(variableName, result);
+}
+
+async function executeDownloadWaitStep(step, variableRegistry, runId) {
+  const variableName = String(
+    step.config?.variableName || step.variableName || "",
+  ).trim();
+
+  if (!variableName) {
+    const error = new Error("Download Wait requires an output variable name.");
+    error.diagnostics = {
+      action: Actions.DownloadWait,
+      finalReason: "download_output_variable_missing",
+    };
+    throw error;
+  }
+
+  throwIfRunCancelled(runId);
+  const controller = new AbortController();
+  const controllers = activeRun?.runId === runId
+    ? activeRun.abortControllers
+    : null;
+  controllers?.add(controller);
+
+  try {
+    const value = await waitForDownload(step.config || {}, {
+      downloadsApi: chrome.downloads,
+      signal: controller.signal,
+    });
+    throwIfRunCancelled(runId);
+    variableRegistry?.set(variableName, value);
+  } finally {
+    controllers?.delete(controller);
+  }
+}
+
+async function executeScreenshotCaptureStep(
+  tab,
+  step,
+  variableRegistry,
+  runId,
+) {
+  const variableName = String(
+    step.config?.variableName || step.variableName || "",
+  ).trim();
+
+  if (!variableName) {
+    const error = new Error("Screenshot Capture requires an output variable name.");
+    error.diagnostics = {
+      action: Actions.ScreenshotCapture,
+      finalReason: "screenshot_output_variable_missing",
+    };
+    throw error;
+  }
+
+  throwIfRunCancelled(runId);
+  const value = await captureScreenshot(tab, step.config || {}, {
+    activateTab: async (tabId, windowId) => {
+      await chrome.windows.update(windowId, { focused: true });
+      await chrome.tabs.update(tabId, { active: true });
+      await delay(150);
+    },
+    captureVisibleTab: async (windowId, options) => {
+      try {
+        return await chrome.tabs.captureVisibleTab(windowId, options);
+      } catch {
+        await delay(150);
+        return await chrome.tabs.captureVisibleTab(windowId, options);
+      }
+    },
+    download: (options) => chrome.downloads.download(options),
+  });
+  throwIfRunCancelled(runId);
+  variableRegistry?.set(variableName, value);
+}
+
+async function executeLocalFileUploadStep(
+  tab,
+  step,
+  variableRegistry,
+  runId,
+) {
+  const config = step.config || {};
+  const approved = [true, "true", "allow"].includes(config.allowLocalFileRead);
+  const variableName = String(config.variableName || step.variableName || "").trim();
+
+  if (!approved) {
+    const error = new Error(
+      "Local File Upload requires explicit node-level file-read approval.",
+    );
+    error.diagnostics = {
+      action: Actions.FileLocalUpload,
+      finalReason: "local_file_read_not_approved",
+    };
+    throw error;
+  }
+
+  if (!variableName) {
+    const error = new Error("Local File Upload requires an output variable name.");
+    error.diagnostics = {
+      action: Actions.FileLocalUpload,
+      finalReason: "local_file_output_variable_missing",
+    };
+    throw error;
+  }
+
+  throwIfRunCancelled(runId);
+  let fileData;
+  try {
+    fileData = await NativeBridge.readLocalFile(config.path || "");
+  } catch (error) {
+    const wrapped = new Error(error.message || "Native local file read failed.");
+    wrapped.diagnostics = {
+      action: Actions.FileLocalUpload,
+      finalReason: "local_file_read_failed",
+    };
+    throw wrapped;
+  }
+  throwIfRunCancelled(runId);
+
+  const response = await executeContentStep(tab, {
+    ...step,
+    action: Actions.FileInputUpload,
+    config: {
+      sourceType: "base64",
+      filename: fileData.filename,
+      mimeType: fileData.mimeType,
+      content: fileData.content,
+      variableName,
+    },
+  }, runId);
+  throwIfRunCancelled(runId);
+  variableRegistry?.set(variableName, response?.value ?? null);
 }
 
 async function sendOffscreenClipboardOperation(operation, value = "") {

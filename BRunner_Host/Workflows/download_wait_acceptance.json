@@ -1,0 +1,41 @@
+{
+  "name": "Download Wait Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "download_acceptance_click",
+      "action": "element.click",
+      "target": {
+        "strategy": "id",
+        "value": "download-fixture"
+      },
+      "friendlyName": "Download acceptance fixture"
+    },
+    {
+      "id": "download_acceptance_wait",
+      "action": "download.wait",
+      "config": {
+        "filenameContains": "download-acceptance",
+        "urlContains": "/tests/fixtures/download-acceptance.txt",
+        "timeoutMs": 10000,
+        "startedWithinMs": 15000,
+        "dangerPolicy": "fail",
+        "variableName": "download_result"
+      }
+    },
+    {
+      "id": "download_acceptance_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "value": "{{download_result.filename}}",
+      "friendlyName": "Download filename: Account name"
+    }
+  ]
+}

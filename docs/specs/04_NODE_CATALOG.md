@@ -48,14 +48,24 @@ HTTP Request live acceptance:
   denied and require explicit node-level approval. Clipboard values stay out of
   execution logs.
 - Web file-input upload from expression-enabled text/base64 content.
-  **Implemented; live acceptance pending.** Content is capped at 10 MB and kept
+  **Implemented and live accepted.** Content is capped at 10 MB and kept
   out of execution logs. Arbitrary local paths and native dialogs remain deferred
   until native-access permissions are designed.
-- Native-dialog upload, download wait, and downloaded-file metadata.
-- Screenshot capture and output path/attachment metadata.
+- Download wait with recent-download recovery, filename/URL matching, timeout,
+  cancellation, danger/interruption diagnostics, and safe metadata output.
+  **Implemented and live accepted.** Full local paths and URL query
+  strings are excluded from workflow output and execution logs.
+- Allowlisted local-file upload through the authenticated native host.
+  **Implemented and live accepted.** Access requires both node-level
+  approval and an enabled host allowlist. Resolved paths and file content are
+  excluded from logs; files are capped at 10 MB. Native OS dialogs remain
+  deferred because direct allowlisted injection is safer and deterministic.
+- Visible-tab screenshot capture to in-memory data or explicit Downloads output.
+  **Implemented and live accepted.** Restricted/internal pages are
+  rejected. Download output omits image data from the workflow variable; memory
+  output remains run-scoped and is never logged.
 
-Remaining Phase B nodes require explicit permission, secret-handling, and
-data-transmission design before implementation.
+Phase B is complete. Native OS dialog automation remains deferred to Milestone 4.
 
 Clipboard live acceptance:
 
@@ -73,6 +83,36 @@ File Input Upload live acceptance:
    `brunner-acceptance.txt | text/plain | 31 bytes | BRunner virtual upload accepted`.
 4. Confirm workflow output variable `uploaded_file` contains name, MIME type,
    and size metadata but not file content.
+
+Download Wait live acceptance:
+
+1. Reload the extension and approve its Downloads permission.
+2. Keep the local fixture server active, then load and run
+   `Download Wait Acceptance`.
+3. Confirm Chrome downloads `download-acceptance.txt` and the Account name field
+   becomes `download-acceptance.txt`.
+4. Confirm `download_result` contains safe metadata without a full local path or
+   URL query string.
+
+Screenshot Capture live acceptance:
+
+1. Reload the extension while the local fixture server is active.
+2. Load and run `Screenshot Capture Acceptance`.
+3. Confirm Chrome saves `brunner-acceptance.png` and the Account name field
+   becomes `brunner-acceptance.png`.
+4. Confirm `screenshot_result` contains format, MIME type, byte size, timestamp,
+   filename, and download id without embedded image data.
+
+Local File Upload live acceptance:
+
+1. Restart the native host so it loads the `READ_FILE` command and updated
+   allowlist configuration.
+2. Reload the extension, keep the local fixture server active, and run
+   `Local File Upload Acceptance`.
+3. Confirm the upload result reads
+   `local-upload-acceptance.txt | text/plain | 35 bytes | BRunner local file upload accepted`.
+4. Change the node path outside `BRunner_Host/AllowedFiles` and confirm it fails
+   without exposing the rejected path in logs or workflow diagnostics.
 
 ## Phase C — Graph-dependent control flow
 

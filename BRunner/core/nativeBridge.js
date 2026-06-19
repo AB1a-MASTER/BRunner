@@ -180,6 +180,12 @@ class NativeBridgeClient {
     });
   }
 
+  async readLocalFile(path) {
+    return this.request(NativeCommands.ReadFile, {
+      path,
+    });
+  }
+
   getStatus() {
     return {
       connected: this.isConnected,

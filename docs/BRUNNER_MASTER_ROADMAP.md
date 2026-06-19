@@ -30,11 +30,17 @@ The initial data controls are functionally accepted but intentionally basic. The
 
 See [02_DATA_NODE_ENGINE.md](specs/02_DATA_NODE_ENGINE.md).
 
-## Milestone 2.5 — Sequential runtime expansion
+## Milestone 2.5 — Sequential runtime expansion (complete)
 
 While the graph UX is deferred, add high-value browser, element, wait, and transformation nodes that work safely in the current sequential engine. Implement in the phases defined by the [Node Catalogue](specs/04_NODE_CATALOG.md).
 
 **Gate:** each added node is registry-driven, expression-aware, backward compatible, and covered by deterministic execution tests.
+
+Phase A and Phase B are implemented and live accepted. Phase B includes secure
+HTTP requests, permission-gated clipboard operations, virtual and allowlisted
+local-file uploads, download waiting/metadata, and visible-tab screenshots.
+Native OS dialog automation remains deferred to Milestone 4 because direct
+allowlisted file-input injection is safer and deterministic.
 
 ## Milestone 3 — Studio graph UX (deferred UX milestone)
 

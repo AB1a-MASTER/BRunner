@@ -89,6 +89,11 @@ export const Actions = Object.freeze({
   ClipboardWrite: "clipboard.write",
 
   FileInputUpload: "file.input.upload",
+  FileLocalUpload: "file.local.upload",
+
+  DownloadWait: "download.wait",
+
+  ScreenshotCapture: "screenshot.capture",
 
   KeyboardSendKeys: "keyboard.send_keys",
 
@@ -128,6 +133,7 @@ export const NativeCommands = Object.freeze({
   DuplicateWorkflow: "DUPLICATE_WORKFLOW",
   RenameWorkflow: "RENAME_WORKFLOW",
   OsKeystroke: "OS_KEYSTROKE",
+  ReadFile: "READ_FILE",
 });
 
 export const Defaults = Object.freeze({

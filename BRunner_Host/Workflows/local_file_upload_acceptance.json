@@ -1,0 +1,24 @@
+{
+  "name": "Local File Upload Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "local_file_acceptance_upload",
+      "action": "file.local.upload",
+      "target": {
+        "strategy": "id",
+        "value": "upload-file"
+      },
+      "config": {
+        "allowLocalFileRead": "allow",
+        "path": "AllowedFiles/local-upload-acceptance.txt",
+        "variableName": "local_file_result"
+      },
+      "friendlyName": "Upload allowlisted local acceptance file"
+    }
+  ]
+}
