@@ -1,0 +1,43 @@
+{
+  "name": "Data Inspector Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {
+    "seed_name": "BRunner seed",
+    "seed_object": {
+      "environment": "acceptance",
+      "retries": 2
+    }
+  },
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "inspector_scalar",
+      "action": "data.set",
+      "config": {
+        "variableName": "scalar_result",
+        "value": "ready"
+      }
+    },
+    {
+      "id": "inspector_table",
+      "action": "data.set",
+      "config": {
+        "variableName": "table_result",
+        "value": [
+          { "name": "alpha", "score": 10 },
+          { "name": "beta", "score": 20 }
+        ]
+      }
+    },
+    {
+      "id": "inspector_template",
+      "action": "data.template",
+      "config": {
+        "variableName": "message",
+        "template": "{{seed_name}} complete"
+      }
+    }
+  ]
+}

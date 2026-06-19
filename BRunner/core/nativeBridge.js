@@ -174,6 +174,13 @@ class NativeBridgeClient {
     });
   }
 
+  async upgradeWorkflow(filename, content) {
+    return this.request(NativeCommands.UpgradeWorkflow, {
+      filename: ensureJsonFilename(filename),
+      content,
+    });
+  }
+
   async osKeystroke(keys) {
     return this.request(NativeCommands.OsKeystroke, {
       keys,

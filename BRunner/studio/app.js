@@ -58,6 +58,8 @@ const NavigationTargets = Object.freeze({
   NewTab: "newTab",
 });
 
+const StudioValidation = globalThis.BRunnerStudioValidation;
+
 let workflow = {
   boundDomain: "",
   variables: {},
@@ -68,7 +70,10 @@ let workflow = {
 let isRecording = false;
 let isWorkflowRunning = false;
 let loadedWorkflowFilename = "";
+let lastRunVariables = {};
+let runtimeVariableEntries = [];
 const nodeDefinitionsByType = new Map();
+let autocompleteState = null;
 
 const canvas = document.getElementById("workflow-canvas");
 const workflowNameInput = document.getElementById("workflow-name");
@@ -77,11 +82,19 @@ const workflowReuseTabsInput = document.getElementById("workflow-reuse-tabs");
 const workflowListContainer = document.getElementById("workflow-list");
 const btnRecord = document.getElementById("btn-record");
 const btnRun = document.getElementById("btn-run");
+const btnSave = document.getElementById("btn-save");
+const validationStatus = document.getElementById("validation-status");
 const statusText = document.getElementById("status-text");
 const recordingTabPolicyInput = document.getElementById(
   "recording-tab-policy",
 );
 const actionPalette = document.getElementById("action-palette");
+const workflowManagerPanel = document.getElementById("workflow-manager-panel");
+const dataInspectorPanel = document.getElementById("data-inspector-panel");
+const dataInspectorList = document.getElementById("data-inspector-list");
+const dataInspectorSearch = document.getElementById("data-inspector-search");
+const dataInspectorSummary = document.getElementById("data-inspector-summary");
+const dataInspectorCount = document.getElementById("data-inspector-count");
 
 init();
 
@@ -89,6 +102,7 @@ function init() {
   wireLayoutControls();
   wireWorkflowFileControls();
   wireActionPalette();
+  wireCanvasEditing();
   loadNodeDefinitions();
   wireExecutionControls();
   wireRecordingControls();
@@ -101,6 +115,7 @@ function init() {
     .catch(() => {});
 
   renderCanvas();
+  renderDataInspector();
   checkBridgeStatus();
   syncRuntimeState();
 }
@@ -113,6 +128,15 @@ function wireLayoutControls() {
         .getElementById("workflow-sidebar")
         ?.classList.toggle("collapsed");
     });
+
+  document.getElementById("tab-workflows")?.addEventListener("click", () => {
+    setManagerPanel("workflows");
+  });
+  document.getElementById("tab-data")?.addEventListener("click", () => {
+    setManagerPanel("data");
+  });
+  dataInspectorSearch?.addEventListener("input", renderDataInspector);
+  dataInspectorList?.addEventListener("click", handleDataInspectorClick);
 
   document.getElementById("btn-new")?.addEventListener("click", () => {
     updateStateFromUI();
@@ -128,8 +152,11 @@ function wireLayoutControls() {
     workflowDomainInput.value = "";
     workflowReuseTabsInput.checked = false;
     loadedWorkflowFilename = "";
+    lastRunVariables = {};
+    runtimeVariableEntries = [];
 
     renderCanvas();
+    renderDataInspector();
   });
 }
 
@@ -175,6 +202,7 @@ async function loadNodeDefinitions() {
         return `<div class="action-btn" data-action="${escapeAttr(definition.type)}" title="${escapeAttr(definition.description || "")}">${escapeHtml(definition.icon || "•")} ${escapeHtml(definition.label || definition.type)}</div>`;
       })
       .join("");
+    renderCanvas();
   } catch (error) {
     actionPalette.innerHTML = `<div class="empty-state" style="color:#ef4444;">Failed to load actions.<br>${escapeHtml(error.message || error)}</div>`;
   }
@@ -186,6 +214,41 @@ function wireExecutionControls() {
       stopCurrentWorkflow();
     } else {
       runCurrentWorkflow();
+    }
+  });
+}
+
+function wireCanvasEditing() {
+  canvas?.addEventListener("input", (event) => {
+    const input = event.target.closest("input, textarea, select");
+    if (!input || !canvas.contains(input)) return;
+    updateStateFromUI();
+    refreshContextualFieldVisibility();
+    refreshValidationUI();
+    if (input.matches("[data-expression='true']")) {
+      updateVariableAutocomplete(input);
+    } else {
+      closeVariableAutocomplete();
+    }
+  });
+
+  canvas?.addEventListener("focusin", (event) => {
+    if (event.target.matches?.("[data-expression='true']")) {
+      updateVariableAutocomplete(event.target);
+    }
+  });
+
+  canvas?.addEventListener("keydown", handleAutocompleteKeydown);
+  canvas?.addEventListener("mousedown", (event) => {
+    const option = event.target.closest(".variable-option");
+    if (!option) return;
+    event.preventDefault();
+    insertAutocompleteVariable(option.dataset.variable || "");
+  });
+
+  document.addEventListener("mousedown", (event) => {
+    if (!event.target.closest(".variable-autocomplete, [data-expression='true']")) {
+      closeVariableAutocomplete();
     }
   });
 }
@@ -282,6 +345,8 @@ function wireRuntimeMessages() {
 async function saveWorkflowToOS() {
   updateStateFromUI();
 
+  if (!validateCurrentWorkflow({ focusFirst: true })) return;
+
   const desiredFilename = ensureJsonFilename(
     workflowNameInput.value || "Untitled",
   );
@@ -372,8 +437,11 @@ async function loadWorkflowFromOS(filename) {
     workflowDomainInput.value = workflow.boundDomain || "";
     workflowReuseTabsInput.checked =
       workflow.settings?.reuseExistingTabs === true;
+    lastRunVariables = {};
+    runtimeVariableEntries = [];
 
     renderCanvas();
+    renderDataInspector();
   } catch (error) {
     alert(`Failed to load workflow: ${error.message || error}`);
   }
@@ -487,6 +555,9 @@ async function runCurrentWorkflow() {
   }
 
   isWorkflowRunning = true;
+  lastRunVariables = {};
+  renderDataInspector();
+  renderCanvas();
   setRunButtonRunning(true);
 
   try {
@@ -497,6 +568,12 @@ async function runCurrentWorkflow() {
 
     if (!isSuccess(response)) {
       alert(`Workflow failed: ${response?.error || "Unknown error"}`);
+    } else {
+      lastRunVariables = response?.variables && typeof response.variables === "object"
+        ? structuredClone(response.variables)
+        : {};
+      renderDataInspector();
+      renderCanvas();
     }
   } catch (error) {
     alert(`Workflow failed: ${error.message || error}`);
@@ -504,6 +581,8 @@ async function runCurrentWorkflow() {
     isWorkflowRunning = false;
     setRunButtonRunning(false);
   }
+
+  if (!validateCurrentWorkflow({ focusFirst: true })) return;
 }
 
 function addStepToWorkflow(action) {
@@ -636,6 +715,8 @@ function updateStateFromUI() {
       step.openIn = openInSelect.value;
       step.payload = step.payload || {};
       step.payload.openIn = openInSelect.value;
+      step.config = step.config || {};
+      step.config.openIn = openInSelect.value;
     }
 
     if (tabRefInput) {
@@ -658,7 +739,9 @@ function updateStateFromUI() {
       step.config = step.config || {};
       step.config[field.key] = field.kind === "number"
         ? parseNumberOrExpression(input.value)
-        : input.value;
+        : field.kind === "value"
+          ? parseStructuredOrTextValue(input.value)
+          : input.value;
     }
   });
 }
@@ -666,26 +749,32 @@ function updateStateFromUI() {
 function applyPayloadValueToStep(step, value) {
   step.payload = step.payload || {};
   step.payload.primary = value;
+  step.config = step.config || {};
 
   switch (step.action) {
     case Actions.BrowserNavigate:
       step.url = value;
+      step.config.url = value;
       break;
 
     case Actions.ElementType:
       step.value = value;
+      step.config.value = value;
       break;
 
     case Actions.ElementExtract:
       step.variableName = value;
+      step.config.variableName = value;
       break;
 
     case Actions.KeyboardSendKeys:
       step.keys = value;
+      step.config.keys = value;
       break;
 
     case Actions.LogicWait:
       step.ms = parseNumberOrExpression(value || "1000");
+      step.config.ms = step.ms;
       break;
 
     default:
@@ -851,20 +940,509 @@ function applyRuntimeState(state) {
 
   setRunButtonRunning(running, stopping);
   if (btnRecord) btnRecord.disabled = running;
+
+  runtimeVariableEntries = Array.isArray(state.execution?.variables)
+    ? state.execution.variables
+    : [];
+  renderDataInspector();
+}
+
+function setManagerPanel(panel) {
+  const showData = panel === "data";
+  if (workflowManagerPanel) workflowManagerPanel.hidden = showData;
+  if (dataInspectorPanel) dataInspectorPanel.hidden = !showData;
+
+  const workflowTab = document.getElementById("tab-workflows");
+  const dataTab = document.getElementById("tab-data");
+  workflowTab?.classList.toggle("active", !showData);
+  dataTab?.classList.toggle("active", showData);
+  workflowTab?.setAttribute("aria-selected", String(!showData));
+  dataTab?.setAttribute("aria-selected", String(showData));
+
+  if (showData) {
+    renderDataInspector();
+    dataInspectorSearch?.focus();
+  }
+}
+
+function renderDataInspector() {
+  if (!dataInspectorList) return;
+
+  const entries = buildInspectorEntries();
+  const query = String(dataInspectorSearch?.value || "").trim().toLowerCase();
+  const filtered = entries.filter((entry) => {
+    const origin = formatVariableOrigin(entry.origin);
+    return !query || [entry.name, entry.type, entry.preview, origin]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+
+  if (dataInspectorCount) dataInspectorCount.textContent = String(entries.length);
+  if (dataInspectorSummary) {
+    const seedCount = entries.filter((entry) => entry.source === "Seed").length;
+    const runCount = entries.length - seedCount;
+    dataInspectorSummary.textContent = entries.length
+      ? `${seedCount} seed · ${runCount} run`
+      : "No variables available";
+  }
+
+  if (!filtered.length) {
+    dataInspectorList.innerHTML = `
+      <div class="empty-state data-empty">
+        ${entries.length ? "No variables match this search." : "Run a workflow or load seed variables."}
+      </div>
+    `;
+    return;
+  }
+
+  dataInspectorList.innerHTML = filtered.map(renderVariableCard).join("");
+}
+
+function buildInspectorEntries() {
+  const entries = new Map();
+
+  for (const [name, value] of Object.entries(workflow.variables || {})) {
+    entries.set(name, {
+      name,
+      ...summarizeInspectorValue(value, true),
+      source: "Seed",
+      origin: {
+        source: "workflow",
+        nodeId: "",
+        action: "workflow.variable",
+      },
+      fullValue: value,
+      hasFullValue: true,
+    });
+  }
+
+  for (const entry of runtimeVariableEntries) {
+    if (!entry?.name) continue;
+    entries.set(entry.name, {
+      ...entry,
+      source: entry.origin?.source === "workflow" ? "Seed" : "Current run",
+      hasFullValue: false,
+    });
+  }
+
+  for (const [name, value] of Object.entries(lastRunVariables || {})) {
+    const runtimeEntry = runtimeVariableEntries.find((entry) => entry.name === name);
+    entries.set(name, {
+      name,
+      ...summarizeInspectorValue(value, true),
+      source: runtimeEntry?.origin?.source === "workflow" ? "Seed" : "Last run",
+      origin: runtimeEntry?.origin || {
+        source: "workflow",
+        nodeId: "",
+        action: "workflow.variable",
+      },
+      fullValue: value,
+      hasFullValue: true,
+    });
+  }
+
+  return Array.from(entries.values()).sort((left, right) => {
+    return left.name.localeCompare(right.name);
+  });
+}
+
+function validateCurrentWorkflow({ focusFirst = false } = {}) {
+  const issues = refreshValidationUI();
+  if (issues.length === 0) return true;
+
+  if (focusFirst) {
+    const firstIssue = issues[0];
+    const node = [...canvas.querySelectorAll(".node")]
+      .find((item) => item.dataset.stepId === firstIssue.stepId);
+    const group = node?.querySelector(`[data-field="${firstIssue.fieldKey}"]`);
+    (group?.querySelector("input, textarea, select") || node)?.focus();
+    node?.scrollIntoView({ behavior: "smooth", block: "center" });
+    alert(`Fix ${issues.length} workflow validation ${issues.length === 1 ? "error" : "errors"} before continuing.`);
+  }
+  return false;
+}
+
+function refreshValidationUI() {
+  if (!StudioValidation) return [];
+
+  const issues = StudioValidation.validateWorkflow(
+    workflow,
+    nodeDefinitionsByType,
+  );
+
+  canvas.querySelectorAll(".node").forEach((node) => {
+    node.classList.remove("node-invalid");
+    node.querySelectorAll(".node-input-group").forEach((group) => {
+      group.classList.remove("field-invalid");
+      group.querySelector("input, textarea, select")?.removeAttribute("aria-invalid");
+      group.querySelector(".field-error")?.remove();
+    });
+    const summary = node.querySelector(".node-validation-summary");
+    if (summary) {
+      summary.hidden = true;
+      summary.textContent = "";
+    }
+  });
+
+  issues.forEach((validationIssue) => {
+    const node = [...canvas.querySelectorAll(".node")]
+      .find((item) => item.dataset.stepId === validationIssue.stepId);
+    if (!node) return;
+    node.classList.add("node-invalid");
+
+    const group = node.querySelector(`[data-field="${validationIssue.fieldKey}"]`);
+    if (group) {
+      group.classList.add("field-invalid");
+      group.querySelector("input, textarea, select")?.setAttribute("aria-invalid", "true");
+      if (!group.querySelector(".field-error")) {
+        const error = document.createElement("span");
+        error.className = "field-error";
+        error.textContent = validationIssue.message;
+        group.appendChild(error);
+      }
+    }
+
+    const summary = node.querySelector(".node-validation-summary");
+    if (summary) {
+      summary.hidden = false;
+      const messages = issues
+        .filter((item) => item.stepId === validationIssue.stepId)
+        .map((item) => item.message);
+      summary.textContent = [...new Set(messages)].join(" ");
+    }
+  });
+
+  if (validationStatus) {
+    validationStatus.textContent = issues.length === 0
+      ? "Valid"
+      : `${issues.length} ${issues.length === 1 ? "error" : "errors"}`;
+    validationStatus.classList.toggle("has-errors", issues.length > 0);
+  }
+  if (btnSave) btnSave.title = issues.length ? "Fix validation errors before saving" : "Save to OS";
+  if (btnRun && !isWorkflowRunning) {
+    btnRun.title = issues.length ? "Fix validation errors before running" : "Run workflow";
+  }
+
+  return issues;
+}
+
+function updateVariableAutocomplete(input) {
+  const cursor = input.selectionStart ?? input.value.length;
+  const beforeCursor = input.value.slice(0, cursor);
+  const token = beforeCursor.match(/\{\{\s*([A-Za-z0-9_$.]*)$/);
+  if (!token) {
+    closeVariableAutocomplete();
+    return;
+  }
+
+  const node = input.closest(".node");
+  const stepIndex = Number(node?.dataset.stepIndex);
+  const query = token[1].toLowerCase();
+  const suggestions = StudioValidation
+    .collectAvailableVariableNames(workflow, stepIndex)
+    .filter((name) => name.toLowerCase().includes(query));
+
+  if (suggestions.length === 0) {
+    closeVariableAutocomplete();
+    return;
+  }
+
+  closeVariableAutocomplete();
+  const list = document.createElement("div");
+  list.className = "variable-autocomplete";
+  list.id = `variable-autocomplete-${node?.dataset.stepId || "field"}`;
+  list.setAttribute("role", "listbox");
+  list.innerHTML = suggestions
+    .map((name, index) => `<button type="button" class="variable-option${index === 0 ? " active" : ""}" role="option" aria-selected="${index === 0}" data-variable="${escapeAttr(name)}"><code>${escapeHtml(name)}</code><span>{{${escapeHtml(name)}}}</span></button>`)
+    .join("");
+  input.closest(".node-input-group")?.appendChild(list);
+  input.setAttribute("aria-expanded", "true");
+  input.setAttribute("aria-controls", list.id);
+  autocompleteState = {
+    input,
+    list,
+    suggestions,
+    activeIndex: 0,
+    start: cursor - token[0].length,
+  };
+}
+
+function handleAutocompleteKeydown(event) {
+  if (!autocompleteState || event.target !== autocompleteState.input) return;
+  const { suggestions } = autocompleteState;
+
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    autocompleteState.activeIndex = (
+      autocompleteState.activeIndex + direction + suggestions.length
+    ) % suggestions.length;
+    renderAutocompleteSelection();
+    return;
+  }
+
+  if (["Enter", "Tab"].includes(event.key)) {
+    event.preventDefault();
+    insertAutocompleteVariable(suggestions[autocompleteState.activeIndex]);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeVariableAutocomplete();
+  }
+}
+
+function renderAutocompleteSelection() {
+  autocompleteState?.list.querySelectorAll(".variable-option").forEach((option, index) => {
+    const active = index === autocompleteState.activeIndex;
+    option.classList.toggle("active", active);
+    option.setAttribute("aria-selected", String(active));
+    if (active) option.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function insertAutocompleteVariable(name) {
+  if (!autocompleteState || !name) return;
+  const { input, start } = autocompleteState;
+  const cursor = input.selectionStart ?? input.value.length;
+  const insertion = `{{${name}}}`;
+  input.value = `${input.value.slice(0, start)}${insertion}${input.value.slice(cursor)}`;
+  const nextCursor = start + insertion.length;
+  input.setSelectionRange(nextCursor, nextCursor);
+  closeVariableAutocomplete();
+  input.focus();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function closeVariableAutocomplete() {
+  if (!autocompleteState) return;
+  autocompleteState.input.removeAttribute("aria-expanded");
+  autocompleteState.input.removeAttribute("aria-controls");
+  autocompleteState.list.remove();
+  autocompleteState = null;
+}
+
+function summarizeInspectorValue(value, includePreview = false) {
+  if (value === null) return { type: "null", size: 0, preview: "null" };
+
+  if (Array.isArray(value)) {
+    const table = value.length > 0 && value.every(isPlainObject);
+    return {
+      type: table ? "table" : "list",
+      size: value.length,
+      preview: `${value.length} ${table ? "rows" : "items"}`,
+    };
+  }
+
+  if (isPlainObject(value)) {
+    const size = Object.keys(value).length;
+    return { type: "object", size, preview: `${size} fields` };
+  }
+
+  if (typeof value === "string") {
+    if (/^data:image\//i.test(value)) {
+      return { type: "image", size: value.length, preview: "Image data available" };
+    }
+    return {
+      type: "string",
+      size: value.length,
+      preview: includePreview ? truncateText(value, 160) : `${value.length} characters`,
+    };
+  }
+
+  return {
+    type: typeof value,
+    size: 1,
+    preview: includePreview ? String(value) : "Value available",
+  };
+}
+
+function renderVariableCard(entry) {
+  const origin = formatVariableOrigin(entry.origin);
+  const details = entry.hasFullValue
+    ? renderVariableDetails(entry.fullValue, entry.type)
+    : "";
+
+  return `
+    <article class="data-card">
+      <div class="data-card-heading">
+        <code class="data-name">${escapeHtml(entry.name)}</code>
+        <span class="data-type">${escapeHtml(entry.type)}</span>
+      </div>
+      <div class="data-meta">
+        <span>${escapeHtml(entry.source)}</span>
+        <span title="${escapeAttr(origin)}">${escapeHtml(origin)}</span>
+      </div>
+      <div class="data-preview">${escapeHtml(entry.preview || "Value available")}</div>
+      ${details}
+      <div class="data-actions">
+        <button class="data-action copy-expression" data-variable="${escapeAttr(entry.name)}">Copy expression</button>
+        ${entry.hasFullValue ? `<button class="data-action copy-value" data-variable="${escapeAttr(entry.name)}">Copy value</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderVariableDetails(value, type) {
+  if (!["object", "list", "table"].includes(type)) return "";
+
+  if (type === "table") {
+    const rows = value.slice(0, 5);
+    const columns = Array.from(new Set(
+      rows.flatMap((row) => Object.keys(row || {})),
+    )).slice(0, 6);
+    const header = columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+    const body = rows.map((row) => {
+      const cells = columns.map((column) => {
+        return `<td>${escapeHtml(formatCellValue(row?.[column]))}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+
+    return `
+      <details class="data-details">
+        <summary>Preview first ${rows.length} rows</summary>
+        <div class="data-table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
+      </details>
+    `;
+  }
+
+  const json = truncateText(
+    JSON.stringify(sanitizeInspectableValue(value), null, 2),
+    6000,
+  );
+  return `
+    <details class="data-details">
+      <summary>Structured preview</summary>
+      <pre>${escapeHtml(json)}</pre>
+    </details>
+  `;
+}
+
+async function handleDataInspectorClick(event) {
+  const button = event.target.closest(".data-action");
+  if (!button || !dataInspectorList?.contains(button)) return;
+
+  const name = button.dataset.variable || "";
+  let text = `{{${name}}}`;
+
+  if (button.classList.contains("copy-value")) {
+    const entry = buildInspectorEntries().find((item) => item.name === name);
+    if (!entry?.hasFullValue) return;
+    text = serializeInspectorValue(entry.fullValue);
+  }
+
+  try {
+    await copyText(text);
+    const original = button.textContent;
+    button.textContent = "Copied";
+    window.setTimeout(() => { button.textContent = original; }, 1000);
+  } catch {
+    alert("Could not copy variable data to the clipboard.");
+  }
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Copy command failed.");
+}
+
+function serializeInspectorValue(value) {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+function formatVariableOrigin(origin = {}) {
+  if (origin.source === "workflow") return "Workflow seed";
+  const action = origin.action || "Node output";
+  return origin.nodeId ? `${action} · ${origin.nodeId}` : action;
+}
+
+function formatCellValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    return truncateText(JSON.stringify(sanitizeInspectableValue(value)), 80);
+  }
+  if (typeof value === "string" && /^data:image\//i.test(value)) {
+    return `[image data omitted: ${value.length} characters]`;
+  }
+  return truncateText(String(value), 80);
+}
+
+function sanitizeInspectableValue(value, depth = 0) {
+  if (depth > 6) return "[nested value omitted]";
+  if (typeof value === "string") {
+    if (/^data:image\//i.test(value)) {
+      return `[image data omitted: ${value.length} characters]`;
+    }
+    return truncateText(value, 1000);
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map((item) => {
+      return sanitizeInspectableValue(item, depth + 1);
+    });
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).slice(0, 50).map(([key, item]) => {
+        return [key, sanitizeInspectableValue(item, depth + 1)];
+      }),
+    );
+  }
+  return value;
+}
+
+function truncateText(value, limit) {
+  const text = String(value ?? "");
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function parseStructuredOrTextValue(value) {
+  const text = String(value ?? "");
+  const trimmed = text.trim();
+
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return text;
+    }
+  }
+
+  return text;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function renderCanvas() {
+  closeVariableAutocomplete();
   canvas.innerHTML = "";
 
   if (workflow.steps.length === 0) {
     canvas.innerHTML =
       '<div class="empty-state">Click an action on the left to start building.</div>';
+    refreshValidationUI();
     return;
   }
 
   workflow.steps.forEach((step, index) => {
     const node = document.createElement("div");
     node.className = "node";
+    node.dataset.stepId = step.id;
+    node.dataset.stepIndex = String(index);
 
     const fields = getStepFieldsHtml(step);
     const title = step.action.replace(".", " ").toUpperCase();
@@ -881,6 +1459,7 @@ function renderCanvas() {
       <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:8px;font-style:italic;">
         ${escapeHtml(getInstructionText(step.action))}
       </div>
+      <div class="node-validation-summary" role="alert" hidden></div>
       ${fields}
     `;
 
@@ -898,6 +1477,8 @@ function renderCanvas() {
       moveStep(Number(button.dataset.index), button.dataset.dir);
     });
   });
+  refreshValidationUI();
+  refreshContextualFieldVisibility();
 }
 
 function getStepFieldsHtml(step) {
@@ -905,32 +1486,36 @@ function getStepFieldsHtml(step) {
   const handledConfigKeys = new Set();
 
   html += `
-    <div class="node-input-group">
+    <div class="node-input-group" data-field="tabRef">
       <label>Run in Logical Tab (optional)</label>
       <input type="text" id="tabref-${escapeAttr(step.id)}" value="${escapeAttr(step.tabRef || "")}" placeholder="e.g. results_tab">
     </div>
   `;
 
   if (needsTarget(step.action)) {
+    const targetHelp = isExtractionNode(step.action)
+      ? '<span class="field-help">Extraction selectors below run inside this target.</span>'
+      : "";
     html += `
-      <div class="node-input-group">
-        <label>Target Element</label>
+      <div class="node-input-group" data-field="target">
+        <label>Target Element *</label>
         <input type="text" id="target-${escapeAttr(step.id)}" value="${escapeAttr(getDisplayTarget(step))}" placeholder="CSS selector, recorded identifier, or text">
+        ${targetHelp}
       </div>
     `;
   }
 
   if (step.action === Actions.BrowserNavigate) {
     html += `
-      <div class="node-input-group">
-        <label>URL</label>
-        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.url || step.payload?.primary || "")}" placeholder="https://example.com">
+      <div class="node-input-group" data-field="url">
+        <label>URL *</label>
+        <input type="text" data-expression="true" autocomplete="off" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.url || step.config?.url || step.payload?.primary || "")}" placeholder="https://example.com or {{url}}">
       </div>
-      <div class="node-input-group">
+      <div class="node-input-group" data-field="openIn">
         <label>Open In</label>
         <select id="openin-${escapeAttr(step.id)}">
-          <option value="sameTab" ${(step.openIn || step.payload?.openIn || "sameTab") === "sameTab" ? "selected" : ""}>Same Tab</option>
-          <option value="newTab" ${(step.openIn || step.payload?.openIn) === "newTab" ? "selected" : ""}>New Tab</option>
+          <option value="sameTab" ${(step.openIn || step.config?.openIn || step.payload?.openIn || "sameTab") === "sameTab" ? "selected" : ""}>Same Tab</option>
+          <option value="newTab" ${(step.openIn || step.config?.openIn || step.payload?.openIn) === "newTab" ? "selected" : ""}>New Tab</option>
         </select>
       </div>
     `;
@@ -940,9 +1525,9 @@ function getStepFieldsHtml(step) {
   if (step.action === Actions.ElementType) {
     handledConfigKeys.add("value");
     html += `
-      <div class="node-input-group">
-        <label>Text to Type</label>
-        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.value || step.payload?.primary || "")}" placeholder="Hello World or {{variable}}">
+      <div class="node-input-group" data-field="value">
+        <label>Text to Type *</label>
+        <input type="text" data-expression="true" autocomplete="off" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.value || step.config?.value || step.payload?.primary || "")}" placeholder="Hello World or {{variable}}">
       </div>
     `;
   }
@@ -950,9 +1535,9 @@ function getStepFieldsHtml(step) {
   if (step.action === Actions.ElementExtract) {
     handledConfigKeys.add("variableName");
     html += `
-      <div class="node-input-group">
-        <label>Variable Name</label>
-        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.variableName || step.payload?.primary || "")}" placeholder="scraped_title">
+      <div class="node-input-group" data-field="variableName">
+        <label>Variable Name *</label>
+        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.variableName || step.config?.variableName || step.payload?.primary || "")}" placeholder="scraped_title">
       </div>
     `;
   }
@@ -960,9 +1545,9 @@ function getStepFieldsHtml(step) {
   if (step.action === Actions.KeyboardSendKeys) {
     handledConfigKeys.add("keys");
     html += `
-      <div class="node-input-group">
-        <label>Key / Shortcut</label>
-        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.keys || step.payload?.primary || "")}" placeholder="Enter, Escape, Ctrl+L">
+      <div class="node-input-group" data-field="keys">
+        <label>Key / Shortcut *</label>
+        <input type="text" data-expression="true" autocomplete="off" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(step.keys || step.config?.keys || step.payload?.primary || "")}" placeholder="Enter, Escape, Ctrl+L">
       </div>
     `;
   }
@@ -970,9 +1555,9 @@ function getStepFieldsHtml(step) {
   if (step.action === Actions.LogicWait) {
     handledConfigKeys.add("ms");
     html += `
-      <div class="node-input-group">
+      <div class="node-input-group" data-field="ms">
         <label>Wait Time (ms)</label>
-        <input type="text" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(String(step.ms || step.payload?.primary || 1000))}" placeholder="1000">
+        <input type="text" data-expression="true" autocomplete="off" id="payload1-${escapeAttr(step.id)}" value="${escapeAttr(String(step.ms || step.config?.ms || step.payload?.primary || 1000))}" placeholder="1000 or {{delay_ms}}">
       </div>
     `;
   }
@@ -982,6 +1567,10 @@ function getStepFieldsHtml(step) {
   for (const field of definition?.config || []) {
     if (handledConfigKeys.has(field.key)) continue;
     html += getConfigFieldHtml(step, field);
+  }
+
+  if (isExtractionNode(step.action)) {
+    html += getExtractionOutputSampleHtml(step);
   }
 
   return html;
@@ -994,6 +1583,12 @@ function getConfigFieldHtml(step, field) {
     ? JSON.stringify(value, null, 2)
     : value;
   const required = field.required ? " *" : "";
+  const help = field.help
+    ? `<span class="field-help">${escapeHtml(field.help)}</span>`
+    : "";
+  const visibility = field.visibleWhen
+    ? ` data-visible-field="${escapeAttr(field.visibleWhen.field)}" data-visible-value="${escapeAttr(field.visibleWhen.equals)}"`
+    : "";
 
   if (field.kind === "select") {
     const options = (field.options || [])
@@ -1004,28 +1599,86 @@ function getConfigFieldHtml(step, field) {
       .join("");
 
     return `
-      <div class="node-input-group">
+      <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
         <label>${escapeHtml(field.label || field.key)}${required}</label>
         <select id="${escapeAttr(id)}">${options}</select>
+        ${help}
       </div>
     `;
   }
 
-  if (field.kind === "textarea") {
+  if (["textarea", "value"].includes(field.kind)) {
     return `
-      <div class="node-input-group">
+      <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
         <label>${escapeHtml(field.label || field.key)}${required}</label>
-        <textarea id="${escapeAttr(id)}" rows="4">${escapeHtml(displayValue)}</textarea>
+        <textarea id="${escapeAttr(id)}" ${field.key !== "variableName" ? 'data-expression="true" autocomplete="off"' : ""} rows="4">${escapeHtml(displayValue)}</textarea>
+        ${help}
       </div>
     `;
   }
 
   return `
-    <div class="node-input-group">
+    <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
       <label>${escapeHtml(field.label || field.key)}${required}</label>
-      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(displayValue)}">
+      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} ${field.key !== "variableName" ? 'data-expression="true" autocomplete="off"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(displayValue)}">
+      ${help}
     </div>
   `;
+}
+
+function refreshContextualFieldVisibility() {
+  canvas.querySelectorAll("[data-visible-field]").forEach((group) => {
+    const node = group.closest(".node");
+    const stepId = node?.dataset.stepId;
+    const field = group.dataset.visibleField;
+    const expected = group.dataset.visibleValue;
+    const controller = document.getElementById(`config-${stepId}-${field}`);
+    group.hidden = String(controller?.value ?? "") !== expected;
+  });
+}
+
+function getExtractionOutputSampleHtml(step) {
+  const sample = StudioValidation.getLastRunOutputSample(step, lastRunVariables);
+  if (!sample.name) {
+    return `
+      <section class="extract-sample extract-sample-empty" aria-label="Last run output">
+        <span>Last run output</span>
+        <p>Set an output variable to preview extracted data here.</p>
+      </section>
+    `;
+  }
+
+  if (!sample.hasValue) {
+    return `
+      <section class="extract-sample extract-sample-empty" aria-label="Last run output for ${escapeAttr(sample.name)}">
+        <div class="extract-sample-heading"><span>Last run output</span><code>${escapeHtml(sample.name)}</code></div>
+        <p>Run the workflow to populate this preview.</p>
+      </section>
+    `;
+  }
+
+  const summary = summarizeInspectorValue(sample.value, true);
+  return `
+    <section class="extract-sample" aria-label="Last run output for ${escapeAttr(sample.name)}">
+      <div class="extract-sample-heading">
+        <span>Last run output</span>
+        <span><code>${escapeHtml(sample.name)}</code><b>${escapeHtml(summary.type)}</b></span>
+      </div>
+      <div class="extract-sample-preview">${escapeHtml(summary.preview)}</div>
+      ${renderVariableDetails(sample.value, summary.type)}
+    </section>
+  `;
+}
+
+function isExtractionNode(action) {
+  return [
+    Actions.ElementExtract,
+    Actions.DataExtractText,
+    Actions.DataExtractAttribute,
+    Actions.DataExtractList,
+    Actions.DataExtractTable,
+    Actions.DataExtractPage,
+  ].includes(action);
 }
 
 function getInstructionText(action) {

@@ -2,8 +2,16 @@
 // Utilities for normalizing, validating, and naming workflows.
 
 import { Defaults } from "./constants.js";
+import {
+  detectWorkflowSchema,
+  graphWorkflowToSequential,
+  WorkflowSchemaVersion,
+} from "./workflowSchema.js";
 
 export function normalizeWorkflow(input = {}) {
+  if (detectWorkflowSchema(input) === WorkflowSchemaVersion.Graph) {
+    input = graphWorkflowToSequential(input);
+  }
   if (Array.isArray(input)) {
     return {
       boundDomain: "",
@@ -48,7 +56,11 @@ export function normalizeWorkflowSettings(settings = {}) {
 export function isWorkflowLike(input) {
   if (Array.isArray(input)) return true;
   if (!input || typeof input !== "object") return false;
-  return Array.isArray(input.steps);
+  return Array.isArray(input.steps) || (
+    detectWorkflowSchema(input) === WorkflowSchemaVersion.Graph &&
+    Array.isArray(input.nodes) &&
+    Array.isArray(input.edges)
+  );
 }
 
 export function getWorkflowSteps(input) {

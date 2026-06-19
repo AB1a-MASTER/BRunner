@@ -1,22 +1,10 @@
 {
     "boundDomain": "www.google.com",
     "variables": {},
+    "settings": {
+        "reuseExistingTabs": false
+    },
     "steps": [
-        {
-            "id": "step_ywclkbvqz",
-            "action": "browser.navigate",
-            "target": "",
-            "targetType": "",
-            "targetFallbacks": [],
-            "targetSnapshot": null,
-            "friendlyName": "",
-            "payload": {
-                "primary": "www.google.com",
-                "openIn": "newTab"
-            },
-            "url": "www.google.com",
-            "openIn": "newTab"
-        },
         {
             "id": "step_yziuigpc5",
             "action": "element.extract",
@@ -31,6 +19,9 @@
             "payload": {
                 "primary": "var1"
             },
+            "config": {
+                "variableName": "var1"
+            },
             "variableName": "var1"
         },
         {
@@ -44,7 +35,8 @@
             "targetFallbacks": [],
             "targetSnapshot": null,
             "friendlyName": "",
-            "payload": {}
+            "payload": {},
+            "config": {}
         },
         {
             "id": "step_9iblj4dbt",
@@ -60,6 +52,9 @@
             "payload": {
                 "primary": "{{var1}}"
             },
+            "config": {
+                "value": "{{var1}}"
+            },
             "value": "{{var1}}"
         },
         {
@@ -73,7 +68,8 @@
             "targetFallbacks": [],
             "targetSnapshot": null,
             "friendlyName": "",
-            "payload": {}
+            "payload": {},
+            "config": {}
         },
         {
             "id": "step_zdsmrmpw4",
@@ -85,6 +81,12 @@
             "friendlyName": "",
             "payload": {
                 "primary": "5000"
+            },
+            "config": {
+                "ms": 5000,
+                "mode": "fixed",
+                "minMs": 500,
+                "maxMs": 1500
             },
             "ms": 5000
         },
@@ -98,6 +100,10 @@
             "friendlyName": "",
             "payload": {
                 "primary": "https://www.wikipedia.org/",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.wikipedia.org/",
                 "openIn": "sameTab"
             },
             "url": "https://www.wikipedia.org/",
@@ -117,6 +123,9 @@
             "payload": {
                 "primary": "{{var1}}"
             },
+            "config": {
+                "value": "{{var1}}"
+            },
             "value": "{{var1}}"
         },
         {
@@ -130,7 +139,8 @@
             "targetFallbacks": [],
             "targetSnapshot": null,
             "friendlyName": "",
-            "payload": {}
+            "payload": {},
+            "config": {}
         }
     ]
 }

@@ -26,6 +26,10 @@ import { executeClipboardAction } from "./core/clipboard.js";
 import { waitForDownload } from "./core/downloadWait.js";
 import { captureScreenshot } from "./core/screenshot.js";
 import {
+  inferOutputVariableName,
+  summarizeVariables,
+} from "./core/variableInspector.js";
+import {
   normalizeWorkflow,
   extractDomainFromUrl,
   isBrowserInternalUrl,
@@ -152,6 +156,14 @@ async function handleMessage(request, sender) {
         return NativeBridge.renameWorkflow(
           request.filename,
           request.newFilename,
+          request.content,
+        );
+      });
+
+    case Messages.OsUpgradeWorkflow:
+      return await persistAndRefresh(() => {
+        return NativeBridge.upgradeWorkflow(
+          request.filename,
           request.content,
         );
       });
@@ -289,18 +301,33 @@ async function runWorkflow(rawWorkflow, options = {}) {
     currentAction: "",
     error: "",
     diagnostics: null,
+    variables: [],
   });
+  const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
+  const variableOrigins = Object.fromEntries(
+    Object.keys(rawWorkflow?.variables || {}).map((name) => [
+      name,
+      {
+        source: "workflow",
+        nodeId: "",
+        action: "workflow.variable",
+      },
+    ]),
+  );
   activeRun = {
     runId,
     cancelRequested: false,
     abortControllers: new Set(),
+    variableRegistry,
+    variableOrigins,
   };
+  runtimeState.updateExecution({
+    variables: summarizeVariables(variableRegistry.snapshot(), variableOrigins),
+  });
 
   try {
     let tab = await resolveStartingTab(workflow);
     const tabsByRef = new Map();
-    const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
-
     const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
     if (initialTabRef && tab?.id) {
       tabsByRef.set(initialTabRef, tab);
@@ -353,6 +380,21 @@ async function runWorkflow(rawWorkflow, options = {}) {
         variableRegistry,
         runId,
       );
+
+      const outputVariableName = inferOutputVariableName(resolvedStep);
+      if (outputVariableName) {
+        variableOrigins[outputVariableName] = {
+          source: "node",
+          nodeId: resolvedStep.id || "",
+          action: resolvedStep.action || resolvedStep.type || "unknown",
+        };
+      }
+      runtimeState.updateExecution({
+        variables: summarizeVariables(
+          variableRegistry.snapshot(),
+          variableOrigins,
+        ),
+      });
 
       throwIfRunCancelled(runId);
 

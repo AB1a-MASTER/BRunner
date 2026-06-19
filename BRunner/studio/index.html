@@ -15,6 +15,7 @@
     <header>
         <div class="logo">BRunner <span>Studio</span></div>
         <div class="header-controls">
+            <span id="validation-status" class="validation-status" aria-live="polite">Valid</span>
             <select id="recording-tab-policy" title="Tabs followed while recording">
                 <option value="openerDescendants">Follow opened tabs</option>
                 <option value="activeTab">Follow active tab</option>
@@ -38,11 +39,18 @@
         </section>
 
         <aside class="workflow-manager" id="workflow-sidebar">
+            <div class="manager-tabs" role="tablist" aria-label="Studio manager panels">
+                <button id="tab-workflows" class="manager-tab active" role="tab" aria-selected="true" aria-controls="workflow-manager-panel">Workflows</button>
+                <button id="tab-data" class="manager-tab" role="tab" aria-selected="false" aria-controls="data-inspector-panel">Data</button>
+            </div>
+
+            <section id="workflow-manager-panel" class="manager-panel" role="tabpanel" aria-labelledby="tab-workflows">
             <div class="manager-header">
-                <input type="text" id="workflow-name" placeholder="Workflow Name" value="Untitled"
-                    style="margin-bottom: 8px;">
+                <label class="sr-only" for="workflow-name">Workflow name</label>
+                <input type="text" id="workflow-name" placeholder="Workflow Name" value="Untitled">
+                <label class="sr-only" for="workflow-domain">Bound domain</label>
                 <input type="text" id="workflow-domain" placeholder="Bound Domain (e.g. github.com)">
-                <label style="display:flex;gap:8px;align-items:center;font-size:0.8rem;color:#94a3b8;">
+                <label class="manager-checkbox">
                     <input type="checkbox" id="workflow-reuse-tabs">
                     Reuse an already-open matching tab
                 </label>
@@ -59,9 +67,26 @@
                     Click Refresh to load OS files.
                 </div>
             </div>
+            </section>
+
+            <section id="data-inspector-panel" class="manager-panel data-inspector" role="tabpanel" aria-labelledby="tab-data" hidden>
+                <div class="data-inspector-header">
+                    <div>
+                        <h3>Variables</h3>
+                        <p id="data-inspector-summary">No variables available</p>
+                    </div>
+                    <span id="data-inspector-count" class="data-count">0</span>
+                </div>
+                <label class="sr-only" for="data-inspector-search">Search variables</label>
+                <input id="data-inspector-search" class="data-search" type="search" placeholder="Search name, type, or origin">
+                <div id="data-inspector-list" class="data-inspector-list" aria-live="polite">
+                    <div class="empty-state data-empty">Run a workflow or load seed variables.</div>
+                </div>
+            </section>
         </aside>
     </main>
 
+    <script src="studioValidation.js"></script>
     <script src="app.js"></script>
 </body>
 

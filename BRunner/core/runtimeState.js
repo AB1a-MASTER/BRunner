@@ -21,6 +21,7 @@ export function createRuntimeStateStore() {
       currentAction: "",
       error: "",
       diagnostics: null,
+      variables: [],
     },
   };
 

@@ -19,6 +19,7 @@ export const Messages = Object.freeze({
   OsDeleteWorkflow: "OS_DELETE_WORKFLOW",
   OsDuplicateWorkflow: "OS_DUPLICATE_WORKFLOW",
   OsRenameWorkflow: "OS_RENAME_WORKFLOW",
+  OsUpgradeWorkflow: "OS_UPGRADE_WORKFLOW",
 
   // Workflow execution
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
@@ -132,6 +133,7 @@ export const NativeCommands = Object.freeze({
   DeleteWorkflow: "DELETE_WORKFLOW",
   DuplicateWorkflow: "DUPLICATE_WORKFLOW",
   RenameWorkflow: "RENAME_WORKFLOW",
+  UpgradeWorkflow: "UPGRADE_WORKFLOW",
   OsKeystroke: "OS_KEYSTROKE",
   ReadFile: "READ_FILE",
 });

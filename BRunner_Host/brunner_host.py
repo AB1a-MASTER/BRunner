@@ -8,6 +8,7 @@ import logging
 import shutil
 from pathlib import Path
 from file_access import read_allowed_file
+from workflow_storage import atomic_upgrade_workflow
 
 # --- Paths ---
 
@@ -271,6 +272,17 @@ async def handle_save_workflow(websocket, request_id, payload):
     )
 
 
+async def handle_upgrade_workflow(websocket, request_id, payload):
+    filename = payload.get("filename")
+    content = payload.get("content")
+    result = atomic_upgrade_workflow(workflow_path(filename), content)
+
+    await send_json(
+        websocket,
+        success(request_id, **result)
+    )
+
+
 async def handle_load_workflow(websocket, request_id, payload):
     filename = payload.get("filename")
     path = workflow_path(filename)
@@ -464,6 +476,9 @@ async def handle_connection(websocket):
 
                 elif command == "SAVE_WORKFLOW":
                     await handle_save_workflow(websocket, request_id, payload)
+
+                elif command == "UPGRADE_WORKFLOW":
+                    await handle_upgrade_workflow(websocket, request_id, payload)
 
                 elif command == "LOAD_WORKFLOW":
                     await handle_load_workflow(websocket, request_id, payload)
