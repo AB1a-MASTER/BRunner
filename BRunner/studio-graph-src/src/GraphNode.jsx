@@ -10,7 +10,9 @@ export function GraphNode({ id, data, selected }) {
   const summaryRows = getNodeSummaryRows(data);
   const execution = getExecutionPresentation(data);
   const bypassed = execution.mode === "disabled";
-  const readOnly = data.readOnly === true || data.executionLocked === true;
+  const readOnly = data.readOnly === true
+    || data.executionLocked === true
+    || data.navigationLocked === true;
   const collapsed = data.collapsed === true;
   const horizontal = data.layoutDirection === "horizontal";
   const targetPosition = horizontal ? Position.Left : Position.Top;
@@ -38,7 +40,7 @@ export function GraphNode({ id, data, selected }) {
 
   const toggleCollapsed = (event) => {
     event.stopPropagation();
-    if (data.executionLocked === true) return;
+    if (data.executionLocked === true || data.navigationLocked === true) return;
     updateNodeData(id, { collapsed: !collapsed });
     if (data.readOnly !== true) data.onMutate?.();
     window.requestAnimationFrame(() => updateNodeInternals(id));
@@ -60,7 +62,7 @@ export function GraphNode({ id, data, selected }) {
             className="node-action nodrag nopan"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={toggleCollapsed}
-            disabled={data.executionLocked === true}
+            disabled={data.executionLocked === true || data.navigationLocked === true}
             aria-label={collapsed ? `Expand ${definition.label}` : `Collapse ${definition.label}`}
             title={collapsed ? "Expand node" : "Collapse node"}
           >

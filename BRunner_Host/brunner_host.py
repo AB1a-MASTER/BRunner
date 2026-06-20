@@ -9,16 +9,19 @@ import shutil
 from pathlib import Path
 from file_access import read_allowed_file
 from workflow_storage import atomic_upgrade_workflow
+from execution_log_storage import save_execution_log
 
 # --- Paths ---
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "brunner_config.json"
 WORKFLOWS_DIR = BASE_DIR / "Workflows"
+EXECUTION_LOGS_DIR = BASE_DIR / "Logs"
 LOG_FILE = BASE_DIR / "brunner_host.log"
 PORT = 8999
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)
+EXECUTION_LOGS_DIR.mkdir(exist_ok=True)
 
 # --- Setup Persistent Logging ---
 
@@ -272,6 +275,22 @@ async def handle_save_workflow(websocket, request_id, payload):
     )
 
 
+async def handle_save_execution_log(websocket, request_id, payload):
+    logs = payload.get("logs") if "logs" in payload else []
+    result = save_execution_log(
+        EXECUTION_LOGS_DIR,
+        payload.get("workflowName") or "Untitled",
+        payload.get("runId") or "run",
+        logs,
+    )
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[ExecutionLog] Saved: filename=%s entries=%s",
+        result["filename"],
+        result["entries"],
+    )
+
+
 async def handle_upgrade_workflow(websocket, request_id, payload):
     filename = payload.get("filename")
     content = payload.get("content")
@@ -476,6 +495,9 @@ async def handle_connection(websocket):
 
                 elif command == "SAVE_WORKFLOW":
                     await handle_save_workflow(websocket, request_id, payload)
+
+                elif command == "SAVE_EXECUTION_LOG":
+                    await handle_save_execution_log(websocket, request_id, payload)
 
                 elif command == "UPGRADE_WORKFLOW":
                     await handle_upgrade_workflow(websocket, request_id, payload)

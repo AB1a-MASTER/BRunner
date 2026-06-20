@@ -41,3 +41,62 @@ controls/nodes for data scraping and expression eval for random timings etc.
 sync ui so that running workflows and recordings show up on both the studio and the sidebar.
 
 make sure the studio is exception from being recoreded.
+
+add to the documents that we need node navigation tools, like hand, selector etc, add safety for accidental edits which navigating. also for selection and mass moving. also color change should be reflected on the mini map/ overview during execution.
+
+Set-Location C:\Users\MASTER\Desktop\project\BR
+python -m http.server 8765 --bind 127.0.0.1
+
+any workflow that have a control that primarily depends on the server (not as a fallback only) should demand the server properly. it won't prevent runnintg, but the node requiring the server should show error unless its avaialbe.
+
+recording doesn't show in the graph studio. the currently open.workflow doesn't shift between the 2.
+
+when recording.if a dropdown option is selected it should be recording via text first cuz the index might change. same for other elements when clicking. so that its user prespective first.
+
+besides that each node should show its description and usage example in the inspector when selected.
+
+we also need to maintain a seperate document that will explain the usage of each node and their options and their behaviour and the system as a whole. so that someone can read the docs and learn how to use the system.
+
+we are still missing the data tab/panel.
+
+we will need a data panel to manage all the data.
+
+we should add that so that we can later tell the workflow to fetch a certain file from a directory and the run workflows/steps using its data as input.
+
+for th logical node we would also need a loop node that will run a workflow with the vars as input for it so that we can run a workflow for each data pair on a table or list etc.
+
+for UI fix
+
+lets fix the UI/UX
+
+in the graph studio
+
+right now we have 2 top bars
+
+all the panes/panels should be collaspeable. the inspector should have 2 mode either pin or collasped. when collasped it only appear when we select a node or clik on it to open and then when we click away it closes.
+
+by default the inspector will show the following,
+current work flow name, bound domain, status like number of nodes and edges saved state, description of the workflow, the layout of the workflow, the data tab, the "reuse already open matching tab option" and the update workflow button (when applicable)
+
+the inspector should only show inspector and not the "properties text"
+
+the save button should also be there and only enable when saveable changes are made.
+
+this will remove one of the top bars.
+We will use the icon2 from the icons folder for our extension and place the new button near the logo on the left and keep the run button on the right. move the saved workflow list next to the run button, and show the conenction status to the host in the center on the top bar. also add/adjust the sequential studio button in this bar
+
+since we were missing options that were in the old ui in this graph stuio we need to make sure they are included.
+
+the libaray tab should show the title as "Node library" along with the number of nodes as currently being shown.
+
+the logs should show the title "Execution logs" only remove the "run history" text.
+
+overview map should be hideable/ toggleable.
+
+the tools should be icons only, hide their text. the text should show as tool tips. their alignment should be vertical
+
+logs need the ability to be cleared or saved. also an option that can be setup to auto clear every run or auto save ever run or manually handle options.
+
+in the sequential studio make the ui better and consistant.
+
+also add the option to make the ui bigger or small for both studios.

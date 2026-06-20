@@ -10,6 +10,7 @@ import { getWorkflowSteps, isWorkflowLike, normalizeWorkflow } from "../BRunner/
 
 const legacy = {
   name: "Legacy flow",
+  description: "Cross-site legacy acceptance flow.",
   boundDomain: "example.com",
   variables: { seed: "ready" },
   settings: { reuseExistingTabs: true },
@@ -34,6 +35,7 @@ test("v1 upgrades to a deterministic linear v2 graph", () => {
 
   assert.equal(graph.schemaVersion, 2);
   assert.equal(graph.id, "flow-1");
+  assert.equal(graph.description, legacy.description);
   assert.equal(graph.entryNodeId, "first");
   assert.deepEqual(graph.nodes.map((node) => node.id), ["first", "second"]);
   assert.deepEqual(graph.edges.map((edge) => [edge.source, edge.target]), [["first", "second"]]);
@@ -48,6 +50,8 @@ test("v2 sequential adapter preserves runtime step fields", () => {
   assert.deepEqual(sequential.steps[0].page, legacy.steps[0].page);
   assert.deepEqual(sequential.steps[1].config, legacy.steps[1].config);
   assert.deepEqual(sequential.variables, legacy.variables);
+  assert.equal(sequential.description, legacy.description);
+  assert.equal(normalizeWorkflow(graph).description, legacy.description);
   assert.equal(normalizeWorkflow(graph).settings.reuseExistingTabs, true);
   assert.equal(getWorkflowSteps(graph).length, 2);
   assert.equal(isWorkflowLike(graph), true);

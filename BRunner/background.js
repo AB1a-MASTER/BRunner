@@ -12,6 +12,7 @@ import {
 import { NativeBridge } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
+import { safeExecutionFailure } from "./core/executionLog.js";
 import { getNodeDefinitions } from "./core/nodeRegistry.js";
 import {
   VariableRegistry,
@@ -169,6 +170,13 @@ async function handleMessage(request, sender) {
         );
       });
 
+    case Messages.OsSaveExecutionLog:
+      return await NativeBridge.saveExecutionLog(
+        request.workflowName,
+        request.runId,
+        request.logs,
+      );
+
     case Messages.ToggleRecording:
       if (request.enabled && runtimeState.isRunning()) {
         return {
@@ -189,6 +197,12 @@ async function handleMessage(request, sender) {
       return {
         ok: true,
         state: runtimeState.getState(),
+      };
+
+    case Messages.ClearExecutionLogs:
+      return {
+        ok: true,
+        state: runtimeState.clearExecutionLogs(),
       };
 
     case Messages.GetNodeDefinitions:
@@ -307,6 +321,7 @@ async function runWorkflow(rawWorkflow, options = {}) {
     skippedSteps: 0,
     completedNodeIds: [],
     skippedNodeIds: [],
+    logs: [],
   });
   const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
   const variableOrigins = Object.fromEntries(
@@ -326,6 +341,12 @@ async function runWorkflow(rawWorkflow, options = {}) {
     variableRegistry,
     variableOrigins,
   };
+  runtimeState.appendExecutionLog({
+    runId,
+    workflowName,
+    status: "started",
+    message: "Workflow started.",
+  });
   runtimeState.updateExecution({
     variables: summarizeVariables(variableRegistry.snapshot(), variableOrigins),
   });
@@ -370,7 +391,15 @@ async function runWorkflow(rawWorkflow, options = {}) {
       if (bypassDecision.skip) {
         skippedCount += 1;
         if (step?.id) skippedNodeIds.push(step.id);
-        runtimeState.updateExecution({
+        runtimeState.appendExecutionLog({
+          runId,
+          workflowName,
+          nodeId: step?.id || "",
+          stepIndex: index,
+          action: step?.action || step?.type || "unknown",
+          status: "skipped",
+          message: "Node bypassed.",
+        }, {
           skippedSteps: skippedCount,
           skippedNodeIds: [...skippedNodeIds],
         });
@@ -404,6 +433,16 @@ async function runWorkflow(rawWorkflow, options = {}) {
           resolvedStep?.action || resolvedStep?.type || "unknown",
       });
 
+      runtimeState.appendExecutionLog({
+        runId,
+        workflowName,
+        nodeId: resolvedStep?.id || "",
+        stepIndex: index,
+        action: resolvedStep?.action || resolvedStep?.type || "unknown",
+        status: "running",
+        message: "Node started.",
+      });
+
       console.log(
         `[BRunner] Executing step ${index + 1}/${steps.length}:`,
         sanitizeStepForLog(resolvedStep),
@@ -428,7 +467,15 @@ async function runWorkflow(rawWorkflow, options = {}) {
       );
       executedCount += 1;
       if (resolvedStep?.id) completedNodeIds.push(resolvedStep.id);
-      runtimeState.updateExecution({
+      runtimeState.appendExecutionLog({
+        runId,
+        workflowName,
+        nodeId: resolvedStep?.id || "",
+        stepIndex: index,
+        action: resolvedStep?.action || resolvedStep?.type || "unknown",
+        status: "completed",
+        message: "Node completed.",
+      }, {
         completedNodeIds: [...completedNodeIds],
       });
 
@@ -463,7 +510,12 @@ async function runWorkflow(rawWorkflow, options = {}) {
       throwIfRunCancelled(runId);
     }
 
-    runtimeState.updateExecution({
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      status: "completed",
+      message: `Workflow completed: ${executedCount} executed, ${skippedCount} bypassed.`,
+    }, {
       status: "completed",
       currentStepIndex: steps.length - 1,
       currentNodeId: "",
@@ -489,13 +541,19 @@ async function runWorkflow(rawWorkflow, options = {}) {
       error?.name === "WorkflowCancelledError" ||
       (activeRun?.runId === runId && activeRun.cancelRequested)
     ) {
-      runtimeState.updateExecution({
+      runtimeState.appendExecutionLog({
+        runId,
+        workflowName,
+        nodeId: runtimeState.getState().execution.currentNodeId,
+        stepIndex: runtimeState.getState().execution.currentStepIndex,
+        status: "cancelled",
+        message: "Workflow stopped by user.",
+        diagnostics: { finalReason: "workflow_cancelled" },
+      }, {
         status: "cancelled",
         currentAction: "",
         error: "Workflow stopped by user.",
-        diagnostics: {
-          finalReason: "workflow_cancelled",
-        },
+        diagnostics: { finalReason: "workflow_cancelled" },
       });
 
       return {
@@ -505,11 +563,22 @@ async function runWorkflow(rawWorkflow, options = {}) {
       };
     }
 
-    runtimeState.updateExecution({
+    const failedExecution = runtimeState.getState().execution;
+    const safeFailure = safeExecutionFailure(error, failedExecution.currentAction);
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      nodeId: failedExecution.currentNodeId,
+      stepIndex: failedExecution.currentStepIndex,
+      action: failedExecution.currentAction,
+      status: "failed",
+      message: safeFailure.message,
+      diagnostics: safeFailure.diagnostics,
+    }, {
       status: "failed",
       currentAction: "",
-      error: error.message || String(error),
-      diagnostics: error.diagnostics || null,
+      error: safeFailure.message,
+      diagnostics: safeFailure.diagnostics,
     });
     throw error;
   } finally {

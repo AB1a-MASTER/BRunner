@@ -55,6 +55,7 @@ test("legacy nodes receive non-overlapping deterministic layout", () => {
 test("v2 graph positions, edges, configuration, and bypass survive round trip", () => {
   const graph = upgradeWorkflowToV2({
     name: "Graph",
+    description: "A graph workflow description.",
     steps: [{
       id: "click",
       action: "element.click",
@@ -69,6 +70,8 @@ test("v2 graph positions, edges, configuration, and bypass survive round trip", 
   const saved = canvasToGraphWorkflow(model.nodes, model.edges, model.metadata);
 
   assert.equal(model.readOnly, false);
+  assert.equal(model.metadata.description, "A graph workflow description.");
+  assert.equal(saved.description, "A graph workflow description.");
   assert.deepEqual(saved.nodes[0].position, { x: 321, y: 654 });
   assert.equal(saved.nodes[0].data.executionMode, "conditional");
   assert.equal(saved.nodes[0].data.skipWhen, "{{skip_save}}");
@@ -100,6 +103,7 @@ test("collapsed state persists but layout direction remains UI metadata", () => 
   model.nodes[0].data.layoutDirection = "horizontal";
   model.nodes[0].data.runtimeStatus = "completed";
   model.nodes[0].data.executionLocked = true;
+  model.nodes[0].data.navigationLocked = true;
   const saved = canvasToGraphWorkflow(model.nodes, model.edges, {
     ...model.metadata,
     settings: { graphLayoutDirection: "horizontal" },
@@ -109,6 +113,7 @@ test("collapsed state persists but layout direction remains UI metadata", () => 
   assert.equal("layoutDirection" in saved.nodes[0].data, false);
   assert.equal("runtimeStatus" in saved.nodes[0].data, false);
   assert.equal("executionLocked" in saved.nodes[0].data, false);
+  assert.equal("navigationLocked" in saved.nodes[0].data, false);
   assert.equal(saved.settings.graphLayoutDirection, "horizontal");
 });
 

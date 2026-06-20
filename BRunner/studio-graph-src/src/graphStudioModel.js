@@ -64,6 +64,7 @@ export function workflowToCanvas(input, definitions) {
     metadata: {
       id: graph.id || "workflow-v2",
       name: graph.name || input?.name || "Untitled",
+      description: graph.description || input?.description || "",
       boundDomain: graph.boundDomain || "",
       settings: cloneObject(graph.settings),
       variables: cloneObject(graph.variables),
@@ -97,6 +98,7 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
     schemaVersion: WorkflowSchemaVersion.Graph,
     id: String(metadata.id || "workflow-v2"),
     name: String(metadata.name || "Untitled"),
+    description: String(metadata.description || ""),
     boundDomain: String(metadata.boundDomain || ""),
     settings: cloneObject(metadata.settings),
     variables: cloneObject(metadata.variables),
@@ -160,6 +162,7 @@ function sanitizeNodeData(source = {}) {
         "layoutDirection",
         "runtimeStatus",
         "executionLocked",
+        "navigationLocked",
       ].includes(key) && typeof value !== "function";
     }),
   );

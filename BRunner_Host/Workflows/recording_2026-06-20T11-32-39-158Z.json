@@ -1,0 +1,52 @@
+{
+    "description": "",
+    "boundDomain": "",
+    "variables": {},
+    "settings": {
+        "reuseExistingTabs": false
+    },
+    "steps": [
+        {
+            "action": "browser.tab.switch",
+            "tabRef": "tab_2",
+            "openerTabRef": "tab_1",
+            "url": "chrome://newtab/",
+            "createIfMissing": true,
+            "friendlyName": "Switch tab: New Tab",
+            "page": {
+                "url": "chrome://newtab/",
+                "origin": "chrome://newtab",
+                "host": "newtab",
+                "hostname": "newtab",
+                "domain": "newtab",
+                "path": "/",
+                "search": "",
+                "title": "New Tab",
+                "access": "restricted"
+            },
+            "recordedAt": "2026-06-20T11:32:34.840Z",
+            "recordedBy": "background.tab_observer"
+        },
+        {
+            "action": "browser.tab.switch",
+            "tabRef": "tab_1",
+            "openerTabRef": "",
+            "url": "chrome-extension://fogahjgbnddmdafeceodembojchcdmop/studio-graph/index.html",
+            "createIfMissing": true,
+            "friendlyName": "Switch tab: BRunner Graph Studio",
+            "page": {
+                "url": "chrome-extension://fogahjgbnddmdafeceodembojchcdmop/studio-graph/index.html",
+                "origin": "chrome-extension://fogahjgbnddmdafeceodembojchcdmop",
+                "host": "fogahjgbnddmdafeceodembojchcdmop",
+                "hostname": "fogahjgbnddmdafeceodembojchcdmop",
+                "domain": "fogahjgbnddmdafeceodembojchcdmop",
+                "path": "/studio-graph/index.html",
+                "search": "",
+                "title": "BRunner Graph Studio",
+                "access": "restricted"
+            },
+            "recordedAt": "2026-06-20T11:32:36.322Z",
+            "recordedBy": "background.tab_observer"
+        }
+    ]
+}

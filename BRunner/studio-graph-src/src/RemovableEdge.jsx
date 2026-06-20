@@ -27,7 +27,9 @@ export function RemovableEdge({
     sourcePosition,
     targetPosition,
   });
-  const readOnly = data?.readOnly === true || data?.executionLocked === true;
+  const readOnly = data?.readOnly === true
+    || data?.executionLocked === true
+    || data?.navigationLocked === true;
 
   const remove = (event) => {
     event.stopPropagation();

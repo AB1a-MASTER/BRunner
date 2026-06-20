@@ -68,6 +68,35 @@ Persistence acceptance:
   execution-state indicator, handles, bypass, expand, and remove controls while
   hiding configuration summaries and technical footer. Collapse state persists.
 
+### Canvas navigation and bulk-editing tools
+
+Graph Studio exposes clear pointer modes rather than overloading every drag:
+
+- **Hand/Pan** mode moves the viewport only. Pointer gestures in this mode must
+  not move nodes, create or remove connections, change selection, or trigger
+  deletion controls. Holding Space may temporarily activate Hand mode.
+- **Selector** mode supports single selection, modifier-assisted additive
+  selection, and marquee selection on empty canvas space.
+- Dragging any selected node moves the complete selected group while preserving
+  relative positions and existing connections. Group movement is one undoable
+  edit when undo history is introduced.
+- The active tool must remain visibly indicated and keyboard accessible. Mode
+  switches must not discard the current selection.
+- Destructive controls and connection handles must not activate from a pan
+  gesture. Delete/Backspace only applies while Selector mode owns canvas focus,
+  reducing accidental edits while navigating.
+
+Navigation and bulk-editing acceptance:
+
+1. Select Hand mode and drag across nodes, handles, edges, and empty space;
+   confirm only the viewport moves and the workflow remains unchanged.
+2. Select Selector mode, marquee several nodes, add/remove one with a modifier,
+   then drag the group; confirm relative spacing and connections remain intact.
+3. Temporarily pan with Space and return to the prior tool without losing the
+   multi-selection.
+4. Confirm keyboard focus, tool announcements, and Delete/Backspace safety do
+   not allow an accidental edit while Hand mode is active.
+
 ### Live graph execution
 
 Graph Studio can run the current validated canvas without requiring a prior save.
@@ -80,6 +109,11 @@ render distinct accessible states for Running, Completed, Bypassed, Failed, and
 Cancelled; collapsed cards retain these indicators. Completion summaries report
 executed and bypassed counts. Transient runtime state is excluded from graph
 persistence.
+
+The minimap/overview reflects the same live runtime colors as the canvas:
+Running, Completed, Bypassed, Failed, and Cancelled nodes update immediately in
+the overview, remain distinguishable from ordinary selection, and reset with the
+transient runtime state rather than being persisted.
 
 When node execution-precondition metadata is added, Graph Studio should display
 compact capability indicators for foreground-tab, visible-target, window-focus,
@@ -96,6 +130,8 @@ Live execution acceptance:
 4. Cause a safe validation/runtime failure and confirm the failing node turns red
    while the header announces the diagnostic.
 5. Save after the run and reload; confirm no transient runtime colors are stored.
+6. During each runtime state, confirm the corresponding minimap node uses the
+   same state color as its full canvas card and returns to idle on the next run.
 
 ### Node readability and bypass controls
 
@@ -165,6 +201,8 @@ positions, so the user-facing Upgrade action is enabled with native backup safet
 
 - Palette generated from node definitions.
 - Drag/drop creation, connection handles, pan/zoom, selection, keyboard deletion, and node reordering through edges.
+- Explicit Hand/Selector tools, guarded navigation gestures, marquee and
+  additive selection, and safe group movement.
 - Right-side properties panel generated from node configuration schemas.
 - Inline validation and prevention of invalid saves/runs.
 - Workflow manager, recording controls, and connection state remain available.
@@ -231,4 +269,18 @@ Live acceptance:
 
 ## Acceptance tests
 
-Verify v1 read-only loading, upgrade backup/rollback, graph editing, save/reload fidelity, node configuration rendering, invalid graph detection, keyboard and pointer interactions, execution highlighting, and extension CSP-compatible production builds.
+Verify v1 read-only loading, upgrade backup/rollback, graph editing, save/reload fidelity, node configuration rendering, invalid graph detection, guarded Hand/Selector interactions, multi-selection/group movement, canvas and minimap execution highlighting, keyboard behavior, and extension CSP-compatible production builds.
+
+Functional Milestone 3 acceptance is complete. The deterministic suite,
+production build, runtime integration checks, and responsive interaction checks
+pass. The remaining work in this milestone is the separate user-directed UI/UX
+refinement defined below.
+
+## Final user-directed UI/UX refinement
+
+After the functional Milestone 3 acceptance gate, schedule a dedicated visual and
+interaction refinement pass across Graph Studio. Do not infer or pre-empt the
+desired redesign. When this phase is reached, explicitly ask the user for their
+UI/UX priorities, examples, and detailed direction before changing the visual
+system or interaction hierarchy. Preserve all accepted behavior while applying
+that feedback, then repeat responsive and accessibility checks.

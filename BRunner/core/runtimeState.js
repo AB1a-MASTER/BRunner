@@ -2,8 +2,13 @@
 // Authoritative recording and workflow-execution state shared by every UI.
 
 import { Messages } from "./constants.js";
+import {
+  appendBoundedExecutionLog,
+  createExecutionLogEntry,
+} from "./executionLog.js";
 
 export function createRuntimeStateStore() {
+  let executionLogSequence = 0;
   let state = {
     recording: {
       isRecording: false,
@@ -26,6 +31,7 @@ export function createRuntimeStateStore() {
       skippedSteps: 0,
       completedNodeIds: [],
       skippedNodeIds: [],
+      logs: [],
     },
   };
 
@@ -53,11 +59,39 @@ export function createRuntimeStateStore() {
   }
 
   function updateExecution(patch = {}) {
+    if (Array.isArray(patch.logs) && patch.logs.length === 0) {
+      executionLogSequence = 0;
+    }
     state.execution = {
       ...state.execution,
       ...patch,
     };
 
+    broadcast();
+    return getState();
+  }
+
+  function appendExecutionLog(event = {}, patch = {}) {
+    executionLogSequence += 1;
+    const entry = createExecutionLogEntry(
+      event,
+      executionLogSequence,
+    );
+    state.execution = {
+      ...state.execution,
+      ...patch,
+      logs: appendBoundedExecutionLog(state.execution.logs, entry),
+    };
+    broadcast();
+    return entry;
+  }
+
+  function clearExecutionLogs() {
+    executionLogSequence = 0;
+    state.execution = {
+      ...state.execution,
+      logs: [],
+    };
     broadcast();
     return getState();
   }
@@ -83,6 +117,8 @@ export function createRuntimeStateStore() {
     getState,
     updateRecording,
     updateExecution,
+    appendExecutionLog,
+    clearExecutionLogs,
     isRunning,
     isRecording,
   };

@@ -181,6 +181,14 @@ class NativeBridgeClient {
     });
   }
 
+  async saveExecutionLog(workflowName, runId, logs) {
+    return this.request(NativeCommands.SaveExecutionLog, {
+      workflowName: String(workflowName || "Untitled"),
+      runId: String(runId || "run"),
+      logs: Array.isArray(logs) ? logs : [],
+    });
+  }
+
   async osKeystroke(keys) {
     return this.request(NativeCommands.OsKeystroke, {
       keys,

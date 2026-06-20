@@ -1,4 +1,4 @@
-export function projectRuntimeState(nodes, execution = {}, readOnly = false) {
+export function projectRuntimeState(nodes, execution = {}, readOnly = false, navigationLocked = false) {
   const completed = new Set(execution.completedNodeIds || []);
   const skipped = new Set(execution.skippedNodeIds || []);
   const active = ["starting", "running", "cancelling"].includes(execution.status);
@@ -19,6 +19,7 @@ export function projectRuntimeState(nodes, execution = {}, readOnly = false) {
         ...node.data,
         runtimeStatus,
         executionLocked: active,
+        navigationLocked,
         readOnly,
       },
     };
@@ -37,4 +38,19 @@ export function summarizeExecution(execution = {}) {
     case "cancelled": return "Workflow stopped";
     default: return "Ready to run";
   }
+}
+
+export function filterExecutionLogs(logs, nodeId = "") {
+  const entries = Array.isArray(logs) ? logs : [];
+  return nodeId ? entries.filter((entry) => entry.nodeId === nodeId) : entries;
+}
+
+export function summarizeExecutionLogs(logs) {
+  const entries = Array.isArray(logs) ? logs : [];
+  return {
+    events: entries.length,
+    completed: entries.filter((entry) => entry.status === "completed" && entry.scope === "node").length,
+    skipped: entries.filter((entry) => entry.status === "skipped").length,
+    failed: entries.filter((entry) => entry.status === "failed").length,
+  };
 }

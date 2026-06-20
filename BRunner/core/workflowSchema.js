@@ -44,6 +44,7 @@ export function upgradeWorkflowToV2(input = {}, options = {}) {
     schemaVersion: WorkflowSchemaVersion.Graph,
     id: String(options.id || input?.id || "workflow-v2"),
     name: String(options.name || input?.name || "Untitled"),
+    description: typeof input?.description === "string" ? input.description : "",
     boundDomain: typeof input?.boundDomain === "string" ? input.boundDomain : "",
     settings: cloneObject(input?.settings),
     variables: cloneObject(input?.variables),
@@ -73,6 +74,7 @@ export function graphWorkflowToSequential(input = {}) {
   }
 
   return {
+    description: typeof input.description === "string" ? input.description : "",
     boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
     variables: cloneObject(input.variables),
     settings: cloneObject(input.settings),

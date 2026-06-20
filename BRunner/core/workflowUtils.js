@@ -14,6 +14,7 @@ export function normalizeWorkflow(input = {}) {
   }
   if (Array.isArray(input)) {
     return {
+      description: "",
       boundDomain: "",
       variables: {},
       settings: createDefaultWorkflowSettings(),
@@ -22,6 +23,7 @@ export function normalizeWorkflow(input = {}) {
   }
 
   return {
+    description: typeof input.description === "string" ? input.description : "",
     boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
     variables:
       input.variables && typeof input.variables === "object"
@@ -34,6 +36,7 @@ export function normalizeWorkflow(input = {}) {
 
 export function createEmptyWorkflow(boundDomain = "") {
   return {
+    description: "",
     boundDomain,
     variables: {},
     settings: createDefaultWorkflowSettings(),

@@ -4,6 +4,13 @@
   "version": "2.2.0",
   "description": "Enterprise-grade event-driven browser automation engine.",
 
+  "icons": {
+    "16": "icons/icon2.png",
+    "32": "icons/icon2.png",
+    "48": "icons/icon2.png",
+    "128": "icons/icon2.png"
+  },
+
   "permissions": [
     "tabs",
     "activeTab",
@@ -29,7 +36,11 @@
   },
 
   "action": {
-    "default_title": "BRunner"
+    "default_title": "BRunner",
+    "default_icon": {
+      "16": "icons/icon2.png",
+      "32": "icons/icon2.png"
+    }
   },
 
   "side_panel": {
@@ -56,7 +67,11 @@
       "resources": [
         "studio/index.html",
         "studio/app.js",
+        "studio/preferences.js",
         "studio/studioValidation.js",
+        "core/studioPreferences.js",
+        "core/studioPreferencesBootstrap.js",
+        "shared/studio-tokens.css",
         "studio/style.css",
         "studio-graph/index.html",
         "studio-graph/assets/*",

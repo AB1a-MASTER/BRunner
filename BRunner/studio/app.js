@@ -61,6 +61,7 @@ const NavigationTargets = Object.freeze({
 const StudioValidation = globalThis.BRunnerStudioValidation;
 
 let workflow = {
+  description: "",
   boundDomain: "",
   variables: {},
   settings: { reuseExistingTabs: false },
@@ -69,6 +70,7 @@ let workflow = {
 
 let isRecording = false;
 let isWorkflowRunning = false;
+let isWorkflowDirty = false;
 let loadedWorkflowFilename = "";
 let lastRunVariables = {};
 let runtimeVariableEntries = [];
@@ -78,6 +80,7 @@ let autocompleteState = null;
 const canvas = document.getElementById("workflow-canvas");
 const workflowNameInput = document.getElementById("workflow-name");
 const workflowDomainInput = document.getElementById("workflow-domain");
+const workflowDescriptionInput = document.getElementById("workflow-description");
 const workflowReuseTabsInput = document.getElementById("workflow-reuse-tabs");
 const workflowListContainer = document.getElementById("workflow-list");
 const btnRecord = document.getElementById("btn-record");
@@ -121,12 +124,21 @@ function init() {
 }
 
 function wireLayoutControls() {
+  [workflowNameInput, workflowDomainInput, workflowDescriptionInput, workflowReuseTabsInput]
+    .filter(Boolean)
+    .forEach((control) => control.addEventListener("input", () => {
+      isWorkflowDirty = true;
+      updateStateFromUI();
+      refreshValidationUI();
+    }));
   document
     .getElementById("btn-toggle-sidebar")
     ?.addEventListener("click", () => {
-      document
-        .getElementById("workflow-sidebar")
-        ?.classList.toggle("collapsed");
+      const sidebar = document.getElementById("workflow-sidebar");
+      const button = document.getElementById("btn-toggle-sidebar");
+      const collapsed = sidebar?.classList.toggle("collapsed") === true;
+      button?.setAttribute("aria-expanded", String(!collapsed));
+      if (button) button.title = collapsed ? "Show workflow manager" : "Hide workflow manager";
     });
 
   document.getElementById("tab-workflows")?.addEventListener("click", () => {
@@ -142,6 +154,7 @@ function wireLayoutControls() {
     updateStateFromUI();
 
     workflow = {
+      description: "",
       boundDomain: "",
       variables: {},
       settings: { reuseExistingTabs: false },
@@ -150,10 +163,12 @@ function wireLayoutControls() {
 
     workflowNameInput.value = "Untitled";
     workflowDomainInput.value = "";
+    if (workflowDescriptionInput) workflowDescriptionInput.value = "";
     workflowReuseTabsInput.checked = false;
     loadedWorkflowFilename = "";
     lastRunVariables = {};
     runtimeVariableEntries = [];
+    isWorkflowDirty = true;
 
     renderCanvas();
     renderDataInspector();
@@ -223,6 +238,7 @@ function wireCanvasEditing() {
     const input = event.target.closest("input, textarea, select");
     if (!input || !canvas.contains(input)) return;
     updateStateFromUI();
+    isWorkflowDirty = true;
     refreshContextualFieldVisibility();
     refreshValidationUI();
     if (input.matches("[data-expression='true']")) {
@@ -318,6 +334,7 @@ function wireRuntimeMessages() {
 
       const step = normalizeStep(request.step);
       workflow.steps.push(step);
+      isWorkflowDirty = true;
 
       renderCanvas();
       canvas.scrollTop = canvas.scrollHeight;
@@ -376,7 +393,9 @@ async function saveWorkflowToOS() {
     if (isSuccess(response)) {
       loadedWorkflowFilename =
         response.newFilename || response.filename || desiredFilename;
+      isWorkflowDirty = false;
       workflowNameInput.value = loadedWorkflowFilename.replace(/\.json$/i, "");
+      refreshValidationUI();
       alert(`Workflow "${loadedWorkflowFilename}" saved.`);
       refreshWorkflowList();
     } else {
@@ -435,10 +454,12 @@ async function loadWorkflowFromOS(filename) {
 
     workflowNameInput.value = filename.replace(/\.json$/i, "");
     workflowDomainInput.value = workflow.boundDomain || "";
+    if (workflowDescriptionInput) workflowDescriptionInput.value = workflow.description || "";
     workflowReuseTabsInput.checked =
       workflow.settings?.reuseExistingTabs === true;
     lastRunVariables = {};
     runtimeVariableEntries = [];
+    isWorkflowDirty = false;
 
     renderCanvas();
     renderDataInspector();
@@ -463,9 +484,9 @@ function renderWorkflowList(files) {
     card.innerHTML = `
       <div class="workflow-card-title">${escapeHtml(file)}</div>
       <div class="workflow-card-actions">
-        <button class="micro-btn load-btn" data-file="${escapeAttr(file)}" title="Load Workflow">📂 Load</button>
-        <button class="micro-btn duplicate-btn" data-file="${escapeAttr(file)}" title="Duplicate Workflow">📋</button>
-        <button class="micro-btn delete-btn" data-file="${escapeAttr(file)}" style="color:#ef4444;border-color:#ef4444;" title="Delete Workflow">🗑️</button>
+        <button class="micro-btn load-btn" data-file="${escapeAttr(file)}" title="Load workflow">Load</button>
+        <button class="micro-btn duplicate-btn" data-file="${escapeAttr(file)}" title="Duplicate workflow" aria-label="Duplicate workflow">Copy</button>
+        <button class="micro-btn delete-btn" data-file="${escapeAttr(file)}" style="color:#ef4444;border-color:#ef4444;" title="Delete workflow" aria-label="Delete workflow">Delete</button>
       </div>
     `;
 
@@ -589,6 +610,7 @@ function addStepToWorkflow(action) {
   updateStateFromUI();
 
   workflow.steps.push(createStep(action));
+  isWorkflowDirty = true;
   renderCanvas();
 }
 
@@ -650,6 +672,7 @@ function createStep(action) {
 function deleteStep(stepId) {
   updateStateFromUI();
   workflow.steps = workflow.steps.filter((step) => step.id !== stepId);
+  isWorkflowDirty = true;
   renderCanvas();
 }
 
@@ -675,6 +698,7 @@ function moveStep(index, direction) {
 
 function updateStateFromUI() {
   workflow.boundDomain = workflowDomainInput.value.trim();
+  workflow.description = workflowDescriptionInput?.value.trim() || "";
   workflow.settings = {
     ...(workflow.settings || {}),
     reuseExistingTabs: Boolean(workflowReuseTabsInput?.checked),
@@ -786,6 +810,7 @@ function getWorkflowFromUI() {
   updateStateFromUI();
 
   return {
+    description: workflow.description || "",
     boundDomain: workflow.boundDomain || "",
     variables: workflow.variables || {},
     settings: workflow.settings || { reuseExistingTabs: false },
@@ -796,6 +821,7 @@ function getWorkflowFromUI() {
 function normalizeWorkflow(input) {
   if (Array.isArray(input)) {
     return {
+      description: "",
       boundDomain: "",
       variables: {},
       settings: { reuseExistingTabs: false },
@@ -804,6 +830,7 @@ function normalizeWorkflow(input) {
   }
 
   return {
+    description: typeof input?.description === "string" ? input.description : "",
     boundDomain: input?.boundDomain || "",
     variables:
       input?.variables && typeof input.variables === "object"
@@ -860,6 +887,8 @@ function normalizeStep(step) {
       normalized[key] = step[key];
     }
   }
+
+  isWorkflowDirty = true;
 
   const primaryPayload = payload.primary;
 
@@ -1117,7 +1146,12 @@ function refreshValidationUI() {
       : `${issues.length} ${issues.length === 1 ? "error" : "errors"}`;
     validationStatus.classList.toggle("has-errors", issues.length > 0);
   }
-  if (btnSave) btnSave.title = issues.length ? "Fix validation errors before saving" : "Save to OS";
+  if (btnSave) {
+    btnSave.disabled = Boolean(issues.length || !isWorkflowDirty || isWorkflowRunning || isRecording);
+    btnSave.title = issues.length
+      ? "Fix validation errors before saving"
+      : !isWorkflowDirty ? "No unsaved workflow changes" : "Save workflow changes";
+  }
   if (btnRun && !isWorkflowRunning) {
     btnRun.title = issues.length ? "Fix validation errors before running" : "Run workflow";
   }
@@ -1771,7 +1805,8 @@ async function checkBridgeStatus() {
 function updateRecordButton() {
   if (!btnRecord) return;
 
-  btnRecord.innerText = isRecording ? "⏹️ Stop Recording" : "🔴 Record Actions";
+  btnRecord.innerText = isRecording ? "Stop Recording" : "Record";
+  btnRecord.title = isRecording ? "Stop recording browser actions" : "Record browser actions";
 
   btnRecord.style.backgroundColor = isRecording
     ? "var(--bg-main)"
@@ -1784,10 +1819,11 @@ function setRunButtonRunning(running, stopping = false) {
   if (!btnRun) return;
 
   btnRun.innerText = stopping
-    ? "⏳ Stopping..."
+    ? "Stopping..."
     : running
-      ? "⏹ Stop Workflow"
-      : "▶ Run Workflow";
+      ? "Stop"
+      : "Run";
+  btnRun.title = running ? "Stop workflow execution" : "Run workflow";
   btnRun.style.backgroundColor = running ? "#dc2626" : "var(--accent)";
   btnRun.disabled = stopping || isRecording;
 }

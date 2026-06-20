@@ -1,0 +1,31 @@
+{
+  "name": "Screenshot Capture Acceptance",
+  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "screenshot_acceptance_capture",
+      "action": "screenshot.capture",
+      "config": {
+        "format": "png",
+        "quality": 90,
+        "outputMode": "download",
+        "filename": "brunner-acceptance.png",
+        "variableName": "screenshot_result"
+      }
+    },
+    {
+      "id": "screenshot_acceptance_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "value": "{{screenshot_result.filename}}",
+      "friendlyName": "Screenshot filename: Account name"
+    }
+  ]
+}

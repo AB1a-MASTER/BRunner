@@ -1,189 +1,293 @@
 BRunner - Latest Development Handoff
-Updated: 2026-06-18
+Updated: 2026-06-20
 
 PURPOSE
-This is the starting point for the next development chat. Read this file after
-Design Doc.txt, then use the specifications under docs/ as the source of truth.
+This is the starting point for the next development chat. Read this file, then
+use Design Doc.txt and docs/ as the source of truth. Preserve all user work and
+continue with isolated, tested slices.
 
-CURRENT STATE
-BRunner has completed its reliability/base-solidification work and now has a
-stable sequential automation foundation. The latest committed checkpoint is:
+GIT OWNERSHIP
+- The user controls every Git operation.
+- Do not stage, commit, amend, branch, reset, push, or open a PR.
+- Provide a commit message only when the user explicitly asks.
+- Do not assume the changes described here are committed.
+- The latest requested commit message was:
 
-  74da734 feat(runtime): solidify workflow execution
+  feat(studio): build executable graph editor
 
-Phase B external/file operations are in progress. HTTP Request, clipboard
-read/write, virtual web file-input upload, Download Wait, and Screenshot Capture
-and allowlisted Local File Upload are implemented and live accepted. Phase B is
-complete. Stop here for the user's commit before beginning Milestone 3. Do not
-begin another broad refactor. Continue later with small, tested changes and
-preserve legacy workflow compatibility.
+  - add React Flow editing, persistence, layout, and live execution
+  - preserve v1 workflows with backup-backed upgrades
+  - add node summaries, bypass, collapse, and runtime states
 
-WORK COMPLETED
+CURRENT MILESTONE
+Milestone 3 - Studio Graph UX functional acceptance is complete. The dedicated
+user-directed UI/UX refinement phase is now active.
 
-1. Recording and replay reliability
-- Recorded elements carry semantic target candidates, snapshots, page context,
-  and compatibility fields.
-- Replay uses direct candidates, the controls tree, and fuzzy document fallback.
-- Failed resolution reports useful diagnostics instead of failing on one selector.
-- Same-page, cross-page, and multi-tab recording/replay have been tested.
-- Restricted pages and the Studio are excluded from content recording.
-- Recording on a restricted New Tab no longer borrows the pinned tab's domain.
+The sequential runtime and Phase A/Phase B node expansion are complete and live
+accepted. The Variables/Data Inspector, autocomplete/validation, extraction UX,
+schema-v2 foundation, React Flow Graph Studio, graph persistence, safe v1 upgrade,
+canvas organization, bypass behavior, and live graph execution are implemented
+and live accepted.
 
-2. Multi-tab runtime
-- Tabs have workflow-local logical tab references (tabRef).
-- Recorded tab switches can be replayed or recovered if a child tab is missing.
-- Open Tab can continue in the current tab or move execution to the new tab.
-- Close Tab returns to an appropriate remaining/opener tab and does not create an
-  empty replacement tab.
-- Element nodes can target a selected logical tab.
+CURRENT TEST BASELINE
+- 84 deterministic JavaScript tests pass across 18 test files.
+- 10 deterministic Python tests pass.
+- `npm run studio:build` succeeds with Vite 8 and extension-safe relative assets.
+- Background and native-host syntax checks pass.
 
-3. Workflow persistence and synchronization
-- Saving an edited workflow updates the original instead of creating a copy.
-- Renaming from Studio updates the workflow filename/name correctly.
-- Duplicate remains a separate explicit operation.
-- New recordings and runtime state synchronize between Studio and sidebar.
-- Native-host save/load compatibility was retained.
+Do not lower this baseline. Rebuild Graph Studio after every source change under
+`BRunner/studio-graph-src/`.
 
-4. Startup and browser behavior
-- A workflow's bound domain is honored at startup.
-- The current usable tab navigates to that domain by default without replacing
-  Studio.
-- Reusing an already-open matching tab is optional and off by default.
-- A default-browser-search node is available.
-- Back, forward, reload, open tab, close tab, and recorded tab switch are present.
+COMPLETED FOUNDATION
 
-5. Shared runtime state and cancellation
-- Studio and sidebar share authoritative recording/execution status.
-- Workflows can be stopped from Studio, the sidebar main control, or a running
-  workflow row.
-- Sidebar controls change from Play/Start to Stop while execution is active.
-- Cancellation interrupts long background waits and page-level conditional waits,
-  prevents later steps, and reports cancelled rather than failed.
+1. Reliable sequential runtime
+- Semantic recording targets, fallback resolution, page recovery, and diagnostics.
+- Multi-tab logical references, tab recovery, open/close/switch behavior.
+- Shared Studio/sidebar runtime state and cooperative cancellation.
+- Native workflow persistence, rename, duplicate, and synchronization.
+- Fresh per-run variables and strict `{{variable}}` expression resolution.
 
-6. Node and data foundation
-- A canonical node registry drives the Studio palette/configuration.
-- Every run receives a fresh variable registry.
-- {{variable}} expressions resolve immediately before each step and fail clearly
-  when a variable is missing.
-- Extraction nodes cover text, attributes, lists, tables, and page metadata.
-- Data nodes include set variable and template.
-- Wait supports fixed and randomized timing.
-- Sequential browser/element/wait/data-transform nodes from Phase A are present:
-  double-click, hover, clear input, element/page scrolling, conditional waits,
-  JSON parse/stringify, regex match/replace, number conversion, and date format.
+2. Node engine and external operations
+- Registry-driven browser, element, wait, extraction, data, and transform nodes.
+- HTTP requests with cancellation and safe logging.
+- Permission-gated clipboard read/write.
+- Virtual and allowlisted local-file upload.
+- Download waiting and visible-tab screenshots.
+- Phase A and Phase B are complete and live accepted.
 
-7. Documentation and planning
-- docs/BRUNNER_MASTER_ROADMAP.md defines the milestone order.
-- docs/specs/01_MULTI_TAB_RUNTIME.md defines tab/runtime behavior.
-- docs/specs/02_DATA_NODE_ENGINE.md defines variables and extraction.
-- docs/specs/03_STUDIO_GRAPH_UX.md defines the later graph editor migration.
-- docs/specs/04_NODE_CATALOG.md defines phased node expansion.
+3. Sequential Studio UX slices
+- Variables/Data Inspector with seed/current/last-run values and safe summaries.
+- Object/list/table previews, search, copy expression, and copy value.
+- Registry-driven required-field and target validation.
+- Variable autocomplete limited to seeds and outputs available before the node.
+- Unknown and forward expression references block save/run.
+- Extraction selector guidance, contextual fields, and last-run node samples.
 
-8. Phase B external and file operations
-- HTTP Request runs in the background and supports GET, POST, PUT, PATCH, DELETE,
-  and HEAD; text/JSON bodies and responses; timeout; non-2xx policy; structured
-  output; and AbortController workflow cancellation.
-- HTTP requests omit browser credentials by default. Request headers, bodies,
-  URL query strings, and embedded credentials are excluded from execution logs.
-- Clipboard Read and Clipboard Write use a Chrome offscreen document. Reads
-  default to denied and require explicit node-level approval. Clipboard values
-  are excluded from logs.
-- Clipboard operations use navigator.clipboard when available and an
-  execCommand copy/paste fallback for offscreen-document focus restrictions.
-- Upload Virtual File creates a real File from expression-enabled text or base64
-  content, assigns it to a web input[type=file], dispatches input/change events,
-  and stores name/type/size metadata in a workflow variable.
-- Virtual uploads reject filesystem paths, cap payloads at 10 MB, and exclude
-  file content from logs. Arbitrary local paths/native dialogs remain deferred
-  until native-access permissions are explicitly designed.
-- Download Wait supports recent-download recovery, filename/URL matching,
-  timeout, cancellation, danger/interruption diagnostics, and safe metadata.
-  Full local paths and URL query strings are excluded from output and logs.
-- Screenshot Capture records the visible HTTP(S) workflow tab as PNG/JPEG. Output
-  is either run-scoped image data or an explicit Downloads file. Restricted pages
-  are rejected, and downloaded screenshot metadata omits embedded image data.
-- Local File Upload requires explicit node approval plus an enabled native-host
-  allowlist. Host path resolution blocks traversal/symlink escapes, caps reads at
-  10 MB, omits paths/content from logs, and reuses virtual file-input injection.
-- Toggle true/false behavior for checkbox and radio controls was corrected.
-- Deterministic suite currently passes 34 tests: 30 JavaScript and 4 Python.
-  Toggle, HTTP, clipboard, virtual file-input, Download Wait, and Screenshot
-  Capture workflows passed live acceptance. Local File Upload also passed.
+GRAPH SCHEMA AND MIGRATION
 
-KNOWN DEFERRED UX WORK
-- Add a Variables/Data Inspector in Studio with saved variables, current values,
-  types, producing nodes, and expandable object/list/table previews.
-- Add variable autocomplete and extraction output samples.
-- Refine extraction controls, validation, empty-result policy, and selector help.
-- Improve recorder overlay smoothness and general Studio responsiveness.
-- Replace the current sequential editor with the planned graph UX only after the
-  sequential runtime phases are complete.
+Files:
+- `BRunner/core/workflowSchema.js`
+- `BRunner/core/workflowUtils.js`
+- `BRunner_Host/workflow_storage.py`
+- `BRunner_Host/brunner_host.py`
+- `BRunner/core/nativeBridge.js`
+- `BRunner/core/constants.js`
 
-WORKTREE STATE AT HANDOFF
-There are uncommitted changes after commit 74da734:
+Behavior:
+- Schema v2 stores workflow metadata, positioned nodes, edges, and entry node ID.
+- V1 steps convert deterministically to v2 nodes and success edges.
+- Valid v2 graphs adapt back to a sequential execution view at runtime.
+- Initial execution permits exactly one complete acyclic success path.
+- Branches, merges, cycles, duplicate IDs, missing nodes, and disconnected nodes
+  are rejected.
+- Native `UPGRADE_WORKFLOW` atomically replaces a v1 file only after retaining
+  `<workflow>.json.v1.bak`.
+- Existing backups are never overwritten.
+- Invalid/failed upgrades leave the original workflow untouched.
 
-- Runtime/registry/UI changes for HTTP, clipboard, virtual file upload, Download
-  Wait, and Screenshot Capture nodes.
-- New core helpers: core/httpRequest.js, core/clipboard.js,
-  core/downloadWait.js, and core/screenshot.js; native file_access.py helper.
-- New content helper: content/filePayload.js.
-- New offscreen clipboard document under BRunner/offscreen/.
-- Manifest permissions for offscreen clipboard read/write.
-- Deterministic tests under tests/ and live acceptance fixtures/workflows.
-- Updated test harness and docs/specs/04_NODE_CATALOG.md.
-- Updated handoff document and user-created workflow files.
-- BRunner_Host/brunner_host.log contains generated runtime log changes; normally
-  do not treat these as product source changes.
+GRAPH STUDIO
 
-Preserve all unrelated user work. User controls Git operations: do not stage,
-commit, branch, push, or open PRs. Provide a commit message only when explicitly
-asked.
+Source/build:
+- Source: `BRunner/studio-graph-src/`
+- Production output: `BRunner/studio-graph/`
+- Build config: `vite.studio.config.js`
+- Dependencies are pinned in `package.json` / `package-lock.json`:
+  React 19.2.7, React DOM 19.2.7, React Flow 12.11.0,
+  Vite 8.0.16, and Vite React plugin 6.0.2.
+- Build command: `npm run studio:build`
+- The accepted sequential Studio remains available and links to Graph Studio.
+
+Implemented graph editing:
+- Registry-loaded searchable Node Library.
+- Click or drag node creation.
+- Node movement, selection, keyboard deletion, handles, and connections.
+- Registry-generated Properties panel with contextual fields.
+- Zoom controls, minimap, canvas fit, and accessible focus states.
+- Node Library and Properties use bounded internal scrolling.
+- Direct node remove and midpoint connection remove controls.
+
+Node readability:
+- Cards show target, output variable, and relevant configured properties.
+- Sensitive HTTP/file payload fields show `Configured`, never raw content.
+- Cards show enabled/bypassed/conditional mode.
+- Nodes can collapse while retaining name, state, handles, and actions.
+- Collapse state persists in v2 workflows.
+
+Canvas organization:
+- Legacy v1 workflows receive deterministic non-overlapping layout.
+- Workflow layout can be Vertical or Horizontal.
+- Arrange reapplies direction, moves handles top/bottom or left/right, and fits
+  the canvas.
+- Layout direction persists in workflow settings.
+
+GRAPH PERSISTENCE AND LEGACY SAFETY
+
+Files:
+- `BRunner/studio-graph-src/src/graphStudioModel.js`
+- `BRunner/studio-graph-src/src/GraphStudio.jsx`
+- `BRunner/studio-graph-src/src/GraphNode.jsx`
+- `BRunner/studio-graph-src/src/RemovableEdge.jsx`
+- `BRunner/studio-graph-src/src/nodePresentation.js`
+
+Behavior:
+- New/load/save/rename works through the native host.
+- V2 save/reload preserves positions, edges, configuration, structured targets,
+  variables, settings, bypass mode, layout direction, and collapse state.
+- Disconnected/invalid graphs cannot save or run.
+- V1 workflows open as clearly marked read-only previews.
+- Palette edits, dragging, connections, deletion, bypass, and properties are
+  locked for v1 previews.
+- Explicit Upgrade to v2 shows the backup filename and unlocks only after the
+  native upgrade succeeds.
+- The native host must be restarted after host-source changes before testing the
+  upgrade command.
+
+BYPASS EXECUTION
+
+Files:
+- `BRunner/core/stepBypass.js`
+- `BRunner/core/variableRegistry.js`
+- `BRunner/background.js`
+
+Modes:
+- Enabled: execute normally.
+- Bypassed: always skip while preserving graph connections.
+- Conditional bypass: evaluate `skipWhen` immediately before the node.
+
+Accepted conditional values:
+- true/false
+- yes/no
+- on/off
+- 1/0
+
+Static bypass is checked before other node expressions, so unused missing
+variables in a disabled node cannot fail the workflow. Missing or ambiguous
+conditional values fail with distinct diagnostics. The legacy `disabled: true`
+flag remains supported.
+
+LIVE GRAPH EXECUTION
+
+Files:
+- `BRunner/studio-graph-src/src/runtimeProjection.js`
+- `BRunner/core/runtimeState.js`
+- `BRunner/background.js`
+
+Behavior:
+- Graph Studio Run executes the validated current canvas without requiring save.
+- Run changes to Stop and uses the shared cancellation path.
+- Editing, saving, loading, arranging, deletion, and property changes lock while
+  execution is active.
+- Authoritative runtime state tracks current, completed, and skipped node IDs.
+- Cards show distinct Running, Completed, Bypassed, Failed, and Cancelled states.
+- Collapsed cards retain runtime state indicators.
+- Completion reports executed and bypassed counts.
+- Runtime-only colors/locks are excluded from persisted graph data.
+
+LIVE ACCEPTANCE COMPLETED
+- Variables/Data Inspector and typed structured values.
+- Variable autocomplete and inline validation.
+- Extraction contextual controls and last-run samples.
+- Graph palette, drag/drop, connections, properties, delete, and navigation.
+- Node summaries, direct remove, bypass, and conditional bypass controls.
+- V2 graph save/reload/rename fidelity.
+- V1 read-only preview and backup-backed Upgrade to v2.
+- Scrollable Node Library.
+- Clean legacy auto-layout.
+- Removable connections.
+- Vertical/horizontal layout and Arrange.
+- Persistent node collapse.
+- Graph Run/Stop and live node execution states.
+- Bounded secret-safe structured execution logs/history, node filtering, node
+  selection links, and run summaries.
+- Explicit Hand/Selector modes, Space-to-pan, navigation edit guards,
+  marquee/additive selection, safe selected-group movement, and keyboard-safe
+  deletion.
+- Runtime-state colors in the minimap/overview.
+
+CANVAS NAVIGATION AND OVERVIEW UX
+
+Implemented and live accepted:
+- Hand/Pan mode must navigate without moving nodes, changing selection, creating
+  connections, or triggering destructive controls.
+- Selector mode must support single, additive, and marquee selection.
+- Dragging a selected node must move the complete selected group while preserving
+  relative positions and graph connections.
+- Space may temporarily activate Hand mode and must restore the previous mode and
+  selection when released.
+- Delete/Backspace and other edits must be guarded while navigating so an
+  accidental pan gesture cannot mutate the graph.
+- The active tool must be visible, keyboard accessible, and announced.
+- Minimap/overview node colors must update during execution to match Running,
+  Completed, Bypassed, Failed, and Cancelled canvas states, then reset without
+  persisting runtime-only color data.
+
+FINAL USER-DIRECTED UI/UX PASS
+
+After the functional Milestone 3 acceptance gate, perform a dedicated Graph
+Studio UI/UX refinement pass. Do not guess the requested redesign. At the start
+of that phase, explicitly ask the user for their priorities, references, and
+detailed direction. Preserve accepted behavior and rerun responsive and
+accessibility checks after applying their feedback.
+
+The detailed implementation plan is now in:
+- `docs/specs/05_STUDIO_UI_UX_REFINEMENT.md`
+
+The open decisions are confirmed. Slice 1 is complete: workflow-description
+persistence, shared global UI preferences/density tokens, icon2 identity, and
+the authenticated host-backed `.log` save command are implemented and verified.
+The native host must be restarted before live-testing SAVE_EXECUTION_LOG.
+
+Next, begin Slice 2: replace Graph Studio's two top bars with the grouped unified
+command bar, add centered host status, and move workflow controls plus saveability
+state into the pinned-by-default Inspector workflow view.
+
+DEFERRED VISIBILITY/PRECONDITION REQUIREMENT
+
+The docs now require registry-level capability metadata for nodes that depend on
+actual on-screen browser state. Future work must identify and enforce whether a
+node requires:
+- foreground/active tab;
+- focused browser window;
+- target visible and unobscured in the viewport;
+- target scrolled into view;
+- hardware/pointer interaction.
+
+Hover Mouse is the primary example. The runtime must activate/focus/present the
+target before dispatch so the node does not fail because the tab or element was
+off-screen. Screenshot, hardware keyboard/mouse, drag, and similar nodes require
+the same audit. Background-safe HTTP/data operations must not force foreground
+activation.
+
+See:
+- `docs/specs/01_MULTI_TAB_RUNTIME.md`
+- `docs/specs/04_NODE_CATALOG.md`
+- `docs/specs/03_STUDIO_GRAPH_UX.md`
+- `docs/BRUNNER_MASTER_ROADMAP.md`
 
 NEXT IMPLEMENTATION PLAN
 
-Step 1 - User commit checkpoint
-- Do not stage or commit. User owns all Git operations.
-- Provide a commit message only when explicitly requested.
-- Do not begin Milestone 3 until the user confirms the Phase B commit is done.
+Next isolated Milestone 3 slice:
+1. Ask the user for their UI/UX priorities, references, and detailed direction.
+2. Translate that direction into an agreed refinement scope without changing
+   accepted workflow behavior.
+3. Implement the user-directed refinement and repeat responsive/accessibility
+   acceptance before beginning Milestone 4.
 
-Step 2 - First Milestone 3 slice after commit
-- Add a Variables/Data Inspector for seed variables and safe current/last-run
-  summaries, producing-node origin, search, and expression-copy actions.
-- Avoid broadcasting large screenshot/file payloads through shared runtime state.
-- Preserve current sequential editor; React Flow/schema v2 migration remains a
-  later explicit step in Milestone 3.
+After Milestone 3 acceptance:
+- Conditions, switch, merge, stop/fail, and retry boundaries.
+- Repeat/while/for-each with limits.
+- Error branches and sub-workflows.
+- Registry-driven foreground/visibility/focus preconditions.
+- Native-dialog strategies, CDP/headless execution, audit, and telemetry.
 
-Each external/file node needs a permission and secret-handling review before code.
-
-Step 4 - Studio UX milestone
-- Build the Variables/Data Inspector and previews first.
-- Add stronger node-specific panels, validation, and variable autocomplete.
-- Then migrate to graph schema v2/React Flow with safe v1 upgrades and backups.
-
-Step 5 - Graph-dependent automation
-- If/else, switch, merge, stop/fail, and retry boundaries.
-- Repeat, while, and for-each with loop limits.
-- Sub-workflows and mapped inputs/outputs.
-- Error branches and reusable workflow components.
-
-DO NOT IMPLEMENT GRAPH CONTROL FLOW IN THE CURRENT LINEAR EXECUTOR. It depends on
-the graph schema defining branch handles, traversal, cycle validation, and limits.
+DO NOT IMPLEMENT GRAPH CONTROL FLOW IN THE LINEAR EXECUTOR.
+Conditions, loops, merge paths, and error branches depend on graph traversal,
+branch handles, cycle validation, and iteration limits.
 
 DEVELOPMENT RULES
-- Preserve persistence, navigation normalization, cancellation, and old workflows.
-- Add nodes only through the canonical registry; avoid one-off Studio forms.
-- Keep patches isolated and include deterministic tests plus a live acceptance case.
-- Reliability, diagnostics, permissions, and secret safety come before visual polish.
-- Do not infer tab reuse, cookie transmission, or native access; these are explicit
-  user choices.
-- Do not perform Git operations. User stages and commits. Generate commit messages
-  only when explicitly requested.
-
-IMMEDIATE NEXT CHAT PROMPT
-Read Design Doc.txt, this handoff, docs/BRUNNER_MASTER_ROADMAP.md, and
-docs/specs/04_NODE_CATALOG.md. Inspect the current worktree without discarding
-changes. Preserve all accepted HTTP/clipboard/file-upload work and user-created
-workflows. Preserve Download Wait, Screenshot Capture, and allowlisted local-file
-changes. Phase B is complete and live accepted. Do not perform Git operations or
-begin Milestone 3 until the user confirms the Phase B commit. After that checkpoint,
-start the Variables/Data Inspector as the first isolated Milestone 3 slice.
+- Preserve legacy workflow compatibility and `.v1.bak` safety.
+- Add behavior through canonical registry/schema contracts, not action-name hacks.
+- Keep secret-bearing payloads out of logs and shared runtime state.
+- Keep changes isolated and covered by deterministic plus live acceptance tests.
+- Preserve cancellation, persistence, navigation, and tab-recovery behavior.
+- Never perform Git operations; the user owns them.

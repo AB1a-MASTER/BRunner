@@ -42,15 +42,26 @@ local-file uploads, download waiting/metadata, and visible-tab screenshots.
 Native OS dialog automation remains deferred to Milestone 4 because direct
 allowlisted file-input injection is safer and deterministic.
 
-## Milestone 3 — Studio graph UX (deferred UX milestone)
+## Milestone 3 — Studio graph UX (functional gate complete)
 
 Move Studio to React Flow and Vite, add graph schema v2, explicit v1 upgrades with backups, node properties, validation, and live execution visualization.
 
 The schema-v2 adapter, initial single-success-path validator, sequential runtime
 view, atomic native-host v1 backup/upgrade command, visual graph scaffold,
-registry-driven properties, graph persistence, user-facing upgrade action, and
-graph execution visualization are implemented. Structured graph logs, final
-accessibility polish, and the complete graph-editor acceptance gate remain pending.
+registry-driven properties, graph persistence, user-facing upgrade action,
+graph execution visualization, bounded secret-safe structured graph logs,
+explicit Hand/Selector navigation modes, accidental-edit guards,
+marquee/additive selection, group movement, runtime-aware minimap colors, and
+deterministic accessibility/responsive polish are implemented. The functional
+graph-editor acceptance gate is complete.
+Next, complete a separate user-directed UI/UX refinement
+pass; ask the user for detailed design direction when that phase begins rather
+than inventing the redesign in advance.
+
+The user-directed scope is now captured in
+[05_STUDIO_UI_UX_REFINEMENT.md](specs/05_STUDIO_UI_UX_REFINEMENT.md). Its user
+decisions are confirmed. Slice 1 contracts/shared preferences are complete;
+Slice 2 is the unified Graph Studio command bar and Inspector workflow shell.
 
 **Gate:** v1 compatibility, safe upgrades, graph save/reload fidelity, editing, validation, and execution highlighting pass.
 
@@ -79,6 +90,9 @@ See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 | Studio/sidebar runtime synchronization | Milestone 1 |
 | Node catalogue, variables, expressions, scraping | Milestone 2 |
 | Responsive drag/drop UI and comprehensive node panels | Milestone 3 |
+| Hand/Selector tools, navigation edit-safety, and bulk node movement | Milestone 3 |
+| Runtime state colors in graph minimap/overview | Milestone 3 |
+| User-directed final Graph Studio UI/UX refinement | After Milestone 3 functional gate; ask user for details first |
 | Saved/runtime variable browser and table/list output previews | Milestone 3 |
 | Stop/cancel running workflow from Studio and sidebar | Runtime foundation; immediate |
 

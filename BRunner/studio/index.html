@@ -4,26 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <title>BRunner Studio IDE</title>
+    <link rel="stylesheet" href="../shared/studio-tokens.css">
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div id="connection-status" class="status-bar">
-        Status: <span id="status-text" class="status-disconnected">Connecting...</span>
-        <button id="btn-reconnect" class="micro-btn">Retry Connection</button>
-    </div>
-    <header>
-        <div class="logo">BRunner <span>Studio</span></div>
+    <header class="studio-command-bar">
+        <div class="logo"><img class="studio-logo-icon" src="../icons/icon2.png" alt="">BRunner <span>Sequential Studio</span></div>
+        <div id="connection-status" class="host-connection" role="status" aria-live="polite">
+            <span class="host-dot" aria-hidden="true"></span>
+            <span id="status-text" class="status-disconnected">Connecting...</span>
+            <button id="btn-reconnect" class="micro-btn" title="Retry native host connection">Retry</button>
+        </div>
         <div class="header-controls">
-            <a class="graph-studio-link" href="../studio-graph/index.html">Graph Studio</a>
+            <a class="graph-studio-link" href="../studio-graph/index.html" title="Open Graph Studio">Graph Studio</a>
+            <label class="header-select-label" for="studio-density">View</label>
+            <select id="studio-density" title="Change the display size in both Studios" aria-label="Studio display size">
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+                <option value="large">Large</option>
+            </select>
             <span id="validation-status" class="validation-status" aria-live="polite">Valid</span>
             <select id="recording-tab-policy" title="Tabs followed while recording">
                 <option value="openerDescendants">Follow opened tabs</option>
                 <option value="activeTab">Follow active tab</option>
             </select>
-            <button id="btn-record" class="danger-btn">🔴 Record Actions</button>
-            <button id="btn-run" class="primary-btn">▶ Run Workflow</button>
-            <button id="btn-toggle-sidebar" class="secondary-btn">🗂️ Toggle Manager</button>
+            <button id="btn-record" class="danger-btn" title="Record browser actions">Record</button>
+            <button id="btn-run" class="primary-btn" title="Run workflow">Run</button>
+            <button id="btn-toggle-sidebar" class="secondary-btn" title="Hide workflow manager" aria-expanded="true">Manager</button>
         </div>
     </header>
 
@@ -51,6 +59,8 @@
                 <input type="text" id="workflow-name" placeholder="Workflow Name" value="Untitled">
                 <label class="sr-only" for="workflow-domain">Bound domain</label>
                 <input type="text" id="workflow-domain" placeholder="Bound Domain (e.g. github.com)">
+                <label class="sr-only" for="workflow-description">Workflow description</label>
+                <textarea id="workflow-description" placeholder="Workflow description"></textarea>
                 <label class="manager-checkbox">
                     <input type="checkbox" id="workflow-reuse-tabs">
                     Reuse an already-open matching tab
@@ -58,9 +68,9 @@
             </div>
 
             <div class="manager-toolbar">
-                <button id="btn-new" class="icon-btn" title="Create New">📄 New</button>
-                <button id="btn-save" class="icon-btn" title="Save to OS">💾 Save</button>
-                <button id="btn-refresh" class="icon-btn" title="Refresh List">🔄 Refresh</button>
+                <button id="btn-new" class="icon-btn" title="Create a new workflow">New</button>
+                <button id="btn-save" class="icon-btn" title="Save workflow changes">Save Changes</button>
+                <button id="btn-refresh" class="icon-btn" title="Refresh saved workflows">Refresh</button>
             </div>
 
             <div class="workflow-list" id="workflow-list">
@@ -87,6 +97,7 @@
         </aside>
     </main>
 
+    <script type="module" src="preferences.js"></script>
     <script src="studioValidation.js"></script>
     <script src="app.js"></script>
 </body>

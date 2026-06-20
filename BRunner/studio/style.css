@@ -21,6 +21,7 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  font-size: calc(16px * var(--studio-font-scale));
 }
 
 /* --- Top Bars --- */
@@ -37,18 +38,30 @@ body {
 .status-connected { color: #22c55e; font-weight: bold; }
 
 header {
-  display: flex;
-  justify-content: space-between;
+  min-height: 72px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(220px, auto) minmax(150px, 1fr) auto;
   align-items: center;
-  padding: 1rem;
-  background-color: var(--bg-panel);
+  gap: 14px;
+  padding: 8px 14px;
+  background-color: #0d1626;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 
 .logo { font-weight: bold; font-size: 1.2rem; }
 .logo span { color: var(--accent); }
 
-.header-controls { display: flex; gap: 10px; align-items: center; }
+.header-controls { display: flex; gap: 8px; align-items: center; justify-content: flex-end; min-width: 0; }
+.header-select-label { color: var(--text-muted); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.header-controls select { height: var(--studio-compact-control-height); min-width: 90px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text-main); font-size: 0.72rem; }
+.host-connection { justify-self: center; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid #365274; border-radius: 999px; color: #b9c7d9; background: rgba(51,65,85,0.16); font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+.host-dot { width: 7px; height: 7px; border-radius: 999px; background: #f59e0b; }
+.host-connection:has(.status-connected) { border-color: #166534; }
+.host-connection:has(.status-connected) .host-dot { background: #22c55e; }
+.host-connection:has(.status-disconnected) { border-color: #991b1b; }
+.host-connection:has(.status-disconnected) .host-dot { background: #ef4444; }
 .graph-studio-link { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 0.7rem; border: 1px solid #475569; border-radius: 4px; color: #bfdbfe; background: #0f172a; text-decoration: none; font-size: 0.78rem; font-weight: 700; transition: border-color 0.2s, background-color 0.2s; }
 .graph-studio-link:hover { border-color: #60a5fa; background: #27354f; }
 .validation-status { border: 1px solid #166534; border-radius: 999px; padding: 0.22rem 0.55rem; color: #86efac; background: rgba(22,101,52,0.18); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
@@ -56,13 +69,13 @@ header {
 
 /* --- Buttons --- */
 button { font-family: inherit; transition: background-color 0.2s; }
-.primary-btn { background-color: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.primary-btn { min-height: var(--studio-control-height); background-color: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; }
 .primary-btn:hover { background-color: var(--accent-hover); }
 
-.secondary-btn { background-color: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+.secondary-btn { min-height: var(--studio-control-height); background-color: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
 .secondary-btn:hover { background-color: var(--node-bg); }
 
-.danger-btn { background-color: var(--danger); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.danger-btn { min-height: var(--studio-control-height); background-color: var(--danger); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; }
 .danger-btn:hover { background-color: var(--danger-hover); }
 
 .micro-btn { background: transparent; border: 1px solid var(--border); color: var(--text-main); cursor: pointer; border-radius: 3px; font-size: 0.75rem; padding: 2px 6px; }
@@ -77,11 +90,11 @@ main {
 
 /* Left: Action Palette */
 .palette {
-  width: 220px;
-  min-width: 220px;
+  width: calc(220px * var(--studio-panel-width-scale));
+  min-width: calc(220px * var(--studio-panel-width-scale));
   background-color: var(--bg-panel);
   border-right: 1px solid var(--border);
-  padding: 1rem;
+  padding: var(--studio-panel-padding);
   overflow-y: auto;
 }
 
@@ -111,8 +124,8 @@ main {
 
 /* Right: Workflow Manager Sidebar */
 .workflow-manager {
-  width: 340px;
-  min-width: 340px;
+  width: calc(340px * var(--studio-panel-width-scale));
+  min-width: calc(340px * var(--studio-panel-width-scale));
   background-color: var(--bg-panel);
   border-left: 1px solid var(--border);
   display: flex;
@@ -122,8 +135,11 @@ main {
 
 /* Class to collapse the sidebar */
 .workflow-manager.collapsed {
-  margin-right: -341px; /* width + border */
+  margin-right: calc(-340px * var(--studio-panel-width-scale) - 1px);
 }
+
+.logo { display: flex; align-items: center; gap: 8px; }
+.studio-logo-icon { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; background: white; }
 
 .manager-tabs {
   display: grid;
@@ -161,7 +177,7 @@ main {
   border-bottom: 1px solid var(--border);
 }
 
-.manager-header input {
+.manager-header input, .manager-header textarea {
   width: 100%;
   box-sizing: border-box;
   background: var(--bg-main);
@@ -172,7 +188,8 @@ main {
   font-size: 0.9rem;
 }
 
-.manager-header input + input { margin-top: 0.5rem; }
+.manager-header input + input, .manager-header textarea { margin-top: 0.5rem; }
+.manager-header textarea { min-height: 62px; resize: vertical; font-family: inherit; }
 .manager-checkbox { display: flex; gap: 8px; align-items: center; margin-top: 0.65rem; font-size: 0.8rem; color: var(--text-muted); }
 .manager-checkbox input { width: auto; margin: 0; }
 

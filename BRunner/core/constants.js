@@ -20,6 +20,7 @@ export const Messages = Object.freeze({
   OsDuplicateWorkflow: "OS_DUPLICATE_WORKFLOW",
   OsRenameWorkflow: "OS_RENAME_WORKFLOW",
   OsUpgradeWorkflow: "OS_UPGRADE_WORKFLOW",
+  OsSaveExecutionLog: "OS_SAVE_EXECUTION_LOG",
 
   // Workflow execution
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
@@ -30,6 +31,7 @@ export const Messages = Object.freeze({
   BridgeStatus: "BRIDGE_STATUS",
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
+  ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
   GetNodeDefinitions: "GET_NODE_DEFINITIONS",
 
   // Content script execution
@@ -134,6 +136,7 @@ export const NativeCommands = Object.freeze({
   DuplicateWorkflow: "DUPLICATE_WORKFLOW",
   RenameWorkflow: "RENAME_WORKFLOW",
   UpgradeWorkflow: "UPGRADE_WORKFLOW",
+  SaveExecutionLog: "SAVE_EXECUTION_LOG",
   OsKeystroke: "OS_KEYSTROKE",
   ReadFile: "READ_FILE",
 });
