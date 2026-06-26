@@ -38,10 +38,22 @@ import {
   InspectorMode,
   LogHandlingPolicy,
   StudioDensity,
+  applyStudioDensity,
   loadStudioPreferences,
   normalizeStudioPreferences,
   saveStudioPreferences,
 } from "../../core/studioPreferences.js";
+import {
+  STUDIO_SESSION_KEY,
+  StudioKind,
+  loadStudioSession,
+  saveStudioSession,
+} from "../../core/studioSession.js";
+import {
+  NativeHostRequirementModes,
+  formatNativeCapabilities,
+  normalizeNativeHostRequirement,
+} from "../../core/nativeHostRequirements.js";
 
 const NODE_TYPES = { brunner: GraphNode };
 const EDGE_TYPES = { removable: RemovableEdge };
@@ -90,6 +102,7 @@ function GraphStudioCanvas() {
   const [temporaryPan, setTemporaryPan] = useState(false);
   const [canvasHasFocus, setCanvasHasFocus] = useState(false);
   const [hostStatus, setHostStatus] = useState("checking");
+  const [hostCapabilities, setHostCapabilities] = useState([]);
   const [recording, setRecording] = useState({
     isRecording: false,
     tabPolicy: "openerDescendants",
@@ -103,6 +116,9 @@ function GraphStudioCanvas() {
     logs: [],
   });
   const handledLogRunRef = useRef("");
+  const recordedStepKeysRef = useRef(new Set());
+  const recordedSessionRef = useRef("");
+  const initialSessionLoadedRef = useRef(false);
   const { screenToFlowPosition, fitView, getNodes, getEdges } = useReactFlow();
   const readOnly = sourceSchema === 1;
   const executionActive = ["starting", "running", "cancelling"].includes(execution.status);
@@ -142,6 +158,7 @@ function GraphStudioCanvas() {
         ...patch,
         panels: { ...current.panels, ...(patch?.panels || {}) },
       });
+      if (next.density !== current.density) applyStudioDensity(next.density);
       saveStudioPreferences(next).catch(() => {});
       return next;
     });
@@ -165,10 +182,12 @@ function GraphStudioCanvas() {
       const response = await chrome.runtime.sendMessage({ type: Messages.CheckBridgeStatus });
       const connected = Boolean(response?.connected);
       setHostStatus(connected ? "connected" : "disconnected");
+      setHostCapabilities(Array.isArray(response?.capabilities) ? response.capabilities : []);
       if (connected) await refreshWorkflows();
       return connected;
     } catch {
       setHostStatus("disconnected");
+      setHostCapabilities([]);
       return false;
     }
   }, [refreshWorkflows]);
@@ -196,7 +215,16 @@ function GraphStudioCanvas() {
   useEffect(() => {
     const applyRuntimeState = (state) => {
       if (state?.execution) setExecution(state.execution);
-      if (state?.recording) setRecording(state.recording);
+      if (state?.recording) {
+        setRecording(state.recording);
+        if (
+          state.recording.sessionId &&
+          state.recording.sessionId !== recordedSessionRef.current
+        ) {
+          recordedSessionRef.current = state.recording.sessionId;
+          recordedStepKeysRef.current = new Set();
+        }
+      }
     };
     const listener = (request) => {
       if (request?.type === Messages.RuntimeStateChanged) {
@@ -251,6 +279,10 @@ function GraphStudioCanvas() {
       execution,
       readOnly,
       canvasInteraction.effectiveTool === CanvasTool.Hand,
+      {
+        hostConnected: hostStatus === "connected",
+        hostCapabilities,
+      },
     ));
     setEdges((current) => current.map((edge) => ({
       ...edge,
@@ -261,7 +293,7 @@ function GraphStudioCanvas() {
         navigationLocked: canvasInteraction.effectiveTool === CanvasTool.Hand,
       },
     })));
-  }, [canvasInteraction.effectiveTool, execution, executionActive, readOnly, setEdges, setNodes]);
+  }, [canvasInteraction.effectiveTool, execution, executionActive, hostCapabilities, hostStatus, readOnly, setEdges, setNodes]);
 
   useEffect(() => {
     if (logFilterNodeId && !nodes.some((node) => node.id === logFilterNodeId)) {
@@ -348,6 +380,8 @@ function GraphStudioCanvas() {
   const appendRecordedStep = useCallback((step) => {
     if (!step || !definitionsByType.size) return;
     try {
+      const key = getRecordedStepKey(step);
+      if (recordedStepKeysRef.current.has(key)) return;
       const currentNodes = getNodes();
       const currentEdges = getEdges();
       const model = workflowToCanvas({ steps: [step] }, definitionsByType);
@@ -376,6 +410,7 @@ function GraphStudioCanvas() {
       const sourceIds = new Set(currentEdges.map((edge) => edge.source));
       const terminal = [...currentNodes].reverse().find((candidate) => !sourceIds.has(candidate.id));
       setNodes(currentNodes.map((candidate) => ({ ...candidate, selected: false })).concat(node));
+      recordedStepKeysRef.current.add(key);
       if (terminal) {
         setEdges(currentEdges.concat({
           id: `edge-${terminal.id}-${id}`,
@@ -395,6 +430,11 @@ function GraphStudioCanvas() {
       setNotice({ kind: "error", text: `Could not add recorded node: ${error.message || error}` });
     }
   }, [definitionsByType, fitView, getEdges, getNodes, layoutDirection, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (!definitionsByType.size || !Array.isArray(recording.recordedSteps)) return;
+    recording.recordedSteps.forEach((step) => appendRecordedStep(step));
+  }, [appendRecordedStep, definitionsByType, recording.recordedSteps]);
 
   useEffect(() => {
     const listener = (request) => {
@@ -448,16 +488,23 @@ function GraphStudioCanvas() {
     setSourceSchema(2);
     setDirty(false);
     setNotice({ kind: "neutral", text: "New v2 workflow" });
+    saveStudioSession({
+      activeWorkflowFilename: "",
+      activeStudio: StudioKind.Graph,
+    }).catch(() => {});
   }, [confirmDiscard, setEdges, setNodes]);
 
-  const loadWorkflow = useCallback(async () => {
-    if (!selectedFile || !definitions.length || !confirmDiscard()) return;
+  const loadWorkflow = useCallback(async (filenameOverride = "") => {
+    const filename = typeof filenameOverride === "string" && filenameOverride
+      ? filenameOverride
+      : selectedFile;
+    if (!filename || !definitions.length || !confirmDiscard()) return;
     setBusy(true);
     setNotice({ kind: "neutral", text: `Loading ${selectedFile}…` });
     try {
       const response = await chrome.runtime.sendMessage({
         type: Messages.LoadWorkflow,
-        filename: selectedFile,
+        filename,
       });
       if (!isSuccess(response)) throw new Error(response?.error || "Could not load workflow.");
       const content = response.content || response.workflow || response.data || response;
@@ -471,16 +518,20 @@ function GraphStudioCanvas() {
         data: { ...edge.data, onMutate: () => setDirty(true) },
       })));
       setSelectedNodeId("");
-      setLoadedFilename(selectedFile);
+      setLoadedFilename(filename);
       setWorkflowName(model.sourceSchema === 1
-        ? stripJson(selectedFile)
-        : (model.metadata.name || stripJson(selectedFile)));
+        ? stripJson(filename)
+        : (model.metadata.name || stripJson(filename)));
       setMetadata(model.metadata);
       setSourceSchema(model.sourceSchema);
       setDirty(false);
       setNotice(model.readOnly
         ? { kind: "warning", text: "Legacy v1 loaded read-only · upgrade required to edit" }
         : { kind: "success", text: "Graph loaded" });
+      saveStudioSession({
+        activeWorkflowFilename: filename,
+        activeStudio: StudioKind.Graph,
+      }).catch(() => {});
       window.setTimeout(() => fitView({ padding: 0.18, duration: 250 }), 0);
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
@@ -488,6 +539,38 @@ function GraphStudioCanvas() {
       setBusy(false);
     }
   }, [confirmDiscard, definitions.length, definitionsByType, fitView, selectedFile, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (
+      initialSessionLoadedRef.current ||
+      hostStatus !== "connected" ||
+      !definitions.length ||
+      busy ||
+      loadedFilename
+    ) return;
+    initialSessionLoadedRef.current = true;
+    loadStudioSession()
+      .then((session) => {
+        if (!session.activeWorkflowFilename) return;
+        setSelectedFile(session.activeWorkflowFilename);
+        void loadWorkflow(session.activeWorkflowFilename);
+      })
+      .catch(() => {});
+  }, [busy, definitions.length, hostStatus, loadWorkflow, loadedFilename]);
+
+  useEffect(() => {
+    const listener = (changes, areaName) => {
+      if (areaName !== "local" || !changes?.[STUDIO_SESSION_KEY]) return;
+      const session = changes[STUDIO_SESSION_KEY].newValue || {};
+      if (session.activeStudio === StudioKind.Graph) return;
+      const filename = session.activeWorkflowFilename || "";
+      if (!filename || filename === loadedFilename || dirty || busy || hostStatus !== "connected") return;
+      setSelectedFile(filename);
+      void loadWorkflow(filename);
+    };
+    chrome.storage?.onChanged?.addListener?.(listener);
+    return () => chrome.storage?.onChanged?.removeListener?.(listener);
+  }, [busy, dirty, hostStatus, loadWorkflow, loadedFilename]);
 
   const duplicateWorkflow = useCallback(async () => {
     if (!selectedFile || busy || hostStatus !== "connected") return;
@@ -595,6 +678,10 @@ function GraphStudioCanvas() {
       setMetadata((current) => ({ ...current, name: stripJson(savedFilename) }));
       setDirty(false);
       setNotice({ kind: "success", text: `Saved ${savedFilename}` });
+      await saveStudioSession({
+        activeWorkflowFilename: savedFilename,
+        activeStudio: StudioKind.Graph,
+      }).catch(() => {});
       await refreshWorkflows();
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
@@ -766,7 +853,7 @@ function GraphStudioCanvas() {
         files={files}
         selectedFile={selectedFile}
         onSelectedFile={setSelectedFile}
-        onLoad={loadWorkflow}
+        onLoad={() => loadWorkflow()}
         onRefresh={refreshWorkflows}
         onDuplicate={duplicateWorkflow}
         onDelete={deleteWorkflow}
@@ -781,7 +868,7 @@ function GraphStudioCanvas() {
         onRun={runOrStopWorkflow}
       />
       <main className={`graph-layout${libraryExpanded ? "" : " library-collapsed"}${inspectorVisible ? "" : " inspector-collapsed"}`}>
-        {libraryExpanded ? <NodePalette definitions={definitions} error={definitionsError} onAdd={addFromPalette} onCollapse={() => updateUiPreferences({ panels: { nodeLibraryExpanded: false } })} readOnly={!canvasInteraction.canEdit} navigationMode={canvasInteraction.effectiveTool === CanvasTool.Hand} /> : <PanelRestoreRail side="left" label="Show Node Library" onRestore={() => updateUiPreferences({ panels: { nodeLibraryExpanded: true } })} />}
+        {libraryExpanded ? <NodePalette definitions={definitions} error={definitionsError} onAdd={addFromPalette} onCollapse={() => updateUiPreferences({ panels: { nodeLibraryExpanded: false } })} readOnly={!canvasInteraction.canEdit} navigationMode={canvasInteraction.effectiveTool === CanvasTool.Hand} hostConnected={hostStatus === "connected"} hostCapabilities={hostCapabilities} /> : <PanelRestoreRail side="left" label="Show Node Library" onRestore={() => updateUiPreferences({ panels: { nodeLibraryExpanded: true } })} />}
         <section
           id="workflow-graph-canvas"
           className={`graph-canvas tool-${canvasInteraction.effectiveTool}`}
@@ -859,6 +946,7 @@ function GraphStudioCanvas() {
           loadedFilename={loadedFilename}
           busy={busy || executionActive || recordingActive}
           hostConnected={hostStatus === "connected"}
+          hostCapabilities={hostCapabilities}
           onUpgrade={upgradeWorkflow}
           layoutDirection={layoutDirection}
           onLayoutDirection={arrangeGraph}
@@ -1002,7 +1090,7 @@ function ExecutionLogPanel({ logs, nodes, filterNodeId, onFilterNodeId, onSelect
   );
 }
 
-function NodePalette({ definitions, error, onAdd, onCollapse, readOnly, navigationMode }) {
+function NodePalette({ definitions, error, onAdd, onCollapse, readOnly, navigationMode, hostConnected, hostCapabilities }) {
   const [query, setQuery] = useState("");
   const visible = definitions.filter((definition) => `${definition.label} ${definition.type} ${definition.category}`.toLowerCase().includes(query.trim().toLowerCase()));
   const groups = visible.reduce((result, definition) => {
@@ -1024,6 +1112,7 @@ function NodePalette({ definitions, error, onAdd, onCollapse, readOnly, navigati
               onDragStart={(event) => { event.dataTransfer.setData("application/brunner-node", definition.type); event.dataTransfer.effectAllowed = "move"; }}
               onClick={() => onAdd(definition)}>
               <span className="palette-glyph"><NodeGlyphSmall /></span><span><strong>{definition.label}</strong><code>{definition.type}</code></span>
+              <NativeHostPill definition={definition} hostConnected={hostConnected} hostCapabilities={hostCapabilities} compact />
             </button>
           ))}</section>
         ))}
@@ -1091,6 +1180,8 @@ function InspectorPanel(props) {
       <div className="properties-scroll">
         <div className="inspector-context"><span>Node</span><strong>{definition.label}</strong></div>
         <div className="node-identity"><code>{node.data.type}</code><span>{navigationMode ? "Navigation mode" : node.data.readOnly ? "Legacy preview" : node.data.executionLocked ? "Execution locked" : `Node ${node.id.slice(-8)}`}</span></div>
+        <NodeGuidancePanel definition={definition} />
+        <NativeHostRequirementPanel definition={definition} hostConnected={props.hostConnected} hostCapabilities={props.hostCapabilities} />
         <section className="property-section" aria-labelledby="execution-heading"><h3 id="execution-heading">Execution</h3>
           <Field label="Node mode" htmlFor="property-execution-mode"><select id="property-execution-mode" value={node.data.executionMode || "enabled"} disabled={readOnly} onChange={(event) => props.onNodeChange({ executionMode: event.target.value })}><option value="enabled">Enabled</option><option value="disabled">Bypassed (always skip)</option><option value="conditional">Conditional bypass</option></select></Field>
           {node.data.executionMode === "conditional" && <Field label="Bypass when" required htmlFor="property-skip-when" help="Skip when this expression resolves to true."><input id="property-skip-when" value={node.data.skipWhen || ""} disabled={readOnly} onChange={(event) => props.onNodeChange({ skipWhen: event.target.value })} placeholder="{{skip_this_step}}" /></Field>}
@@ -1103,6 +1194,95 @@ function InspectorPanel(props) {
       </div>
     </aside>
   );
+}
+
+function NodeGuidancePanel({ definition = {} }) {
+  const guidance = definition.guidance || {};
+  const inputs = guidance.inputs || definition.inputs || [];
+  const outputs = guidance.outputs || definition.outputs || [];
+
+  return (
+    <section className="node-guidance" aria-labelledby="node-guidance-heading">
+      <h3 id="node-guidance-heading">How to use</h3>
+      <p>{guidance.description || definition.description || "No description available."}</p>
+      <dl>
+        <div><dt>When</dt><dd>{guidance.whenToUse || "Use when this node behavior is needed."}</dd></div>
+        <div><dt>Example</dt><dd>{guidance.example || "Configure the node and connect success to the next step."}</dd></div>
+        <div><dt>I/O</dt><dd>Inputs: {formatInlineList(inputs)} · Outputs: {formatInlineList(outputs)}</dd></div>
+        <div><dt>Config</dt><dd>{guidance.configuration || "Configure required fields before running."}</dd></div>
+        <div><dt>Safety</dt><dd>{guidance.safety || "Failures report bounded diagnostics."}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function NativeHostRequirementPanel({ definition, hostConnected, hostCapabilities }) {
+  const summary = getNativeHostSummary(definition, hostConnected, hostCapabilities);
+  if (!summary) return null;
+
+  return (
+    <section className={`native-host-requirement native-host-${summary.state}`} aria-labelledby="native-host-requirement-heading">
+      <div>
+        <h3 id="native-host-requirement-heading">{summary.heading}</h3>
+        <p>{summary.message}</p>
+      </div>
+      <span>{summary.badge}</span>
+    </section>
+  );
+}
+
+function NativeHostPill({ definition, hostConnected, hostCapabilities, compact = false }) {
+  const summary = getNativeHostSummary(definition, hostConnected, hostCapabilities);
+  if (!summary) return null;
+  return (
+    <span className={`native-host-pill native-host-${summary.state}${compact ? " native-host-pill-compact" : ""}`} title={summary.message}>
+      {summary.badge}
+    </span>
+  );
+}
+
+function getNativeHostSummary(definition = {}, hostConnected = false, hostCapabilities = []) {
+  const requirement = normalizeNativeHostRequirement(definition.nativeHost);
+  if (requirement.mode === NativeHostRequirementModes.None) return null;
+
+  const missing = Array.isArray(hostCapabilities)
+    ? requirement.capabilities.filter((capability) => !hostCapabilities.includes(capability))
+    : [];
+  const capabilityText = formatNativeCapabilities(requirement.capabilities);
+
+  if (requirement.mode === NativeHostRequirementModes.Fallback) {
+    return {
+      state: "optional",
+      badge: "Host optional",
+      heading: "Native host optional",
+      message: `This node can use ${capabilityText} as a fallback, but host absence is not an error.`,
+    };
+  }
+
+  if (!hostConnected) {
+    return {
+      state: "missing",
+      badge: "Host required",
+      heading: "Native host required",
+      message: `This node fails if reached while the native host is disconnected. Required capability: ${capabilityText}.`,
+    };
+  }
+
+  if (missing.length) {
+    return {
+      state: "missing",
+      badge: "Capability missing",
+      heading: "Native capability missing",
+      message: `Connected host is missing required capability: ${formatNativeCapabilities(missing)}.`,
+    };
+  }
+
+  return {
+    state: "available",
+    badge: "Host ready",
+    heading: "Native host ready",
+    message: `Required capability available: ${capabilityText}.`,
+  };
 }
 
 function WorkflowDataView({ seeds = {}, variables = [] }) {
@@ -1131,6 +1311,19 @@ function ConfigField({ field, value, config, onChange, disabled }) {
 }
 
 function Field({ label, required, help, htmlFor, children }) { return <div className="property-field"><label htmlFor={htmlFor}>{label}{required ? " *" : ""}</label>{children}{help && <small>{help}</small>}</div>; }
+function formatInlineList(values = []) { return values.length ? values.join(", ") : "none"; }
+function getRecordedStepKey(step = {}) {
+  if (step.id) return `id:${step.id}`;
+  return [
+    "recorded",
+    step.recordedAt || "",
+    step.action || step.type || "",
+    step.tabRef || "",
+    step.url || "",
+    typeof step.target === "string" ? step.target : JSON.stringify(step.target || ""),
+    step.value === undefined ? "" : String(step.value),
+  ].join("|");
+}
 function isSuccess(response) { return Boolean(response && (response.ok === true || response.status === "success")); }
 function stripJson(filename) { return String(filename || "Untitled").replace(/\.json$/i, ""); }
 function createNewMetadata() { return { id: crypto.randomUUID(), name: "Untitled", description: "", boundDomain: "", settings: { reuseExistingTabs: false, graphLayoutDirection: "vertical" }, variables: {} }; }

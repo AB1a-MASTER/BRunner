@@ -2,6 +2,12 @@
 // Canonical serializable definitions for workflow nodes supported by runtime.
 
 import { Actions, NavigationTargets } from "./constants.js";
+import {
+  DEFAULT_NATIVE_HOST_REQUIREMENT,
+  NativeHostCapabilities,
+  NativeHostRequirementModes,
+  normalizeNativeHostRequirement,
+} from "./nativeHostRequirements.js";
 
 const definitions = [
   {
@@ -250,6 +256,10 @@ const definitions = [
     label: "Send Keystroke",
     icon: "🎹",
     description: "Send a key or shortcut through the native host.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Required,
+      capabilities: [NativeHostCapabilities.OsKeystroke],
+    },
     targetRequired: false,
     config: [{ key: "keys", label: "Keys", kind: "text", required: true }],
     inputs: ["input"],
@@ -640,6 +650,10 @@ const definitions = [
     label: "Upload Allowed Local File",
     icon: "LOCAL",
     description: "Read an allowlisted file through the native host and assign it to a web file input.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Required,
+      capabilities: [NativeHostCapabilities.LocalFileRead],
+    },
     targetRequired: true,
     config: [
       {
@@ -895,8 +909,15 @@ function historyUnavailableField() {
   };
 }
 
+const normalizedDefinitions = definitions.map((definition) => ({
+  nativeHost: DEFAULT_NATIVE_HOST_REQUIREMENT,
+  ...definition,
+  nativeHost: normalizeNativeHostRequirement(definition.nativeHost),
+  guidance: normalizeNodeGuidance(definition),
+}));
+
 const definitionsByType = new Map(
-  definitions.map((definition) => [definition.type, definition]),
+  normalizedDefinitions.map((definition) => [definition.type, definition]),
 );
 
 export function getNodeDefinition(type) {
@@ -904,9 +925,81 @@ export function getNodeDefinition(type) {
 }
 
 export function getNodeDefinitions() {
-  return definitions.map((definition) => structuredClone(definition));
+  return normalizedDefinitions.map((definition) => structuredClone(definition));
 }
 
 export function isSupportedNodeType(type) {
   return definitionsByType.has(type);
+}
+
+function normalizeNodeGuidance(definition = {}) {
+  const label = definition.label || definition.type || "node";
+  const category = definition.category || "Node";
+  const requiredFields = (definition.config || [])
+    .filter((field) => field.required)
+    .map((field) => field.label || field.key);
+  const requiredText = requiredFields.length
+    ? `Configure ${formatList(requiredFields)}.`
+    : "No required configuration fields.";
+  const targetText = definition.targetRequired
+    ? "Select or record the target element before running."
+    : "Runs without a target element.";
+
+  return {
+    description: definition.description || `Run ${label}.`,
+    whenToUse: definition.whenToUse ||
+      `Use ${label} when a workflow needs this ${category.toLowerCase()} behavior.`,
+    example: definition.example || createUsageExample(definition),
+    inputs: Array.isArray(definition.inputs) ? definition.inputs : ["input"],
+    outputs: Array.isArray(definition.outputs) ? definition.outputs : ["success"],
+    configuration: `${targetText} ${requiredText}`,
+    safety: definition.safety || createSafetyNote(definition),
+  };
+}
+
+function createUsageExample(definition = {}) {
+  const label = definition.label || definition.type || "this node";
+  const type = definition.type || "";
+
+  const examples = {
+    [Actions.BrowserNavigate]: "Open https://example.com in the current tab, then continue to the next node.",
+    [Actions.ElementClick]: "Click a recorded Submit button after required form fields are filled.",
+    [Actions.ElementType]: "Type {{email}} into a recorded email input.",
+    [Actions.ElementSelect]: "Choose the visible option text \"United States\" from a recorded dropdown.",
+    [Actions.LogicWait]: "Pause for 1000 ms before checking that a result appears.",
+    [Actions.DataSet]: "Set `status` to `ready` for later expressions like {{status}}.",
+    [Actions.HttpRequest]: "Fetch JSON from an API and save the parsed response into `api_response`.",
+    [Actions.FileLocalUpload]: "Read an approved local file through the native host and upload it to a file input.",
+    [Actions.KeyboardSendKeys]: "Send Ctrl+L through the native host when page-level automation is not enough.",
+  };
+
+  return examples[type] ||
+    `Add ${label}, configure its required fields, and connect its success output to the next node.`;
+}
+
+function createSafetyNote(definition = {}) {
+  const category = definition.category || "";
+  const nativeMode = normalizeNativeHostRequirement(definition.nativeHost).mode;
+
+  if (nativeMode === NativeHostRequirementModes.Required) {
+    return "Requires the native host when reached; fails clearly if the host or capability is unavailable.";
+  }
+  if (category === "Clipboard") {
+    return "Clipboard contents can be sensitive; reads require explicit node approval and logs avoid raw contents.";
+  }
+  if (category === "Network") {
+    return "Headers and bodies are kept out of logs; non-2xx and timeout behavior is controlled by node options.";
+  }
+  if (category === "File") {
+    return "File payloads, local paths, and large binary content are bounded and kept out of execution logs.";
+  }
+  if (definition.targetRequired) {
+    return "Target resolution uses semantic candidates first and reports diagnostics if the target cannot be found.";
+  }
+  return "Safe to run without native host access; failures report bounded diagnostics.";
+}
+
+function formatList(values = []) {
+  if (values.length <= 1) return values[0] || "";
+  return `${values.slice(0, -1).join(", ")} and ${values.at(-1)}`;
 }

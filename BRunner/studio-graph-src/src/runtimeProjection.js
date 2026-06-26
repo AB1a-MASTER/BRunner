@@ -1,4 +1,10 @@
-export function projectRuntimeState(nodes, execution = {}, readOnly = false, navigationLocked = false) {
+export function projectRuntimeState(
+  nodes,
+  execution = {},
+  readOnly = false,
+  navigationLocked = false,
+  host = {},
+) {
   const completed = new Set(execution.completedNodeIds || []);
   const skipped = new Set(execution.skippedNodeIds || []);
   const active = ["starting", "running", "cancelling"].includes(execution.status);
@@ -21,6 +27,8 @@ export function projectRuntimeState(nodes, execution = {}, readOnly = false, nav
         executionLocked: active,
         navigationLocked,
         readOnly,
+        hostConnected: host.hostConnected === true,
+        hostCapabilities: Array.isArray(host.hostCapabilities) ? host.hostCapabilities : [],
       },
     };
   });

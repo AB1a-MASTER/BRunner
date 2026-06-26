@@ -2,6 +2,7 @@
 // WebSocket bridge to the local BRunner Python host.
 
 import { Defaults, NativeCommands } from "./constants.js";
+import { NativeHostCapabilities } from "./nativeHostRequirements.js";
 import { ensureJsonFilename } from "./workflowUtils.js";
 
 class NativeBridgeClient {
@@ -204,6 +205,13 @@ class NativeBridgeClient {
   getStatus() {
     return {
       connected: this.isConnected,
+      capabilities: this.isConnected
+        ? [
+            NativeHostCapabilities.OsKeystroke,
+            NativeHostCapabilities.LocalFileRead,
+            NativeHostCapabilities.ExecutionLogSave,
+          ]
+        : [],
     };
   }
 }

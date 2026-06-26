@@ -1,0 +1,1207 @@
+{
+    "description": "",
+    "boundDomain": "www.google.com",
+    "variables": {},
+    "settings": {
+        "reuseExistingTabs": false
+    },
+    "steps": [
+        {
+            "id": "recorded_1782494376207_b3ac9t",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.google.com/",
+            "payload": {
+                "primary": "https://www.google.com/",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.google.com/",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.google.com/",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/",
+                "search": "",
+                "title": "Google",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:36.207Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.google.com/",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494376907_0l5xz2",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "id",
+                    "value": "APjFqb",
+                    "score": 100
+                },
+                "candidates": [
+                    {
+                        "strategy": "id",
+                        "value": "APjFqb",
+                        "score": 100
+                    },
+                    {
+                        "strategy": "name",
+                        "value": "q",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Search",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "title",
+                        "value": "Search",
+                        "score": 84
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "form #APjFqb",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "#APjFqb",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_6dcdb163",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "name",
+                        "value": "q",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Search",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "title",
+                        "value": "Search",
+                        "score": 84
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "form #APjFqb",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "#APjFqb",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_6dcdb163",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "textarea",
+                    "role": "combobox",
+                    "type": "",
+                    "id": "APjFqb",
+                    "name": "q",
+                    "ariaLabel": "Search",
+                    "placeholder": "",
+                    "title": "Search",
+                    "text": "",
+                    "value": "",
+                    "href": "",
+                    "classes": [
+                        "gLFyf"
+                    ],
+                    "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                    "nearbyText": "",
+                    "bounds": {
+                        "x": 523,
+                        "y": 377,
+                        "width": 447,
+                        "height": 50
+                    }
+                }
+            },
+            "targetType": "id",
+            "targetFallbacks": [
+                {
+                    "strategy": "name",
+                    "value": "q",
+                    "score": 95
+                },
+                {
+                    "strategy": "ariaLabel",
+                    "value": "Search",
+                    "score": 92
+                },
+                {
+                    "strategy": "title",
+                    "value": "Search",
+                    "score": 84
+                },
+                {
+                    "strategy": "form_context",
+                    "value": "form #APjFqb",
+                    "score": 72
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "#APjFqb",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_6dcdb163",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "textarea",
+                "role": "combobox",
+                "type": "",
+                "id": "APjFqb",
+                "name": "q",
+                "ariaLabel": "Search",
+                "placeholder": "",
+                "title": "Search",
+                "text": "",
+                "value": "",
+                "href": "",
+                "classes": [
+                    "gLFyf"
+                ],
+                "domPath": "body:1/div:1/div:5/form:2/div:0/div:0/div:1/div:0/div:1/textarea:2",
+                "nearbyText": "",
+                "bounds": {
+                    "x": 523,
+                    "y": 377,
+                    "width": 447,
+                    "height": 50
+                }
+            },
+            "friendlyName": "id: APjFqb",
+            "payload": {},
+            "config": {},
+            "page": {
+                "url": "https://www.google.com/",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/",
+                "search": "",
+                "title": "Google"
+            },
+            "recordedAt": "2026-06-26T17:19:36.905Z",
+            "tabRef": "tab_1"
+        },
+        {
+            "id": "recorded_1782494380994_xi6ko0",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+            "payload": {
+                "primary": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/search",
+                "search": "?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "title": "apple - Google Search",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:40.995Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494381522_4edu3s",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "text: AppleApplehttps://www.apple.com"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "Apple\n\nApple\nhttps://www.apple.com",
+                "value": "",
+                "href": "https://www.apple.com/",
+                "classes": [
+                    "zReHs"
+                ],
+                "domPath": "div:0/div:1/div:0/div:0/div:0/div:0/div:0/div:0/span:0/a:0",
+                "nearbyText": "Apple Apple https://www.apple.com",
+                "bounds": {
+                    "x": 210,
+                    "y": 179,
+                    "width": 160,
+                    "height": 44
+                }
+            },
+            "friendlyName": "",
+            "payload": {},
+            "config": {},
+            "page": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/search",
+                "search": "?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "title": "apple - Google Search"
+            },
+            "recordedAt": "2026-06-26T17:19:41.521Z",
+            "tabRef": "tab_1"
+        },
+        {
+            "id": "recorded_1782494383282_bk5wg0",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.apple.com/",
+            "payload": {
+                "primary": "https://www.apple.com/",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.apple.com/",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.apple.com/",
+                "origin": "https://www.apple.com",
+                "host": "www.apple.com",
+                "hostname": "www.apple.com",
+                "domain": "apple.com",
+                "path": "/",
+                "search": "",
+                "title": "Apple",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:43.282Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.apple.com/",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494386137_dbvuav",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+            "payload": {
+                "primary": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/search",
+                "search": "?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "title": "apple - Google Search",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:46.137Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494387699_5ne2bz",
+            "action": "element.click",
+            "target": {
+                "strategy": "css_selector",
+                "value": "text: AppleFacebook\u00a0\u00b7\u00a0Apple16.4M+ followers"
+            },
+            "targetType": "css_selector",
+            "targetFallbacks": [],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "Apple\n\nFacebook\u00a0\u00b7\u00a0Apple\n16.4M+ followers",
+                "value": "",
+                "href": "https://www.facebook.com/apple/",
+                "classes": [
+                    "zReHs"
+                ],
+                "domPath": "div:3/div:2/div:1/div:0/div:0/div:0/div:0/div:0/span:0/a:0",
+                "nearbyText": "Apple Facebook \u00b7 Apple 16.4M+ followers",
+                "bounds": {
+                    "x": 210,
+                    "y": 250,
+                    "width": 149,
+                    "height": 44
+                }
+            },
+            "friendlyName": "",
+            "payload": {},
+            "config": {},
+            "page": {
+                "url": "https://www.google.com/search?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "origin": "https://www.google.com",
+                "host": "www.google.com",
+                "hostname": "www.google.com",
+                "domain": "google.com",
+                "path": "/search",
+                "search": "?q=apple&sca_esv=b2b623efc307516e&sxsrf=APpeQnvrKNQmq1GYd7mESa1XM3qvFcBEfg%3A1782494374957&source=hp&ei=prQ-arLvNtePhbIPjcffyAs&iflsig=ABILxe8AAAAAaj7CtuMSdh9kpqMD6R8_iRjIVnK7c45L&ved=0ahUKEwiy2p6AtaWVAxXXR0EAHY3jF7kQ4dUDCBg&uact=5&oq=apple&gs_lp=Egdnd3Mtd2l6IgVhcHBsZTIKECMYgAQYigUYJzIKECMYgAQYigUYJzIKECMYgAQYigUYJzINEAAYgAQYigUYQxixAzINEAAYgAQYigUYQxixAzITEC4YgAQYigUYQxixAxjHARjRAzINEAAYgAQYigUYQxixAzIKEAAYgAQYigUYQzIQEC4YgAQYigUYQxjHARjRAzINEAAYgAQYigUYQxixA0j4E1CYDliaE3ABeACQAQCYAa0CoAH9BqoBBTItMi4xuAEDyAEA-AEBmAIEoAKkB6gCCsICBxAjGOoCGCfCAg0QLhjHARjRAxjqAhgnwgIKECMY8AUY6gIYJ8ICFhAuGIAEGIoFGEMYsQMYgwEYxwEY0QPCAhAQABiABBiKBRhDGLEDGIMBwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICBRAAGIAEmAMV8QUFOt6jQDYHAZIHBzEuMC4xLjKgB9IcsgcFMi0xLjK4B48HwgcHMi0zLjAuMcgHIIAIAQ&sclient=gws-wiz",
+                "title": "apple - Google Search"
+            },
+            "recordedAt": "2026-06-26T17:19:47.698Z",
+            "tabRef": "tab_1"
+        },
+        {
+            "id": "recorded_1782494393415_kr0qhu",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.facebook.com/apple/",
+            "payload": {
+                "primary": "https://www.facebook.com/apple/",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.facebook.com/apple/",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.facebook.com/apple/",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/",
+                "search": "",
+                "title": "Apple | Facebook",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:53.415Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.facebook.com/apple/",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494393970_qgbwpe",
+            "action": "element.type",
+            "target": {
+                "primary": {
+                    "strategy": "name",
+                    "value": "email",
+                    "score": 95
+                },
+                "candidates": [
+                    {
+                        "strategy": "name",
+                        "value": "email",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Email or phone",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "placeholder",
+                        "value": "Email or phone",
+                        "score": 86
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "#login_form input[name=\"email\"]",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "input[name=\"email\"]",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:0/label:0/input:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_18435e74",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Email or phone",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "placeholder",
+                        "value": "Email or phone",
+                        "score": 86
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "#login_form input[name=\"email\"]",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "input[name=\"email\"]",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:0/label:0/input:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_18435e74",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "input",
+                    "role": "",
+                    "type": "email",
+                    "id": "",
+                    "name": "email",
+                    "ariaLabel": "Email or phone",
+                    "placeholder": "Email or phone",
+                    "title": "",
+                    "text": "",
+                    "value": "",
+                    "href": "",
+                    "classes": [
+                        "x1i10hfl",
+                        "xggy1nq",
+                        "xtpw4lu",
+                        "x1tutvks",
+                        "x1s3xk63",
+                        "x1s07b3s",
+                        "x1kdt53j",
+                        "x1a2a7pz"
+                    ],
+                    "domPath": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:0/label:0/input:0",
+                    "nearbyText": "Log in Forgotten account?",
+                    "bounds": {
+                        "x": 885,
+                        "y": 8,
+                        "width": 188,
+                        "height": 40
+                    }
+                }
+            },
+            "targetType": "name",
+            "targetFallbacks": [
+                {
+                    "strategy": "ariaLabel",
+                    "value": "Email or phone",
+                    "score": 92
+                },
+                {
+                    "strategy": "placeholder",
+                    "value": "Email or phone",
+                    "score": 86
+                },
+                {
+                    "strategy": "form_context",
+                    "value": "#login_form input[name=\"email\"]",
+                    "score": 72
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "input[name=\"email\"]",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:0/label:0/input:0",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_18435e74",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "input",
+                "role": "",
+                "type": "email",
+                "id": "",
+                "name": "email",
+                "ariaLabel": "Email or phone",
+                "placeholder": "Email or phone",
+                "title": "",
+                "text": "",
+                "value": "",
+                "href": "",
+                "classes": [
+                    "x1i10hfl",
+                    "xggy1nq",
+                    "xtpw4lu",
+                    "x1tutvks",
+                    "x1s3xk63",
+                    "x1s07b3s",
+                    "x1kdt53j",
+                    "x1a2a7pz"
+                ],
+                "domPath": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:0/label:0/input:0",
+                "nearbyText": "Log in Forgotten account?",
+                "bounds": {
+                    "x": 885,
+                    "y": 8,
+                    "width": 188,
+                    "height": 40
+                }
+            },
+            "friendlyName": "name: email",
+            "payload": {
+                "primary": "abdulbasit1a.skans@gmail.com"
+            },
+            "config": {
+                "value": "abdulbasit1a.skans@gmail.com"
+            },
+            "page": {
+                "url": "https://www.facebook.com/apple/",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/",
+                "search": "",
+                "title": "Apple | Facebook"
+            },
+            "recordedAt": "2026-06-26T17:19:53.968Z",
+            "tabRef": "tab_1",
+            "value": "abdulbasit1a.skans@gmail.com"
+        },
+        {
+            "id": "recorded_1782494393975_f8qqbd",
+            "action": "element.type",
+            "target": {
+                "primary": {
+                    "strategy": "name",
+                    "value": "pass",
+                    "score": 95
+                },
+                "candidates": [
+                    {
+                        "strategy": "name",
+                        "value": "pass",
+                        "score": 95
+                    },
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Password",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "placeholder",
+                        "value": "Password",
+                        "score": 86
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "#login_form input[name=\"pass\"]",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "input[name=\"pass\"]",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:1/label:0/input:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_2dca64c9",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "ariaLabel",
+                        "value": "Password",
+                        "score": 92
+                    },
+                    {
+                        "strategy": "placeholder",
+                        "value": "Password",
+                        "score": 86
+                    },
+                    {
+                        "strategy": "form_context",
+                        "value": "#login_form input[name=\"pass\"]",
+                        "score": 72
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "input[name=\"pass\"]",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:1/label:0/input:0",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_2dca64c9",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "input",
+                    "role": "",
+                    "type": "password",
+                    "id": "",
+                    "name": "pass",
+                    "ariaLabel": "Password",
+                    "placeholder": "Password",
+                    "title": "",
+                    "text": "",
+                    "value": "",
+                    "href": "",
+                    "classes": [
+                        "x1i10hfl",
+                        "xggy1nq",
+                        "xtpw4lu",
+                        "x1tutvks",
+                        "x1s3xk63",
+                        "x1s07b3s",
+                        "x1kdt53j",
+                        "x1a2a7pz"
+                    ],
+                    "domPath": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:1/label:0/input:0",
+                    "nearbyText": "Log in Forgotten account?",
+                    "bounds": {
+                        "x": 1081,
+                        "y": 8,
+                        "width": 188,
+                        "height": 40
+                    }
+                }
+            },
+            "targetType": "name",
+            "targetFallbacks": [
+                {
+                    "strategy": "ariaLabel",
+                    "value": "Password",
+                    "score": 92
+                },
+                {
+                    "strategy": "placeholder",
+                    "value": "Password",
+                    "score": 86
+                },
+                {
+                    "strategy": "form_context",
+                    "value": "#login_form input[name=\"pass\"]",
+                    "score": 72
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "input[name=\"pass\"]",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:1/label:0/input:0",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_2dca64c9",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "input",
+                "role": "",
+                "type": "password",
+                "id": "",
+                "name": "pass",
+                "ariaLabel": "Password",
+                "placeholder": "Password",
+                "title": "",
+                "text": "",
+                "value": "",
+                "href": "",
+                "classes": [
+                    "x1i10hfl",
+                    "xggy1nq",
+                    "xtpw4lu",
+                    "x1tutvks",
+                    "x1s3xk63",
+                    "x1s07b3s",
+                    "x1kdt53j",
+                    "x1a2a7pz"
+                ],
+                "domPath": "div:0/div:1/div:1/div:1/div:0/form:0/div:1/div:1/label:0/input:0",
+                "nearbyText": "Log in Forgotten account?",
+                "bounds": {
+                    "x": 1081,
+                    "y": 8,
+                    "width": 188,
+                    "height": 40
+                }
+            },
+            "friendlyName": "name: pass",
+            "payload": {
+                "primary": "FBPassSkans@123"
+            },
+            "config": {
+                "value": "FBPassSkans@123"
+            },
+            "page": {
+                "url": "https://www.facebook.com/apple/",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/",
+                "search": "",
+                "title": "Apple | Facebook"
+            },
+            "recordedAt": "2026-06-26T17:19:53.971Z",
+            "tabRef": "tab_1",
+            "value": "FBPassSkans@123"
+        },
+        {
+            "id": "recorded_1782494394058_h0yufq",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "text",
+                    "value": "About",
+                    "score": 76
+                },
+                "candidates": [
+                    {
+                        "strategy": "text",
+                        "value": "About",
+                        "score": 76
+                    },
+                    {
+                        "strategy": "role_text",
+                        "value": "tab::About",
+                        "score": 74
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:1/a:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_69e354e8",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "role_text",
+                        "value": "tab::About",
+                        "score": 74
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:1/a:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_69e354e8",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "a",
+                    "role": "tab",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "About",
+                    "value": "",
+                    "href": "https://www.facebook.com/apple/about",
+                    "classes": [
+                        "x1i10hfl",
+                        "x3ct3a4",
+                        "xggy1nq",
+                        "x1fmog5m",
+                        "xu25z0z",
+                        "x140muxe",
+                        "xo1y3bh",
+                        "x87ps6o"
+                    ],
+                    "domPath": "div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:1/a:2",
+                    "nearbyText": "More Posts About Photos",
+                    "bounds": {
+                        "x": 389,
+                        "y": 534,
+                        "width": 74,
+                        "height": 60
+                    }
+                }
+            },
+            "targetType": "text",
+            "targetFallbacks": [
+                {
+                    "strategy": "role_text",
+                    "value": "tab::About",
+                    "score": 74
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:1/a:2",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_69e354e8",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "tab",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "About",
+                "value": "",
+                "href": "https://www.facebook.com/apple/about",
+                "classes": [
+                    "x1i10hfl",
+                    "x3ct3a4",
+                    "xggy1nq",
+                    "x1fmog5m",
+                    "xu25z0z",
+                    "x140muxe",
+                    "xo1y3bh",
+                    "x87ps6o"
+                ],
+                "domPath": "div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:0/div:1/a:2",
+                "nearbyText": "More Posts About Photos",
+                "bounds": {
+                    "x": 389,
+                    "y": 534,
+                    "width": 74,
+                    "height": 60
+                }
+            },
+            "friendlyName": "text: About",
+            "payload": {},
+            "config": {},
+            "page": {
+                "url": "https://www.facebook.com/apple/",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/",
+                "search": "",
+                "title": "Apple | Facebook"
+            },
+            "recordedAt": "2026-06-26T17:19:54.057Z",
+            "tabRef": "tab_1"
+        },
+        {
+            "id": "recorded_1782494394091_7u0k7a",
+            "action": "browser.navigate",
+            "target": "",
+            "targetType": "",
+            "targetFallbacks": [],
+            "targetSnapshot": null,
+            "friendlyName": "Navigate: https://www.facebook.com/apple/about",
+            "payload": {
+                "primary": "https://www.facebook.com/apple/about",
+                "openIn": "sameTab"
+            },
+            "config": {
+                "url": "https://www.facebook.com/apple/about",
+                "openIn": "sameTab"
+            },
+            "page": {
+                "url": "https://www.facebook.com/apple/about",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/about",
+                "search": "",
+                "title": "Apple | Facebook",
+                "access": "content"
+            },
+            "recordedAt": "2026-06-26T17:19:54.091Z",
+            "recordedBy": "background.navigation_observer",
+            "tabRef": "tab_1",
+            "url": "https://www.facebook.com/apple/about",
+            "openIn": "sameTab"
+        },
+        {
+            "id": "recorded_1782494397401_em11gc",
+            "action": "element.click",
+            "target": {
+                "primary": {
+                    "strategy": "text",
+                    "value": "Albums",
+                    "score": 76
+                },
+                "candidates": [
+                    {
+                        "strategy": "text",
+                        "value": "Albums",
+                        "score": 76
+                    },
+                    {
+                        "strategy": "role_text",
+                        "value": "tab::Albums",
+                        "score": 74
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:0/div:0/div:1/div:0/div:0/div:0/div:0/div:1/a:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_10dcd0ba",
+                        "score": 40
+                    }
+                ],
+                "fallbacks": [
+                    {
+                        "strategy": "role_text",
+                        "value": "tab::Albums",
+                        "score": 74
+                    },
+                    {
+                        "strategy": "css_selector",
+                        "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                        "score": 68
+                    },
+                    {
+                        "strategy": "dom_path",
+                        "value": "div:0/div:0/div:0/div:1/div:0/div:0/div:0/div:0/div:1/a:2",
+                        "score": 55
+                    },
+                    {
+                        "strategy": "ctrlHash",
+                        "value": "ctrl_10dcd0ba",
+                        "score": 40
+                    }
+                ],
+                "snapshot": {
+                    "tag": "a",
+                    "role": "tab",
+                    "type": "",
+                    "id": "",
+                    "name": "",
+                    "ariaLabel": "",
+                    "placeholder": "",
+                    "title": "",
+                    "text": "Albums",
+                    "value": "",
+                    "href": "https://www.facebook.com/apple/photos_albums",
+                    "classes": [
+                        "x1i10hfl",
+                        "x3ct3a4",
+                        "xggy1nq",
+                        "x1fmog5m",
+                        "xu25z0z",
+                        "x140muxe",
+                        "xo1y3bh",
+                        "x87ps6o"
+                    ],
+                    "domPath": "div:0/div:0/div:0/div:1/div:0/div:0/div:0/div:0/div:1/a:2",
+                    "nearbyText": "More Apple's Photos Albums",
+                    "bounds": {
+                        "x": 470,
+                        "y": 335,
+                        "width": 84,
+                        "height": 60
+                    }
+                }
+            },
+            "targetType": "text",
+            "targetFallbacks": [
+                {
+                    "strategy": "role_text",
+                    "value": "tab::Albums",
+                    "score": 74
+                },
+                {
+                    "strategy": "css_selector",
+                    "value": "div > div > div > div:nth-of-type(2) > a:nth-of-type(2)",
+                    "score": 68
+                },
+                {
+                    "strategy": "dom_path",
+                    "value": "div:0/div:0/div:0/div:1/div:0/div:0/div:0/div:0/div:1/a:2",
+                    "score": 55
+                },
+                {
+                    "strategy": "ctrlHash",
+                    "value": "ctrl_10dcd0ba",
+                    "score": 40
+                }
+            ],
+            "targetSnapshot": {
+                "tag": "a",
+                "role": "tab",
+                "type": "",
+                "id": "",
+                "name": "",
+                "ariaLabel": "",
+                "placeholder": "",
+                "title": "",
+                "text": "Albums",
+                "value": "",
+                "href": "https://www.facebook.com/apple/photos_albums",
+                "classes": [
+                    "x1i10hfl",
+                    "x3ct3a4",
+                    "xggy1nq",
+                    "x1fmog5m",
+                    "xu25z0z",
+                    "x140muxe",
+                    "xo1y3bh",
+                    "x87ps6o"
+                ],
+                "domPath": "div:0/div:0/div:0/div:1/div:0/div:0/div:0/div:0/div:1/a:2",
+                "nearbyText": "More Apple's Photos Albums",
+                "bounds": {
+                    "x": 470,
+                    "y": 335,
+                    "width": 84,
+                    "height": 60
+                }
+            },
+            "friendlyName": "text: Albums",
+            "payload": {},
+            "config": {},
+            "page": {
+                "url": "https://www.facebook.com/apple/about",
+                "origin": "https://www.facebook.com",
+                "host": "www.facebook.com",
+                "hostname": "www.facebook.com",
+                "domain": "facebook.com",
+                "path": "/apple/about",
+                "search": "",
+                "title": "Apple | Facebook"
+            },
+            "recordedAt": "2026-06-26T17:19:57.400Z",
+            "tabRef": "tab_1"
+        }
+    ]
+}

@@ -63,7 +63,7 @@ we will need a data panel to manage all the data.
 
 we should add that so that we can later tell the workflow to fetch a certain file from a directory and the run workflows/steps using its data as input.
 
-for th logical node we would also need a loop node that will run a workflow with the vars as input for it so that we can run a workflow for each data pair on a table or list etc.
+for the logical node we would also need a loop node that will run a workflow with the vars as input for it so that we can run a workflow for each data pair on a table or list etc.
 
 for UI fix
 

@@ -2,6 +2,7 @@
     "schemaVersion": 2,
     "id": "workflow-v2",
     "name": "clipboard_acceptance",
+    "description": "opens a test page, puts text on clipboard, reads it and types it in input.",
     "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
     "settings": {
         "reuseExistingTabs": false
@@ -25,7 +26,13 @@
                 "target": "",
                 "executionMode": "enabled",
                 "skipWhen": "",
-                "collapsed": true
+                "collapsed": true,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "os.keystroke",
+                    "local_file.read",
+                    "execution_log.save"
+                ]
             }
         },
         {
@@ -44,7 +51,13 @@
                 "target": "",
                 "executionMode": "enabled",
                 "skipWhen": "",
-                "collapsed": true
+                "collapsed": true,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "os.keystroke",
+                    "local_file.read",
+                    "execution_log.save"
+                ]
             }
         },
         {
@@ -65,7 +78,13 @@
                 "friendlyName": "Clipboard output: Account name",
                 "executionMode": "enabled",
                 "skipWhen": "",
-                "collapsed": true
+                "collapsed": false,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "os.keystroke",
+                    "local_file.read",
+                    "execution_log.save"
+                ]
             }
         }
     ],

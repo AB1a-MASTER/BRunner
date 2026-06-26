@@ -2069,3 +2069,162 @@
 2026-06-20 17:04:14,941 [INFO] [Inbound] Command: AUTH | Request ID: none
 2026-06-20 17:04:14,942 [INFO] [Auth] Extension connected and authenticated securely.
 2026-06-20 17:04:16,488 [INFO] connection closed
+2026-06-26 15:38:12,218 [INFO] ========================================
+2026-06-26 15:38:12,218 [INFO]  BRunner Native OS Host Started
+2026-06-26 15:38:12,218 [INFO]  Listening on ws://localhost:8999
+2026-06-26 15:38:12,218 [INFO] ========================================
+2026-06-26 15:38:12,224 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-26 15:38:12,224 [INFO] ========================================
+2026-06-26 15:38:12,337 [INFO] server listening on 127.0.0.1:8999
+2026-06-26 15:38:12,338 [INFO] server listening on [::1]:8999
+2026-06-26 15:38:19,116 [INFO] connection open
+2026-06-26 15:38:19,117 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 15:38:19,123 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 15:38:19,123 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 15:38:23,114 [INFO] connection closed
+2026-06-26 15:38:23,337 [INFO] connection open
+2026-06-26 15:38:23,337 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 15:38:23,337 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 15:38:23,337 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 15:38:34,461 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 15:38:35,925 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 15:38:43,552 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
+2026-06-26 15:38:46,792 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
+2026-06-26 15:38:52,224 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
+2026-06-26 15:38:57,762 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 6
+2026-06-26 15:39:02,401 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
+2026-06-26 15:39:32,433 [INFO] connection closed
+2026-06-26 15:39:41,073 [INFO] connection open
+2026-06-26 15:39:41,073 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 15:39:41,076 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 15:39:41,077 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 15:39:41,081 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 15:39:43,186 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 15:39:49,721 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
+2026-06-26 15:40:19,740 [INFO] connection closed
+2026-06-26 15:41:58,066 [INFO] connection open
+2026-06-26 15:41:58,066 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 15:41:58,066 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 15:41:58,066 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 15:41:58,149 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 1
+2026-06-26 15:41:58,156 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 15:42:30,829 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
+2026-06-26 15:42:34,435 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-06-26 15:42:53,270 [INFO] connection closed
+2026-06-26 21:27:31,585 [INFO] ========================================
+2026-06-26 21:27:31,588 [INFO]  BRunner Native OS Host Started
+2026-06-26 21:27:31,589 [INFO]  Listening on ws://localhost:8999
+2026-06-26 21:27:31,589 [INFO] ========================================
+2026-06-26 21:27:31,591 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
+2026-06-26 21:27:31,591 [INFO] ========================================
+2026-06-26 21:27:31,741 [INFO] server listening on [::1]:8999
+2026-06-26 21:27:31,743 [INFO] server listening on 127.0.0.1:8999
+2026-06-26 21:27:39,135 [INFO] connection open
+2026-06-26 21:27:39,136 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 21:27:39,137 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 21:27:39,138 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 21:27:40,192 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 21:28:10,211 [INFO] connection closed
+2026-06-26 21:41:38,058 [INFO] connection open
+2026-06-26 21:41:38,058 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 21:41:38,060 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 21:41:38,060 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 21:41:38,088 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 21:41:44,807 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 21:42:14,815 [INFO] connection closed
+2026-06-26 21:55:40,712 [INFO] connection open
+2026-06-26 21:55:40,712 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 21:55:40,713 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 21:55:40,714 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 21:55:40,789 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 21:55:57,154 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
+2026-06-26 21:56:27,193 [INFO] connection closed
+2026-06-26 22:07:38,026 [INFO] connection open
+2026-06-26 22:07:38,027 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:07:38,034 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:07:38,035 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:07:43,836 [INFO] connection closed
+2026-06-26 22:07:44,223 [INFO] connection open
+2026-06-26 22:07:44,224 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:07:44,243 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:07:44,245 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:07:46,160 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 22:07:47,364 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 22:07:57,719 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
+2026-06-26 22:08:26,178 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-06-26 22:08:26,200 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
+2026-06-26 22:09:06,259 [INFO] connection closed
+2026-06-26 22:17:16,929 [INFO] connection open
+2026-06-26 22:17:16,930 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:17:16,933 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:17:16,933 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:17:18,993 [INFO] connection closed
+2026-06-26 22:17:19,409 [INFO] connection open
+2026-06-26 22:17:19,409 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:17:19,421 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:17:19,422 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:17:22,827 [INFO] connection closed
+2026-06-26 22:17:22,990 [INFO] connection open
+2026-06-26 22:17:22,991 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:17:22,995 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:17:22,996 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:17:23,963 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 22:17:25,221 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 22:18:59,760 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
+2026-06-26 22:19:05,856 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-06-26 22:19:19,295 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 5
+2026-06-26 22:19:59,702 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 6
+2026-06-26 22:19:59,720 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
+2026-06-26 22:19:59,724 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 8
+2026-06-26 22:19:59,728 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 9
+2026-06-26 22:20:05,991 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
+2026-06-26 22:20:15,038 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 11
+2026-06-26 22:21:23,623 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 12
+2026-06-26 22:21:27,361 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 13
+2026-06-26 22:21:32,719 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 14
+2026-06-26 22:21:38,578 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 15
+2026-06-26 22:21:38,590 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 16
+2026-06-26 22:21:39,882 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 17
+2026-06-26 22:22:12,970 [INFO] connection closed
+2026-06-26 22:27:03,256 [INFO] connection open
+2026-06-26 22:27:03,261 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:27:03,264 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:27:03,265 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:27:04,332 [INFO] connection closed
+2026-06-26 22:27:04,466 [INFO] connection open
+2026-06-26 22:27:04,467 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:27:04,483 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:27:04,486 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:27:09,395 [INFO] connection closed
+2026-06-26 22:27:09,709 [INFO] connection open
+2026-06-26 22:27:09,710 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:27:09,718 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:27:09,719 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:27:11,194 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 22:27:12,582 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 22:27:12,700 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
+2026-06-26 22:28:32,191 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-06-26 22:28:48,183 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 5
+2026-06-26 22:28:48,190 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 6
+2026-06-26 22:28:48,195 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
+2026-06-26 22:28:49,746 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 8
+2026-06-26 22:28:54,526 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 9
+2026-06-26 22:28:57,350 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
+2026-06-26 22:29:02,879 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 11
+2026-06-26 22:29:04,989 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 12
+2026-06-26 22:29:09,540 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 13
+2026-06-26 22:29:09,567 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 14
+2026-06-26 22:29:39,590 [INFO] connection closed
+2026-06-26 22:34:48,815 [INFO] connection open
+2026-06-26 22:34:48,815 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:34:48,817 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:34:48,818 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:34:49,959 [INFO] connection closed
+2026-06-26 22:34:50,188 [INFO] connection open
+2026-06-26 22:34:50,188 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-06-26 22:34:50,206 [INFO] [Inbound] Command: AUTH | Request ID: none
+2026-06-26 22:34:50,207 [INFO] [Auth] Extension connected and authenticated securely.
+2026-06-26 22:34:52,133 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
+2026-06-26 22:34:53,142 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
+2026-06-26 22:35:03,563 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
+2026-06-26 22:35:33,572 [INFO] connection closed

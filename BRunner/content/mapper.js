@@ -422,9 +422,16 @@
 
       this.lastInputValueByElement.set(element, value);
 
-      const step = this.createRecordedStep(Actions.ElementType, element, {
-        value,
-      });
+      const step = element.tagName?.toLowerCase?.() === "select"
+        ? this.createRecordedStep(Actions.ElementSelect, element, {
+            value: this.getSelectedOptionText(element) || value,
+            optionText: this.getSelectedOptionText(element),
+            optionValue: value,
+            optionIndex: Number(element.selectedIndex),
+          })
+        : this.createRecordedStep(Actions.ElementType, element, {
+            value,
+          });
 
       this.emitRecordedStep(step);
     }
@@ -1489,6 +1496,14 @@
       }
 
       return "";
+    }
+
+    getSelectedOptionText(element) {
+      if (!element || element.tagName?.toLowerCase?.() !== "select") return "";
+      const option = element.selectedOptions?.[0] ||
+        element.options?.[element.selectedIndex] ||
+        null;
+      return String(option?.text || option?.label || "").trim();
     }
 
     delay(ms) {

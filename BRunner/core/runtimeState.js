@@ -16,6 +16,7 @@ export function createRuntimeStateStore() {
       tabPolicy: "openerDescendants",
       boundDomain: "",
       recordedStepCount: 0,
+      recordedSteps: [],
     },
     execution: {
       status: "idle",
@@ -49,6 +50,9 @@ export function createRuntimeStateStore() {
       sessionId: recording.sessionId || "",
       tabPolicy: recording.tabPolicy || "openerDescendants",
       boundDomain: recording.boundDomain || "",
+      recordedSteps: Array.isArray(recording.recordedSteps)
+        ? recording.recordedSteps.map((step) => structuredClone(step))
+        : [],
       recordedStepCount: Array.isArray(recording.recordedSteps)
         ? recording.recordedSteps.length
         : Number(recording.recordedStepCount || 0),

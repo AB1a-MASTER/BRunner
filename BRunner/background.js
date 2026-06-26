@@ -13,7 +13,11 @@ import { NativeBridge } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
-import { getNodeDefinitions } from "./core/nodeRegistry.js";
+import { getNodeDefinition, getNodeDefinitions } from "./core/nodeRegistry.js";
+import {
+  evaluateNativeHostRequirement,
+  formatNativeCapabilities,
+} from "./core/nativeHostRequirements.js";
 import {
   VariableRegistry,
   resolveStepExpressions,
@@ -432,6 +436,8 @@ async function runWorkflow(rawWorkflow, options = {}) {
         currentAction:
           resolvedStep?.action || resolvedStep?.type || "unknown",
       });
+
+      assertNativeHostRequirement(resolvedStep, index);
 
       runtimeState.appendExecutionLog({
         runId,
@@ -907,6 +913,31 @@ async function executeStep(
   }
 
   return contextReadyTab;
+}
+
+function assertNativeHostRequirement(step, stepIndex = -1) {
+  const action = step?.action || step?.type || "unknown";
+  const definition = getNodeDefinition(action);
+  if (!definition?.nativeHost) return;
+
+  const result = evaluateNativeHostRequirement(
+    definition.nativeHost,
+    NativeBridge.getStatus(),
+  );
+  if (result.ok) return;
+
+  const error = new Error(result.message);
+  error.diagnostics = {
+    action,
+    nodeId: step?.id || "",
+    stepIndex,
+    nativeHostRequirement: result.requirement.mode,
+    requiredCapabilities: result.requirement.capabilities,
+    missingCapabilities: result.missingCapabilities,
+    requiredCapabilityLabels: formatNativeCapabilities(result.missingCapabilities),
+    finalReason: result.finalReason,
+  };
+  throw error;
 }
 
 async function executeHttpRequestStep(step, variableRegistry, runId) {

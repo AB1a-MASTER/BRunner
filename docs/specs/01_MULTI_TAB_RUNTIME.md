@@ -52,6 +52,12 @@ Classify `chrome://`, `edge://`, `about:`, `devtools://`, extension pages, and o
 
 Studio is always excluded from recording.
 
+Recorded interaction targets prioritize user perspective. Dropdown selection
+stores visible option text before stable value and index fallbacks. Click-like
+interactions prioritize accessible name, label, visible text, role, and stable
+attributes before structural position. Both Studios consume one authoritative
+recorded-step stream so an action appears exactly once in the active editor.
+
 ## Runtime state
 
 Add messages:

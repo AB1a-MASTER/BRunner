@@ -45,6 +45,27 @@ The first implementation establishes runtime behavior, not the final authoring e
 
 These refinements must preserve the current node schemas or include explicit migrations.
 
+## Managed Data panel follow-up
+
+The initial Variables/Data Inspector is a runtime browser, not the complete data
+authoring surface. Milestone 3.2 adds one shared model for:
+
+- editing workflow seed variables and typed defaults;
+- inspecting current/last-run values and producing nodes;
+- managing scalar, object, list, and table datasets;
+- previewing columns/schema and mapping fields into workflow inputs;
+- declaring bounded host-backed JSON/CSV sources from approved directories.
+
+Persist data-source declarations and seed values in workflow schema. Keep
+last-run values transient. Native file sources use safe identifiers or
+allowlisted relative references, never unrestricted paths, and follow the
+required-host node contract. See
+[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+
+Data-driven repetition is graph control flow, not a Data-panel side effect. A
+bounded For Each node composes with Workflow Call to execute mapped workflow
+inputs once per list/table record under explicit limits and cancellation rules.
+
 ## Acceptance tests
 
 Verify scalar, attribute, list, table, and page metadata extraction; cross-page and cross-tab reuse; nested expression substitution; strict missing-variable failures; random wait bounds; fresh registry per run; and legacy workflow execution.

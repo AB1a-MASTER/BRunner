@@ -48,6 +48,10 @@ test("graph Studio wires persistence and execution controls", async () => {
   assert.match(source, /OS_DUPLICATE_WORKFLOW/);
   assert.match(source, /OS_DELETE_WORKFLOW/);
   assert.match(source, /STUDIO_RECEIVE_STEP/);
+  assert.match(source, /loadStudioSession/);
+  assert.match(source, /saveStudioSession/);
+  assert.match(source, /getRecordedStepKey/);
+  assert.match(source, /recording\.recordedSteps\.forEach/);
   assert.match(source, /CLEAR_EXECUTION_LOGS/);
   assert.match(source, /OS_SAVE_EXECUTION_LOG/);
   assert.match(source, /Clear &amp; save after run/);
@@ -58,6 +62,10 @@ test("graph Studio wires persistence and execution controls", async () => {
   assert.match(source, /multiSelectionKeyCode/);
   assert.match(source, /getMiniMapNodeColor/);
   assert.match(source, /CanvasToolBar/);
+  assert.match(source, /applyStudioDensity/);
+  assert.match(source, /onDensity=\{\(density\) => updateUiPreferences\(\{ density \}\)\}/);
+  assert.match(source, /NodeGuidancePanel/);
+  assert.match(source, /How to use/);
   assert.match(source, /Skip to graph canvas/);
   assert.match(source, /aria-keyshortcuts="V"/);
   assert.match(source, /aria-keyshortcuts="H"/);
@@ -74,6 +82,10 @@ test("palette and properties panels have bounded scrolling", async () => {
   );
 
   assert.match(css, /\.graph-sidebar[^}]*min-height:\s*0/);
+  assert.match(css, /var\(--studio-density-scale\)/);
+  assert.match(css, /var\(--studio-panel-width-scale\)/);
+  assert.match(css, /var\(--studio-control-height\)/);
+  assert.match(css, /\.node-guidance/);
   assert.match(css, /\.palette-scroll, \.properties-scroll[^}]*overflow-y:\s*auto/);
   assert.match(css, /\.graph-canvas\.tool-hand \.react-flow__node[\s\S]*pointer-events:\s*none/);
   assert.match(css, /\.canvas-tool-bar button\.is-active/);

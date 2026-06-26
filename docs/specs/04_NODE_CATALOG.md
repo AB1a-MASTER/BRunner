@@ -150,3 +150,27 @@ Implement only after graph schema v2 defines handles, branch traversal, loop lim
 - Structured diagnostics with action, inputs, timeout/retry state, and final reason.
 - Legacy compatibility or explicit migration.
 - Deterministic unit tests plus one live extension acceptance scenario.
+- Native-host requirement metadata: unused, optional fallback, or required,
+  including named capabilities and a stable unavailable diagnostic.
+- User guidance metadata: description, when-to-use guidance, usage example,
+  input/output summary, and safety/failure notes for Inspector and the living
+  user guide.
+
+## Recording semantics requirement
+
+Recorded controls must prefer user-facing identity over order or DOM position.
+Select nodes resolve visible option text first, option value second, and index
+only as a last fallback. Click-like nodes prefer accessible name, label, visible
+text, role, and stable attributes before structural selectors or ordinal
+position. Ambiguity must produce target diagnostics rather than arbitrary
+selection.
+
+## Planned data-driven nodes
+
+- Data Source: load bounded JSON/CSV from an approved host-managed source.
+- Workflow Call: run a referenced workflow with mapped inputs and outputs.
+- For Each: iterate a list/table, bind row/item/index variables, call a workflow
+  or bounded sub-workflow, and collect ordered outputs.
+
+These nodes follow the contracts and implementation order in
+[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).

@@ -395,6 +395,14 @@ live acceptance pass.
 11. Compact, Comfortable, and Large work in both Studios.
 12. Sequential Studio is visually consistent and retains all accepted behavior.
 
+## Follow-up discovered during live review
+
+The remaining runtime/authoring and managed-data requirements are tracked in
+[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md):
+required-host node diagnostics, visible Graph recording, cross-Studio workflow
+continuity, semantic text-first recording, Inspector node examples, the complete
+Data panel, approved file data sources, Workflow Call, and bounded For Each.
+
 ## Confirmed user decisions
 
 1. The button beside the logo is **New Workflow**.

@@ -58,6 +58,9 @@ const NavigationTargets = Object.freeze({
   NewTab: "newTab",
 });
 
+const STUDIO_SESSION_KEY = "brunner.studio.session.v1";
+const STUDIO_KIND = "sequential";
+
 const StudioValidation = globalThis.BRunnerStudioValidation;
 
 let workflow = {
@@ -76,6 +79,7 @@ let lastRunVariables = {};
 let runtimeVariableEntries = [];
 const nodeDefinitionsByType = new Map();
 let autocompleteState = null;
+let initialStudioSessionApplied = false;
 
 const canvas = document.getElementById("workflow-canvas");
 const workflowNameInput = document.getElementById("workflow-name");
@@ -106,6 +110,7 @@ function init() {
   wireWorkflowFileControls();
   wireActionPalette();
   wireCanvasEditing();
+  wireStudioSessionSync();
   loadNodeDefinitions();
   wireExecutionControls();
   wireRecordingControls();
@@ -172,6 +177,10 @@ function wireLayoutControls() {
 
     renderCanvas();
     renderDataInspector();
+    saveStudioSession({
+      activeWorkflowFilename: "",
+      activeStudio: STUDIO_KIND,
+    }).catch(() => {});
   });
 }
 
@@ -396,6 +405,10 @@ async function saveWorkflowToOS() {
       isWorkflowDirty = false;
       workflowNameInput.value = loadedWorkflowFilename.replace(/\.json$/i, "");
       refreshValidationUI();
+      await saveStudioSession({
+        activeWorkflowFilename: loadedWorkflowFilename,
+        activeStudio: STUDIO_KIND,
+      }).catch(() => {});
       alert(`Workflow "${loadedWorkflowFilename}" saved.`);
       refreshWorkflowList();
     } else {
@@ -416,7 +429,9 @@ async function refreshWorkflowList() {
     });
 
     if (isSuccess(response)) {
-      renderWorkflowList(response.files || response.workflows || []);
+      const files = response.files || response.workflows || [];
+      renderWorkflowList(files);
+      applyInitialStudioSession(files);
       return;
     }
 
@@ -434,7 +449,7 @@ async function refreshWorkflowList() {
   }
 }
 
-async function loadWorkflowFromOS(filename) {
+async function loadWorkflowFromOS(filename, options = {}) {
   try {
     const response = await chrome.runtime.sendMessage({
       type: Messages.OsLoadWorkflow,
@@ -463,6 +478,12 @@ async function loadWorkflowFromOS(filename) {
 
     renderCanvas();
     renderDataInspector();
+    if (options.publishSession !== false) {
+      await saveStudioSession({
+        activeWorkflowFilename: filename,
+        activeStudio: STUDIO_KIND,
+      }).catch(() => {});
+    }
   } catch (error) {
     alert(`Failed to load workflow: ${error.message || error}`);
   }
@@ -935,6 +956,45 @@ function normalizeStep(step) {
   }
 
   return normalized;
+}
+
+function wireStudioSessionSync() {
+  chrome.storage?.onChanged?.addListener?.((changes, areaName) => {
+    if (areaName !== "local" || !changes?.[STUDIO_SESSION_KEY]) return;
+    const session = changes[STUDIO_SESSION_KEY].newValue || {};
+    if (session.activeStudio === STUDIO_KIND) return;
+    const filename = session.activeWorkflowFilename || "";
+    if (!filename || filename === loadedWorkflowFilename || isWorkflowDirty) return;
+    loadWorkflowFromOS(filename, { publishSession: false });
+  });
+}
+
+async function applyInitialStudioSession(files = []) {
+  if (initialStudioSessionApplied || loadedWorkflowFilename || isWorkflowDirty) return;
+  initialStudioSessionApplied = true;
+  const session = await loadStudioSession().catch(() => null);
+  const filename = session?.activeWorkflowFilename || "";
+  if (!filename || !files.includes(filename)) return;
+  await loadWorkflowFromOS(filename, { publishSession: false });
+}
+
+async function loadStudioSession() {
+  const stored = await chrome.storage.local.get(STUDIO_SESSION_KEY);
+  return stored?.[STUDIO_SESSION_KEY] || {};
+}
+
+async function saveStudioSession(patch = {}) {
+  const current = await loadStudioSession().catch(() => ({}));
+  const session = {
+    version: 1,
+    activeWorkflowFilename: String(
+      patch.activeWorkflowFilename ?? current.activeWorkflowFilename ?? "",
+    ),
+    activeStudio: String(patch.activeStudio || current.activeStudio || ""),
+    updatedAt: new Date().toISOString(),
+  };
+  await chrome.storage.local.set({ [STUDIO_SESSION_KEY]: session });
+  return session;
 }
 
 async function syncRuntimeState() {
@@ -1493,6 +1553,7 @@ function renderCanvas() {
       <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:8px;font-style:italic;">
         ${escapeHtml(getInstructionText(step.action))}
       </div>
+      ${getNodeGuidanceHtml(step.action)}
       <div class="node-validation-summary" role="alert" hidden></div>
       ${fields}
     `;
@@ -1513,6 +1574,29 @@ function renderCanvas() {
   });
   refreshValidationUI();
   refreshContextualFieldVisibility();
+}
+
+function getNodeGuidanceHtml(action) {
+  const definition = nodeDefinitionsByType.get(action);
+  const guidance = definition?.guidance || {};
+  if (!definition) return "";
+
+  const inputs = guidance.inputs || definition.inputs || [];
+  const outputs = guidance.outputs || definition.outputs || [];
+
+  return `
+    <details class="node-guidance">
+      <summary>How to use ${escapeHtml(definition.label || action)}</summary>
+      <p>${escapeHtml(guidance.description || definition.description || "")}</p>
+      <dl>
+        <div><dt>When</dt><dd>${escapeHtml(guidance.whenToUse || "")}</dd></div>
+        <div><dt>Example</dt><dd>${escapeHtml(guidance.example || "")}</dd></div>
+        <div><dt>I/O</dt><dd>Inputs: ${escapeHtml(formatInlineList(inputs))} · Outputs: ${escapeHtml(formatInlineList(outputs))}</dd></div>
+        <div><dt>Config</dt><dd>${escapeHtml(guidance.configuration || "")}</dd></div>
+        <div><dt>Safety</dt><dd>${escapeHtml(guidance.safety || "")}</dd></div>
+      </dl>
+    </details>
+  `;
 }
 
 function getStepFieldsHtml(step) {
@@ -1843,6 +1927,10 @@ function ensureJsonFilename(name) {
     .replace(/\.json$/i, "");
 
   return `${clean || "Untitled"}.json`;
+}
+
+function formatInlineList(values = []) {
+  return Array.isArray(values) && values.length ? values.join(", ") : "none";
 }
 
 function isSuccess(response) {

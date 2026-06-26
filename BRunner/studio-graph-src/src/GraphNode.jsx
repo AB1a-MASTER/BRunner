@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import { Handle, Position, useReactFlow, useUpdateNodeInternals } from "@xyflow/react";
 import { getExecutionPresentation, getNodeSummaryRows } from "./nodePresentation.js";
+import {
+  NativeHostRequirementModes,
+  formatNativeCapabilities,
+  normalizeNativeHostRequirement,
+} from "../../core/nativeHostRequirements.js";
 
 export function GraphNode({ id, data, selected }) {
   const { deleteElements, updateNodeData } = useReactFlow();
@@ -47,6 +52,7 @@ export function GraphNode({ id, data, selected }) {
   };
 
   const runtimeStatus = data.runtimeStatus || "idle";
+  const nativeHost = getNativeHostPresentation(definition, data);
 
   return (
     <article className={`graph-node${selected ? " is-selected" : ""}${bypassed ? " is-bypassed" : ""}${collapsed ? " is-collapsed" : ""} runtime-${runtimeStatus}`}>
@@ -106,6 +112,13 @@ export function GraphNode({ id, data, selected }) {
         {!collapsed && <code>{execution.detail}</code>}
       </div>
 
+      {!collapsed && nativeHost && (
+        <div className={`node-native-host node-native-host-${nativeHost.state}`} title={nativeHost.title}>
+          <span>{nativeHost.label}</span>
+          <code>{nativeHost.detail}</code>
+        </div>
+      )}
+
       {!collapsed && (summaryRows.length ? (
         <dl className="graph-node-summary">
           {summaryRows.map((row) => (
@@ -126,6 +139,35 @@ export function GraphNode({ id, data, selected }) {
       <Handle type="source" position={sourcePosition} id="success" />
     </article>
   );
+}
+
+function getNativeHostPresentation(definition = {}, data = {}) {
+  const requirement = normalizeNativeHostRequirement(definition.nativeHost);
+  if (requirement.mode === NativeHostRequirementModes.None) return null;
+
+  const missing = Array.isArray(data.hostCapabilities)
+    ? requirement.capabilities.filter((capability) => !data.hostCapabilities.includes(capability))
+    : [];
+  const capabilityText = formatNativeCapabilities(requirement.capabilities);
+
+  if (requirement.mode === NativeHostRequirementModes.Fallback) {
+    return {
+      state: "optional",
+      label: "Host optional",
+      detail: capabilityText,
+      title: "Native host may be used as a fallback.",
+    };
+  }
+
+  const available = data.hostConnected === true && missing.length === 0;
+  return {
+    state: available ? "available" : "missing",
+    label: available ? "Host ready" : "Host required",
+    detail: missing.length ? formatNativeCapabilities(missing) : capabilityText,
+    title: available
+      ? `Required native host capability available: ${capabilityText}.`
+      : `This node fails if reached without native host capability: ${capabilityText}.`,
+  };
 }
 
 function NodeGlyph() {

@@ -29,30 +29,41 @@
       };
     }
 
-    addCandidate(candidates, TargetStrategies.Id, element.id, 100);
-
-    addCandidate(
-      candidates,
-      TargetStrategies.Name,
-      element.getAttribute("name"),
-      95,
-    );
-
     addCandidate(
       candidates,
       TargetStrategies.AriaLabel,
       element.getAttribute("aria-label"),
-      92,
+      110,
     );
+
+    const labelText = getAssociatedLabelText(element);
+    addCandidate(candidates, TargetStrategies.LabelText, labelText, 108);
+
+    const stableText = getStableElementText(element);
+    addCandidate(candidates, TargetStrategies.Text, stableText, 104);
+
+    const role = element.getAttribute("role");
+    if (role && stableText) {
+      addCandidate(candidates, "role_text", `${role}::${stableText}`, 102);
+    }
 
     addCandidate(
       candidates,
       "placeholder",
       element.getAttribute("placeholder"),
-      86,
+      100,
     );
 
-    addCandidate(candidates, "title", element.getAttribute("title"), 84);
+    addCandidate(candidates, "title", element.getAttribute("title"), 98);
+
+    addCandidate(candidates, TargetStrategies.Id, element.id, 92);
+
+    addCandidate(
+      candidates,
+      TargetStrategies.Name,
+      element.getAttribute("name"),
+      90,
+    );
 
     for (const attr of [
       TargetStrategies.DataTestId,
@@ -64,17 +75,6 @@
       "data-testid",
     ]) {
       addCandidate(candidates, attr, element.getAttribute(attr), 88);
-    }
-
-    const labelText = getAssociatedLabelText(element);
-    addCandidate(candidates, TargetStrategies.LabelText, labelText, 82);
-
-    const stableText = getStableElementText(element);
-    addCandidate(candidates, TargetStrategies.Text, stableText, 76);
-
-    const role = element.getAttribute("role");
-    if (role && stableText) {
-      addCandidate(candidates, "role_text", `${role}::${stableText}`, 74);
     }
 
     const formContextSelector = buildFormContextSelector(element);

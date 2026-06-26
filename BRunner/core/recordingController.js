@@ -134,6 +134,7 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
 
     const normalizedStep = {
       ...step,
+      id: step.id || createRecordedStepId(),
       ...(trackedTab?.tabRef ? { tabRef: trackedTab.tabRef } : {}),
       recordedAt: step.recordedAt || new Date().toISOString(),
     };
@@ -224,6 +225,7 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
     lastNavigationRecordedAt = now;
 
     const navigationStep = {
+      id: createRecordedStepId(),
       action: Actions.BrowserNavigate,
       url: tab.url,
       openIn: "sameTab",
@@ -313,6 +315,7 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
     activeRecordingTabId = tabId;
 
     const step = {
+      id: createRecordedStepId(),
       action: Actions.BrowserTabSwitch,
       tabRef: trackedTab.tabRef,
       openerTabRef: trackedTab.openerTabRef || "",
@@ -459,6 +462,10 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
 
   function createSessionId() {
     return `recording_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function createRecordedStepId() {
+    return `recorded_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
   function safeUrlPart(url, key) {

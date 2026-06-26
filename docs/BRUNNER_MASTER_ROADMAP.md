@@ -58,18 +58,59 @@ Next, complete a separate user-directed UI/UX refinement
 pass; ask the user for detailed design direction when that phase begins rather
 than inventing the redesign in advance.
 
-The user-directed scope is now captured in
+The user-directed scope is captured in
 [05_STUDIO_UI_UX_REFINEMENT.md](specs/05_STUDIO_UI_UX_REFINEMENT.md). Its user
-decisions are confirmed. Slice 1 contracts/shared preferences are complete;
-Slice 2 is the unified Graph Studio command bar and Inspector workflow shell.
+decisions are confirmed and the implementation slices are substantially
+complete. Live extension acceptance and responsive visual tuning remain.
 
 **Gate:** v1 compatibility, safe upgrades, graph save/reload fidelity, editing, validation, and execution highlighting pass.
 
 See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 
+## Milestone 3.1 — Runtime and authoring closure (next)
+
+Correct the integration gaps found during the Studio review before expanding
+control flow:
+
+- declare required versus fallback-only native-host capabilities per node and
+  fail a required node clearly when reached without its capability;
+- make recording appear exactly once in Graph Studio and synchronize recording
+  state across every UI;
+- retain the same compatible open workflow when switching Studios without
+  silently losing dirty drafts;
+- record dropdown choices and clicks using user-facing semantic text/name before
+  fragile value, selector, or index fallbacks;
+- defer a final macro-recording polish pass until the end of this phase; known
+  quirks will be collected now and fixed together after the core runtime,
+  authoring, and data work is in place;
+- show registry-backed descriptions, examples, requirements, inputs, and
+  outputs for selected nodes in Inspector.
+
+**Gate:** host-dependent nodes diagnose correctly, Graph recording is visible,
+Studio switching preserves workflow identity safely, semantic select/click
+recordings survive reordered controls, and every node exposes usage guidance.
+
+See
+[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](specs/06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+
+## Milestone 3.2 — Managed data authoring
+
+Replace the basic runtime-variable preview with a complete shared Data panel for
+seed variables, runtime values, lists/tables, mappings, previews, and bounded
+host-backed JSON/CSV data sources from approved directories.
+
+**Gate:** users can declare and preview safe workflow data, map it into workflow
+inputs, diagnose unavailable/malformed sources, and run ordinary workflows
+without leaking unrestricted paths or persistent runtime values.
+
+See [02_DATA_NODE_ENGINE.md](specs/02_DATA_NODE_ENGINE.md) and
+[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](specs/06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+
 ## Milestone 4 — Advanced automation
 
-- Conditions, loops, merge paths, and sub-workflows.
+- Conditions, merge paths, and reusable sub-workflows.
+- Bounded For Each over list/table records, mapped workflow inputs/outputs,
+  cancellation, iteration limits, and deterministic result collection.
 - File upload strategies and native-dialog automation.
 - Registry-driven foreground-tab, focused-window, visible-target, and pointer
   preconditions for viewport-dependent nodes such as Hover Mouse.
@@ -94,6 +135,12 @@ See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 | Runtime state colors in graph minimap/overview | Milestone 3 |
 | User-directed final Graph Studio UI/UX refinement | After Milestone 3 functional gate; ask user for details first |
 | Saved/runtime variable browser and table/list output previews | Milestone 3 |
+| Managed seed/dataset panel and allowlisted JSON/CSV sources | Milestone 3.2 |
+| Required/fallback native-host capability contract | Milestone 3.1 |
+| Cross-Studio open-workflow continuity | Milestone 3.1 |
+| Semantic text-first select/click recording | Milestone 3.1 |
+| Registry-backed node descriptions and examples in Inspector | Milestone 3.1 |
+| Workflow Call and bounded data For Each | Milestone 4 |
 | Stop/cancel running workflow from Studio and sidebar | Runtime foundation; immediate |
 
 ## Development rules
@@ -102,3 +149,5 @@ See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 2. Prefer isolated patches over architectural rewrites.
 3. Every behavior change requires deterministic tests and manual acceptance steps.
 4. Reliability and diagnostics precede polish.
+5. Keep [BRUNNER_USER_GUIDE.md](BRUNNER_USER_GUIDE.md) synchronized with the
+   registry, Inspector guidance, and node behavior.

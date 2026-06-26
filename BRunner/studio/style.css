@@ -294,6 +294,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .node-input-group textarea { box-sizing: border-box; width: 100%; background-color: var(--bg-main); border: 1px solid var(--border); color: white; padding: 0.5rem; border-radius: 4px; font-family: monospace; }
 .node-input-group textarea { resize: vertical; min-height: 5rem; }
 .node-invalid { border-color: #b91c1c; }
+.node-guidance { margin: 0.55rem 0 0.75rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; background: rgba(15,23,42,0.62); color: #cbd5e1; }
+.node-guidance summary { cursor: pointer; color: #dbeafe; font-size: 0.76rem; font-weight: 700; }
+.node-guidance p { margin: 0.5rem 0; color: #cbd5e1; font-size: 0.72rem; line-height: 1.45; }
+.node-guidance dl { display: grid; gap: 0.35rem; margin: 0; }
+.node-guidance dl > div { display: grid; gap: 0.12rem; }
+.node-guidance dt { color: #93c5fd; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.node-guidance dd { margin: 0; color: var(--text-muted); font-size: 0.7rem; line-height: 1.4; }
 .node-validation-summary { margin: 0.4rem 0 0.6rem; padding: 0.45rem 0.55rem; border-left: 3px solid var(--danger); border-radius: 3px; background: rgba(127,29,29,0.2); color: #fecaca; font-size: 0.72rem; line-height: 1.4; }
 .field-invalid input, .field-invalid textarea, .field-invalid select { border-color: var(--danger); }
 .field-error { margin-top: 0.22rem; color: #fca5a5; font-size: 0.7rem; line-height: 1.35; }

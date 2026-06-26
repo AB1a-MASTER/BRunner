@@ -1,0 +1,9 @@
+{
+    "description": "",
+    "boundDomain": "www.google.com",
+    "variables": {},
+    "settings": {
+        "reuseExistingTabs": false
+    },
+    "steps": []
+}
