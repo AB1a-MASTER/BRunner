@@ -10,6 +10,7 @@ export const NativeHostRequirementModes = Object.freeze({
 export const NativeHostCapabilities = Object.freeze({
   OsKeystroke: "os.keystroke",
   LocalFileRead: "local_file.read",
+  DataSourceRead: "data_source.read",
   ExecutionLogSave: "execution_log.save",
 });
 
@@ -21,6 +22,7 @@ export const DEFAULT_NATIVE_HOST_REQUIREMENT = Object.freeze({
 const CAPABILITY_LABELS = Object.freeze({
   [NativeHostCapabilities.OsKeystroke]: "OS keystroke",
   [NativeHostCapabilities.LocalFileRead]: "local file read",
+  [NativeHostCapabilities.DataSourceRead]: "data source read",
   [NativeHostCapabilities.ExecutionLogSave]: "execution log save",
 });
 

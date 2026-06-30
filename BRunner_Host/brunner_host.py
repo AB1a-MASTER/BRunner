@@ -8,8 +8,10 @@ import logging
 import shutil
 from pathlib import Path
 from file_access import read_allowed_file
+from data_source import read_data_source
 from workflow_storage import atomic_upgrade_workflow
 from execution_log_storage import save_execution_log
+from host_settings import load_or_create_config
 
 # --- Paths ---
 
@@ -18,7 +20,8 @@ CONFIG_FILE = BASE_DIR / "brunner_config.json"
 WORKFLOWS_DIR = BASE_DIR / "Workflows"
 EXECUTION_LOGS_DIR = BASE_DIR / "Logs"
 LOG_FILE = BASE_DIR / "brunner_host.log"
-PORT = 8999
+config = load_or_create_config(CONFIG_FILE, BASE_DIR)
+PORT = config["port"]
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)
 EXECUTION_LOGS_DIR.mkdir(exist_ok=True)
@@ -37,28 +40,6 @@ logging.basicConfig(
 # --- Authentication & Setup ---
 
 
-def load_or_create_config():
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    new_key = secrets.token_hex(16)
-    config = {
-        "pairing_key": new_key,
-        "paired_extension_id": None,
-        "local_file_access": {
-            "enabled": False,
-            "allowed_roots": ["AllowedFiles"]
-        }
-    }
-
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=4)
-
-    return config
-
-
-config = load_or_create_config()
 PAIRING_KEY = config["pairing_key"]
 
 logging.info("========================================")
@@ -239,6 +220,26 @@ async def handle_read_file(websocket, request_id, payload):
         "[File] Read approved local file: name=%s size=%s",
         file_data["filename"],
         file_data["size"]
+    )
+
+
+async def handle_read_data_source(websocket, request_id, payload):
+    result = read_data_source(
+        config,
+        BASE_DIR,
+        payload.get("source") or payload,
+    )
+
+    await send_json(
+        websocket,
+        success(request_id, **result)
+    )
+
+    logging.info(
+        "[DataSource] Read approved data source: name=%s format=%s rows=%s",
+        result["filename"],
+        result["format"],
+        result["rows"]
     )
 
 
@@ -489,6 +490,9 @@ async def handle_connection(websocket):
 
                 elif command == "READ_FILE":
                     await handle_read_file(websocket, request_id, payload)
+
+                elif command == "READ_DATA_SOURCE":
+                    await handle_read_data_source(websocket, request_id, payload)
 
                 elif command == "LIST_WORKFLOWS":
                     await handle_list_workflows(websocket, request_id)

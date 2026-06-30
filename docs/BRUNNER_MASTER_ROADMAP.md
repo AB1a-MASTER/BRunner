@@ -97,7 +97,12 @@ See
 
 Replace the basic runtime-variable preview with a complete shared Data panel for
 seed variables, runtime values, lists/tables, mappings, previews, and bounded
-host-backed JSON/CSV data sources from approved directories.
+host-backed TXT/CSV/JSON data sources from approved directories.
+
+Add a native-host desktop UI packaged as an easy-to-run executable. The UI must
+let a user start/stop the backend, see connection/auth status, inspect and edit
+backend settings such as allowed data/file directories and pairing, and diagnose
+host capability availability without editing JSON files by hand.
 
 **Gate:** users can declare and preview safe workflow data, map it into workflow
 inputs, diagnose unavailable/malformed sources, and run ordinary workflows
@@ -105,6 +110,25 @@ without leaking unrestricted paths or persistent runtime values.
 
 See [02_DATA_NODE_ENGINE.md](specs/02_DATA_NODE_ENGINE.md) and
 [06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](specs/06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+
+## Milestone 3.3 — Nodes completeness and friendliness pass
+
+After the Data panel foundations are in place, audit the full node catalog
+against the goal of complete practical browser/host automation. This pass must:
+
+- verify which required nodes are present, missing, duplicated, or too narrow;
+- improve node names, grouping, defaults, examples, and safety copy;
+- replace free-text fields with friendlier controls where possible;
+- add valid-value autocomplete for variable-name entries and expression fields;
+- add guided keyboard controls: Send Text versus Send Keystroke, with a
+  searchable/autofill list of supported keys and common modifier combinations
+  such as Ctrl/Alt/Shift/Meta plus key;
+- keep advanced/manual entry available for uncommon values while validating the
+  common path.
+
+**Gate:** a user can discover the right node, configure it without memorizing
+internal names or key syntax, and confirm that the catalog covers the required
+automation scenarios before final macro-recording polish.
 
 ## Milestone 4 — Advanced automation
 
@@ -135,11 +159,13 @@ See [02_DATA_NODE_ENGINE.md](specs/02_DATA_NODE_ENGINE.md) and
 | Runtime state colors in graph minimap/overview | Milestone 3 |
 | User-directed final Graph Studio UI/UX refinement | After Milestone 3 functional gate; ask user for details first |
 | Saved/runtime variable browser and table/list output previews | Milestone 3 |
-| Managed seed/dataset panel and allowlisted JSON/CSV sources | Milestone 3.2 |
+| Managed seed/dataset panel and allowlisted TXT/CSV/JSON sources | Milestone 3.2 |
+| Native-host settings UI and packaged executable | Milestone 3.2 |
 | Required/fallback native-host capability contract | Milestone 3.1 |
 | Cross-Studio open-workflow continuity | Milestone 3.1 |
 | Semantic text-first select/click recording | Milestone 3.1 |
 | Registry-backed node descriptions and examples in Inspector | Milestone 3.1 |
+| Nodes completeness and user-friendly controls pass | Milestone 3.3 |
 | Workflow Call and bounded data For Each | Milestone 4 |
 | Stop/cancel running workflow from Studio and sidebar | Runtime foundation; immediate |
 

@@ -17,6 +17,8 @@ export function normalizeWorkflow(input = {}) {
       description: "",
       boundDomain: "",
       variables: {},
+      datasets: {},
+      dataSources: [],
       settings: createDefaultWorkflowSettings(),
       steps: input,
     };
@@ -29,6 +31,13 @@ export function normalizeWorkflow(input = {}) {
       input.variables && typeof input.variables === "object"
         ? structuredClone(input.variables)
         : {},
+    datasets:
+      input.datasets && typeof input.datasets === "object" && !Array.isArray(input.datasets)
+        ? structuredClone(input.datasets)
+        : {},
+    dataSources: Array.isArray(input.dataSources)
+      ? structuredClone(input.dataSources)
+      : [],
     settings: normalizeWorkflowSettings(input.settings),
     steps: Array.isArray(input.steps) ? input.steps : [],
   };
@@ -39,6 +48,8 @@ export function createEmptyWorkflow(boundDomain = "") {
     description: "",
     boundDomain,
     variables: {},
+    datasets: {},
+    dataSources: [],
     settings: createDefaultWorkflowSettings(),
     steps: [],
   };

@@ -172,5 +172,33 @@ selection.
 - For Each: iterate a list/table, bind row/item/index variables, call a workflow
   or bounded sub-workflow, and collect ordered outputs.
 
+## Nodes completeness and authoring-friendliness pass
+
+Schedule a dedicated nodes pass after the Data panel foundations and before the
+final macro-recording polish. The pass has two goals:
+
+1. **Completeness audit:** verify that BRunner has the required browser, data,
+   logic, host, keyboard, pointer, tab/window, file, clipboard, HTTP, and
+   workflow-reuse nodes for complete practical automation. Mark missing nodes,
+   narrow nodes, duplicate nodes, and nodes that should be merged or split.
+2. **Friendly authoring:** reduce raw text entry where Studio can know valid
+   values. Prefer selects, comboboxes, autocomplete, and validation without
+   removing expert/manual entry.
+
+Required authoring improvements:
+
+- variable-name fields offer valid existing names, safe new-name validation, and
+  expression-aware autocomplete where appropriate;
+- output-variable fields suggest clear names and warn about overwrite or invalid
+  identifiers;
+- keyboard nodes split user intent into **Send Text** and **Send Keystroke**;
+- Send Keystroke exposes a searchable/autofill list of supported keys plus
+  common modifier combinations (`Ctrl`, `Alt`, `Shift`, `Meta`) while keeping an
+  advanced/manual form for uncommon shortcuts;
+- node labels, descriptions, examples, categories, defaults, and safety notes
+  are reviewed for non-expert readability;
+- each friendly control still serializes to the same deterministic workflow
+  shape or an explicitly versioned migration.
+
 These nodes follow the contracts and implementation order in
 [06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).

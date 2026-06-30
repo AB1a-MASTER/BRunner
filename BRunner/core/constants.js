@@ -21,6 +21,7 @@ export const Messages = Object.freeze({
   OsRenameWorkflow: "OS_RENAME_WORKFLOW",
   OsUpgradeWorkflow: "OS_UPGRADE_WORKFLOW",
   OsSaveExecutionLog: "OS_SAVE_EXECUTION_LOG",
+  OsReadDataSource: "OS_READ_DATA_SOURCE",
 
   // Workflow execution
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
@@ -139,6 +140,7 @@ export const NativeCommands = Object.freeze({
   SaveExecutionLog: "SAVE_EXECUTION_LOG",
   OsKeystroke: "OS_KEYSTROKE",
   ReadFile: "READ_FILE",
+  ReadDataSource: "READ_DATA_SOURCE",
 });
 
 export const Defaults = Object.freeze({

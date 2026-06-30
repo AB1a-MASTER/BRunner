@@ -54,6 +54,7 @@ import {
   formatNativeCapabilities,
   normalizeNativeHostRequirement,
 } from "../../core/nativeHostRequirements.js";
+import { summarizeValue } from "../../core/variableInspector.js";
 
 const NODE_TYPES = { brunner: GraphNode };
 const EDGE_TYPES = { removable: RemovableEdge };
@@ -72,6 +73,7 @@ const Messages = Object.freeze({
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
   SaveExecutionLog: "OS_SAVE_EXECUTION_LOG",
+  ReadDataSource: "OS_READ_DATA_SOURCE",
   StudioReceiveStep: "STUDIO_RECEIVE_STEP",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   ToggleRecording: "TOGGLE_RECORDING",
@@ -1165,7 +1167,16 @@ function InspectorPanel(props) {
               {props.graphSaveError && <p className="panel-error">{props.graphSaveError}</p>}
             </>
           ) : (
-            <WorkflowDataView seeds={props.metadata.variables} variables={props.variables} />
+            <WorkflowDataView
+              seeds={props.metadata.variables}
+              datasets={props.metadata.datasets}
+              dataSources={props.metadata.dataSources}
+              variables={props.variables}
+              readOnly={readOnly || props.busy}
+              onSeedsChange={(variables) => props.onMetadata({ variables })}
+              hostConnected={props.hostConnected}
+              onDataSourcesChange={(dataSources) => props.onMetadata({ dataSources })}
+            />
           )}
         </div>
       </aside>
@@ -1285,17 +1296,171 @@ function getNativeHostSummary(definition = {}, hostConnected = false, hostCapabi
   };
 }
 
-function WorkflowDataView({ seeds = {}, variables = [] }) {
+function WorkflowDataView({
+  seeds = {},
+  datasets = {},
+  dataSources = [],
+  variables = [],
+  readOnly = false,
+  onSeedsChange = () => {},
+  hostConnected = false,
+  onDataSourcesChange = () => {},
+}) {
+  const [seedName, setSeedName] = useState("");
+  const [seedValue, setSeedValue] = useState("");
+  const [seedError, setSeedError] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [sourcePath, setSourcePath] = useState("");
+  const [sourceFormat, setSourceFormat] = useState("txt");
+  const [sourceError, setSourceError] = useState("");
+  const [sourcePreview, setSourcePreview] = useState(null);
+  const [sourceBusy, setSourceBusy] = useState(false);
   const runtimeNames = new Set((variables || []).map((entry) => entry.name));
   const entries = [
-    ...Object.keys(seeds || {}).filter((name) => !runtimeNames.has(name)).map((name) => ({ name, type: typeof seeds[name], summary: "Workflow seed" })),
+    ...Object.keys(seeds || {}).filter((name) => !runtimeNames.has(name)).map((name) => ({ name, ...summarizeValue(seeds[name]), summary: "Workflow seed" })),
     ...(variables || []),
   ];
+  const datasetEntries = Object.entries(datasets || {});
+  const safeSources = Array.isArray(dataSources) ? dataSources : [];
+
+  const addSeed = () => {
+    const name = seedName.trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      setSeedError("Use a variable name like seed_name.");
+      return;
+    }
+    try {
+      const value = parseSeedValue(seedValue);
+      onSeedsChange({ ...(seeds || {}), [name]: value });
+      setSeedName("");
+      setSeedValue("");
+      setSeedError("");
+    } catch (error) {
+      setSeedError(error.message || String(error));
+    }
+  };
+
+  const removeSeed = (name) => {
+    const next = { ...(seeds || {}) };
+    delete next[name];
+    onSeedsChange(next);
+  };
+
+  const addDataSource = () => {
+    const id = sourceName.trim();
+    const relativePath = sourcePath.trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id)) {
+      setSourceError("Use a source name like numbers.");
+      return;
+    }
+    if (!relativePath) {
+      setSourceError("Choose a relative file such as list.txt.");
+      return;
+    }
+    const nextSource = {
+      id,
+      name: id,
+      relativePath,
+      format: sourceFormat,
+      shape: sourceFormat === "csv" ? "table" : "list",
+    };
+    const next = [
+      ...safeSources.filter((source) => source.id !== id),
+      nextSource,
+    ];
+    onDataSourcesChange(next);
+    setSourceName("");
+    setSourcePath("");
+    setSourceFormat("txt");
+    setSourceError("");
+  };
+
+  const removeDataSource = (id) => {
+    onDataSourcesChange(safeSources.filter((source) => source.id !== id));
+    if (sourcePreview?.id === id) setSourcePreview(null);
+  };
+
+  const previewDataSource = async (source) => {
+    setSourceBusy(true);
+    setSourceError("");
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: Messages.ReadDataSource,
+        source,
+      });
+      if (!isSuccess(response)) throw new Error(response?.error || "Could not read data source.");
+      setSourcePreview(response);
+    } catch (error) {
+      setSourceError(error.message || String(error));
+    } finally {
+      setSourceBusy(false);
+    }
+  };
+
   return (
     <section className="workflow-data-view" aria-labelledby="workflow-data-heading">
       <div className="data-view-heading"><div><h3 id="workflow-data-heading">Variables</h3><p>{entries.length ? `${entries.length} available` : "No variables available"}</p></div><b>{entries.length}</b></div>
+      <section className="data-author-section" aria-labelledby="seed-data-heading">
+        <h4 id="seed-data-heading">Seed variables</h4>
+        <div className="seed-editor">
+          <input value={seedName} disabled={readOnly} onChange={(event) => setSeedName(event.target.value)} placeholder="seed_name" aria-label="Seed variable name" />
+          <textarea rows="3" value={seedValue} disabled={readOnly} onChange={(event) => setSeedValue(event.target.value)} placeholder="JSON value or text" aria-label="Seed variable value" />
+          <button type="button" className="inspector-secondary-action" onClick={addSeed} disabled={readOnly}>Add seed</button>
+        </div>
+        {seedError && <p className="panel-error">{seedError}</p>}
+      </section>
       {!entries.length && <p className="properties-empty">Run the workflow or add seed variables to inspect data.</p>}
-      {entries.map((entry) => <article key={entry.name} className="data-variable-row"><strong>{entry.name}</strong><span>{entry.type || "unknown"}</span><p>{entry.summary || entry.origin?.action || "Current run"}</p></article>)}
+      {entries.map((entry) => (
+        <article key={entry.name} className="data-variable-row">
+          <strong>{entry.name}</strong>
+          <span>{entry.type || "unknown"}</span>
+          <p>{entry.preview || entry.summary || entry.origin?.action || "Current run"}</p>
+          {Object.prototype.hasOwnProperty.call(seeds || {}, entry.name) && (
+            <button type="button" onClick={() => removeSeed(entry.name)} disabled={readOnly} aria-label={`Remove seed ${entry.name}`} title={`Remove seed ${entry.name}`}>Remove</button>
+          )}
+        </article>
+      ))}
+      <section className="data-author-section" aria-labelledby="dataset-heading">
+        <h4 id="dataset-heading">Datasets</h4>
+        {!datasetEntries.length && <p>No persisted datasets declared.</p>}
+        {datasetEntries.map(([name, value]) => {
+          const summary = summarizeValue(value);
+          return <article key={name} className="data-variable-row"><strong>{name}</strong><span>{summary.type}</span><p>{summary.preview}</p></article>;
+        })}
+      </section>
+      <section className="data-author-section" aria-labelledby="data-source-heading">
+        <h4 id="data-source-heading">File data sources</h4>
+        <div className="data-source-editor">
+          <input value={sourceName} disabled={readOnly} onChange={(event) => setSourceName(event.target.value)} placeholder="numbers" aria-label="Data source name" />
+          <input value={sourcePath} disabled={readOnly} onChange={(event) => setSourcePath(event.target.value)} placeholder="list.txt" aria-label="Data source relative file" />
+          <select value={sourceFormat} disabled={readOnly} onChange={(event) => setSourceFormat(event.target.value)} aria-label="Data source format">
+            <option value="txt">TXT list</option>
+            <option value="csv">CSV table/list</option>
+            <option value="json">JSON</option>
+          </select>
+          <button type="button" className="inspector-secondary-action" onClick={addDataSource} disabled={readOnly}>Add source</button>
+        </div>
+        {sourceError && <p className="panel-error">{sourceError}</p>}
+        {!safeSources.length && <p>No host-backed JSON/CSV sources declared.</p>}
+        {safeSources.map((source, index) => (
+          <article key={source.id || index} className="data-variable-row">
+            <strong>{source.name || source.id || `source_${index + 1}`}</strong>
+            <span>{source.format || "source"}</span>
+            <p>{source.status || source.relativePath || "Declared host-managed source"}</p>
+            <div className="data-row-actions">
+              <button type="button" onClick={() => previewDataSource(source)} disabled={!hostConnected || sourceBusy} title={hostConnected ? "Preview parsed source data" : "Connect native host to preview"}>Preview</button>
+              <button type="button" onClick={() => removeDataSource(source.id)} disabled={readOnly}>Remove</button>
+            </div>
+          </article>
+        ))}
+        {sourcePreview && (
+          <article className="data-source-preview">
+            <strong>{sourcePreview.name || sourcePreview.id}</strong>
+            <span>{sourcePreview.kind} · {sourcePreview.preview}</span>
+            <p>{sourcePreview.filename}</p>
+          </article>
+        )}
+      </section>
     </section>
   );
 }
@@ -1326,7 +1491,17 @@ function getRecordedStepKey(step = {}) {
 }
 function isSuccess(response) { return Boolean(response && (response.ok === true || response.status === "success")); }
 function stripJson(filename) { return String(filename || "Untitled").replace(/\.json$/i, ""); }
-function createNewMetadata() { return { id: crypto.randomUUID(), name: "Untitled", description: "", boundDomain: "", settings: { reuseExistingTabs: false, graphLayoutDirection: "vertical" }, variables: {} }; }
+function parseSeedValue(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  try {
+    return JSON.parse(raw);
+  } catch {
+    if (/^[\[{]/.test(raw)) throw new Error("Seed JSON is malformed.");
+    return raw;
+  }
+}
+function createNewMetadata() { return { id: crypto.randomUUID(), name: "Untitled", description: "", boundDomain: "", settings: { reuseExistingTabs: false, graphLayoutDirection: "vertical" }, variables: {}, datasets: {}, dataSources: [] }; }
 function NodeGlyphSmall() { return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/><path d="M10 7h4a3 3 0 0 1 3 3v4"/></svg>; }
 function NodeGlyphLarge() { return <svg aria-hidden="true" viewBox="0 0 48 48"><rect x="7" y="7" width="13" height="13" rx="3"/><rect x="28" y="28" width="13" height="13" rx="3"/><path d="M20 13.5h8a7 7 0 0 1 7 7V28"/></svg>; }
 function RefreshIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 5M20 5v6h-6"/></svg>; }

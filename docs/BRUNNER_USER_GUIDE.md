@@ -19,6 +19,11 @@ and host-managed log saving. Nodes label the host as required, optional fallback
 or unused. A disconnected host does not prevent a workflow from starting, but a
 reached node with a required host capability fails clearly.
 
+Planned native-host packaging includes a desktop settings UI distributed as an
+easy-to-run executable. It will let users start/stop the backend, check
+connection and pairing status, view capabilities, and edit backend settings such
+as allowed file/data directories without hand-editing config files.
+
 ## Basic workflow
 
 1. Create or load a workflow in either Studio.
@@ -46,6 +51,12 @@ layout or option order changes.
 - Lists and tables can be previewed and will support bounded For Each execution.
 - Host-backed files use approved data-source declarations; workflows never gain
   unrestricted filesystem access.
+- Graph Studio can declare and preview `.txt`, `.csv`, or `.json` dataset
+  sources through the native host from approved directories. Runtime loading
+  makes each parsed source available as a variable by source name. Planned For
+  Each support will load `list.txt`, parse one number per line, then run a
+  bounded workflow once per number and use that value to fill forms, perform
+  lookups, or extract related data.
 
 ## Native host states
 
@@ -118,4 +129,7 @@ When adding or changing a node:
 2. Add or revise its detailed entry in this guide.
 3. Show the same description and example in Inspector.
 4. Document host requirements, safety limits, inputs, outputs, and diagnostics.
-5. Add deterministic tests and a live acceptance scenario.
+5. Prefer friendly controls over raw text when valid values are knowable:
+   variable-name autocomplete, safe output-name validation, selects/comboboxes,
+   and guided key/shortcut pickers for keyboard nodes.
+6. Add deterministic tests and a live acceptance scenario.

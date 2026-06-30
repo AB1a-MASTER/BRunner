@@ -65,7 +65,8 @@ test("native capability labels are human readable", () => {
     formatNativeCapabilities([
       NativeHostCapabilities.OsKeystroke,
       NativeHostCapabilities.LocalFileRead,
+      NativeHostCapabilities.DataSourceRead,
     ]),
-    "OS keystroke and local file read",
+    "OS keystroke, local file read and data source read",
   );
 });

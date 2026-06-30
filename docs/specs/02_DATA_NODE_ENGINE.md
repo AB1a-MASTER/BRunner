@@ -54,13 +54,28 @@ authoring surface. Milestone 3.2 adds one shared model for:
 - inspecting current/last-run values and producing nodes;
 - managing scalar, object, list, and table datasets;
 - previewing columns/schema and mapping fields into workflow inputs;
-- declaring bounded host-backed JSON/CSV sources from approved directories.
+- declaring bounded host-backed TXT/CSV/JSON sources from approved directories.
 
 Persist data-source declarations and seed values in workflow schema. Keep
 last-run values transient. Native file sources use safe identifiers or
 allowlisted relative references, never unrestricted paths, and follow the
 required-host node contract. See
 [06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+
+Dataset file sources must support user-provided list and table data in `.txt`
+or `.csv` form, loaded from a configured approved directory each time the
+workflow runs. A declared source can point to a safe relative file such as
+`list.txt`, parse it into a bounded list of numbers or a table of rows, validate
+encoding/size/row limits, and expose the parsed dataset to later workflow nodes.
+This enables patterns such as: on every run, read `list.txt`, parse one number
+per line, then use bounded For Each to run a workflow once per number and pass
+that value into form-filling, lookup, or extraction steps.
+
+Initial Milestone 3.2 foundation is implemented: schema v1/v2 adapters preserve
+`datasets` and `dataSources`, Graph Studio metadata round trips them, and the
+Graph Data tab can add/remove workflow seed variables and TXT/CSV/JSON source
+declarations while previewing host-parsed source summaries through the native
+host.
 
 Data-driven repetition is graph control flow, not a Data-panel side effect. A
 bounded For Each node composes with Workflow Call to execute mapped workflow

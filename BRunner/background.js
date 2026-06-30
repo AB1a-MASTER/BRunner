@@ -17,6 +17,8 @@ import { getNodeDefinition, getNodeDefinitions } from "./core/nodeRegistry.js";
 import {
   evaluateNativeHostRequirement,
   formatNativeCapabilities,
+  NativeHostCapabilities,
+  NativeHostRequirementModes,
 } from "./core/nativeHostRequirements.js";
 import {
   VariableRegistry,
@@ -181,6 +183,9 @@ async function handleMessage(request, sender) {
         request.logs,
       );
 
+    case Messages.OsReadDataSource:
+      return await NativeBridge.readDataSource(request.source);
+
     case Messages.ToggleRecording:
       if (request.enabled && runtimeState.isRunning()) {
         return {
@@ -327,9 +332,9 @@ async function runWorkflow(rawWorkflow, options = {}) {
     skippedNodeIds: [],
     logs: [],
   });
-  const variableRegistry = new VariableRegistry(rawWorkflow?.variables || {});
+  const variableRegistry = new VariableRegistry(workflow.variables || {});
   const variableOrigins = Object.fromEntries(
-    Object.keys(rawWorkflow?.variables || {}).map((name) => [
+    Object.keys(workflow.variables || {}).map((name) => [
       name,
       {
         source: "workflow",
@@ -356,6 +361,17 @@ async function runWorkflow(rawWorkflow, options = {}) {
   });
 
   try {
+    await loadWorkflowDataSources({
+      workflow,
+      variableRegistry,
+      variableOrigins,
+      runId,
+      workflowName,
+    });
+    runtimeState.updateExecution({
+      variables: summarizeVariables(variableRegistry.snapshot(), variableOrigins),
+    });
+
     let executedCount = 0;
     let skippedCount = 0;
     const completedNodeIds = [];
@@ -592,6 +608,89 @@ async function runWorkflow(rawWorkflow, options = {}) {
       activeRun = null;
     }
   }
+}
+
+async function loadWorkflowDataSources({
+  workflow,
+  variableRegistry,
+  variableOrigins,
+  runId,
+  workflowName,
+}) {
+  const sources = Array.isArray(workflow?.dataSources)
+    ? workflow.dataSources
+    : [];
+  if (!sources.length) return;
+
+  const requirement = {
+    mode: NativeHostRequirementModes.Required,
+    capabilities: [NativeHostCapabilities.DataSourceRead],
+  };
+  const evaluation = evaluateNativeHostRequirement(
+    requirement,
+    NativeBridge.getStatus(),
+  );
+  if (!evaluation.ok) {
+    const error = new Error(evaluation.message || "Native host is required for data sources.");
+    error.diagnostics = {
+      action: "data.source.load",
+      finalReason: evaluation.finalReason,
+      capabilities: evaluation.missingCapabilities,
+    };
+    throw error;
+  }
+
+  for (const source of sources) {
+    const variableName = normalizeDataSourceVariableName(
+      source?.variableName || source?.id || source?.name,
+    );
+    if (!variableName) {
+      const error = new Error("Data source requires a safe source name.");
+      error.diagnostics = {
+        action: "data.source.load",
+        finalReason: "invalid_data_source_name",
+      };
+      throw error;
+    }
+
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      action: "data.source.load",
+      status: "started",
+      message: `Loading data source ${variableName}.`,
+    });
+
+    const result = await NativeBridge.readDataSource(source);
+    variableRegistry.set(variableName, result.data);
+    variableOrigins[variableName] = {
+      source: "dataSource",
+      nodeId: "",
+      action: "data.source.load",
+      filename: result.filename || "",
+      format: result.format || "",
+      kind: result.kind || "",
+    };
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      action: "data.source.load",
+      status: "completed",
+      message: `Loaded data source ${variableName}: ${result.preview || "data available"}.`,
+      diagnostics: {
+        sourceId: source?.id || "",
+        format: result.format || "",
+        kind: result.kind || "",
+        rows: result.rows || 0,
+        columns: result.columns || 0,
+      },
+    });
+  }
+}
+
+function normalizeDataSourceVariableName(value) {
+  const name = String(value || "").trim();
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : "";
 }
 
 async function stopActiveWorkflow() {

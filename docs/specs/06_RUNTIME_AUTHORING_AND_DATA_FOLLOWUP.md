@@ -103,6 +103,8 @@ The panel must manage:
 - workflow seed variables and defaults;
 - current/last-run values, types, and producing nodes;
 - reusable datasets: scalar, object, list, and table;
+- user-provided TXT/CSV list or table files loaded from approved directories on
+  each workflow run;
 - previews, schema/column discovery, validation, search, and safe value editing;
 - variable and dataset mapping into workflow inputs;
 - data-source status, refresh, and bounded diagnostics;
@@ -112,6 +114,29 @@ Data UI state stays outside workflow execution data. Persisted seed variables
 and data-source declarations belong to workflow schema; last-run values remain
 transient unless the user explicitly exports them.
 
+Foundation status: schema adapters preserve `datasets` and `dataSources`, Graph
+Studio can add/remove seed variables and declared TXT/CSV/JSON data sources,
+and the native host can preview parsed approved-directory sources without
+returning unrestricted paths. Runtime injection into workflow variables and
+bounded For Each consumption remain next.
+
+### Native-host settings UI and executable
+
+Add a small desktop UI for the native host and package it as a user-runnable
+executable. The UI must let users start or stop the host, confirm connection and
+pairing status, view advertised capabilities, edit backend settings such as
+allowed file/data directories, local-file access enablement, pairing key, port,
+and log location, and surface bounded diagnostics. Users should not need to edit
+`brunner_config.json` manually for ordinary backend setup. The packaged host UI
+must preserve the same allowlist and authentication safety model as the current
+Python service.
+
+Initial foundation: `BRunner_Host/host_ui.py` provides a Tkinter settings app
+for starting/stopping the host, editing pairing/port/allowlisted roots, and
+viewing logs. `BRunner_Host/build_host_ui.py` is the PyInstaller entry point for
+building a one-file `BRunnerHost` executable when packaging dependencies are
+available.
+
 ### Host-managed file data sources
 
 Add an allowlisted native-host data-source operation for loading a declared file
@@ -119,11 +144,45 @@ from an approved directory. The workflow stores a safe source identifier or
 allowlisted relative reference, format, parsing options, and input mapping—not
 an unrestricted path or file contents.
 
-Initial formats should be JSON and CSV, with explicit encoding, size, row, and
-column limits. The Data panel previews parsed data and reports stale, missing,
-denied, oversized, or malformed sources without exposing full local paths.
-Executing a workflow that reaches a required file-source node while the host is
-unavailable fails that node under the native-host requirement contract.
+Initial formats should include TXT lists, CSV tables/lists, and JSON, with
+explicit encoding, size, row, column, and item limits. TXT list parsing supports
+one item per non-empty line, including common numeric lists such as `list.txt`.
+CSV parsing supports table rows with headers and single-column list files. The
+Data panel previews parsed data and reports stale, missing, denied, oversized,
+or malformed sources without exposing full local paths. Executing a workflow
+that reaches a required file-source node while the host is unavailable fails
+that node under the native-host requirement contract.
+
+Example: a workflow declares an approved-directory source named `numbers` that
+loads `list.txt` at run start. The source parses the file into a list of
+numbers. A bounded For Each node later iterates `numbers`, passes the current
+number into a called workflow, and that child workflow uses it to fill forms,
+perform lookups, or collect additional data.
+
+## Track B.5 — Nodes completeness and friendliness pass
+
+After the Data panel model is in place, perform a dedicated nodes pass before
+the final macro-recording polish. This pass verifies that the catalog contains
+the required nodes for complete practical automation and makes node authoring
+more approachable.
+
+Scope:
+
+- audit browser, data, logic, host, keyboard, pointer, tab/window, file,
+  clipboard, HTTP, and workflow-reuse node coverage;
+- identify missing nodes, duplicated capabilities, overly narrow nodes, and
+  nodes that should be split or merged;
+- make entries friendlier with selects, comboboxes, autocomplete, defaults, and
+  validation where Studio can know valid values;
+- add variable-name autocomplete/validation for valid existing variables and
+  safe new output names;
+- split keyboard intent into **Send Text** and **Send Keystroke**;
+- add a searchable/autofill key catalog for Send Keystroke covering individual
+  keys and common modifier combinations such as Ctrl/Alt/Shift/Meta plus key;
+- keep advanced/manual entry for uncommon keys while validating the common path.
+
+Acceptance for this pass: a user can discover the right node and configure it
+without memorizing internal names, raw key syntax, or variable identifier rules.
 
 ## Track C — Data-driven control flow
 
@@ -132,6 +191,7 @@ Add graph-dependent nodes only after traversal and cycle rules are specified:
 ### For Each / dataset loop
 
 - Accept a list, table, or expression yielding iterable records.
+- Accept host-backed datasets loaded from declared TXT/CSV/JSON data sources.
 - Bind each item/row, index, and optionally key into named iteration variables.
 - Execute a referenced workflow or bounded sub-workflow once per record.
 - Map parent variables and current record fields into child workflow inputs.
@@ -175,8 +235,9 @@ scenario are updated.
    Sequential Studios render description, example, I/O, config, and safety
    notes.**
 5. Specify and implement the managed Data panel and safe file data sources.
-6. Specify graph traversal, Workflow Call, and bounded For Each execution.
-7. Complete live acceptance and final visual polish.
+6. Perform the nodes completeness and authoring-friendliness pass.
+7. Specify graph traversal, Workflow Call, and bounded For Each execution.
+8. Complete live acceptance and final visual polish.
 
 ## Acceptance gates
 
@@ -190,5 +251,7 @@ scenario are updated.
    user-facing targets.
 5. Every selected node shows canonical description and usage guidance.
 6. The Data panel can manage seed data and preview bounded host-backed JSON/CSV.
-7. For Each safely runs a mapped workflow once per list/table record with
+7. Nodes pass confirms required automation coverage and friendlier controls such
+   as variable-name autocomplete and guided keystroke entry.
+8. For Each safely runs a mapped workflow once per list/table record with
    limits, cancellation, and deterministic outputs.

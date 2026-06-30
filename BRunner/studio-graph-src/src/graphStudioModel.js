@@ -68,6 +68,8 @@ export function workflowToCanvas(input, definitions) {
       boundDomain: graph.boundDomain || "",
       settings: cloneObject(graph.settings),
       variables: cloneObject(graph.variables),
+      datasets: cloneObject(graph.datasets),
+      dataSources: cloneArray(graph.dataSources),
     },
   };
 }
@@ -102,6 +104,8 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
     boundDomain: String(metadata.boundDomain || ""),
     settings: cloneObject(metadata.settings),
     variables: cloneObject(metadata.variables),
+    datasets: cloneObject(metadata.datasets),
+    dataSources: cloneArray(metadata.dataSources),
     entryNodeId: graphNodes.length ? (entries.length === 1 ? entries[0].id : "") : "",
     nodes: graphNodes,
     edges: graphEdges,
@@ -185,6 +189,10 @@ function displayTarget(target) {
 
 function cloneObject(value) {
   return value && typeof value === "object" ? structuredClone(value) : {};
+}
+
+function cloneArray(value) {
+  return Array.isArray(value) ? structuredClone(value) : [];
 }
 
 function clonePosition(position) {

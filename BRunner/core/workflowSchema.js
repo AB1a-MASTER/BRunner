@@ -48,6 +48,8 @@ export function upgradeWorkflowToV2(input = {}, options = {}) {
     boundDomain: typeof input?.boundDomain === "string" ? input.boundDomain : "",
     settings: cloneObject(input?.settings),
     variables: cloneObject(input?.variables),
+    datasets: cloneObject(input?.datasets),
+    dataSources: cloneArray(input?.dataSources),
     entryNodeId: nodes[0]?.id || "",
     nodes,
     edges,
@@ -77,6 +79,8 @@ export function graphWorkflowToSequential(input = {}) {
     description: typeof input.description === "string" ? input.description : "",
     boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
     variables: cloneObject(input.variables),
+    datasets: cloneObject(input.datasets),
+    dataSources: cloneArray(input.dataSources),
     settings: cloneObject(input.settings),
     steps,
   };
@@ -177,4 +181,8 @@ function omitKeys(value, keys) {
 
 function cloneObject(value) {
   return value && typeof value === "object" ? structuredClone(value) : {};
+}
+
+function cloneArray(value) {
+  return Array.isArray(value) ? structuredClone(value) : [];
 }

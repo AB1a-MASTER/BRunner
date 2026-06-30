@@ -10,7 +10,7 @@ class LocalFileAccessError(ValueError):
     pass
 
 
-def read_allowed_file(config, base_dir, requested_path, max_bytes=MAX_LOCAL_FILE_BYTES):
+def resolve_allowed_file_path(config, base_dir, requested_path, max_bytes=MAX_LOCAL_FILE_BYTES):
     access = config.get("local_file_access")
 
     if not isinstance(access, dict) or access.get("enabled") is not True:
@@ -55,7 +55,18 @@ def read_allowed_file(config, base_dir, requested_path, max_bytes=MAX_LOCAL_FILE
 
     size = resolved.stat().st_size
     if size > max_bytes:
-        raise LocalFileAccessError("Local file exceeds the 10 MB safety limit.")
+        raise LocalFileAccessError("Local file exceeds the safety limit.")
+
+    return resolved, size
+
+
+def read_allowed_file(config, base_dir, requested_path, max_bytes=MAX_LOCAL_FILE_BYTES):
+    resolved, size = resolve_allowed_file_path(
+        config,
+        base_dir,
+        requested_path,
+        max_bytes,
+    )
 
     mime_type = mimetypes.guess_type(resolved.name)[0] or "application/octet-stream"
     content = base64.b64encode(resolved.read_bytes()).decode("ascii")

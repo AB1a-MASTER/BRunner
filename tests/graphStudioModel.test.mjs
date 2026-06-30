@@ -65,6 +65,8 @@ test("v2 graph positions, edges, configuration, and bypass survive round trip", 
     }],
   });
   graph.nodes[0].position = { x: 321, y: 654 };
+  graph.datasets = { sample: ["one", "two"] };
+  graph.dataSources = [{ id: "sample_json", format: "json", relativePath: "sample.json" }];
 
   const model = workflowToCanvas(graph, definitions);
   const saved = canvasToGraphWorkflow(model.nodes, model.edges, model.metadata);
@@ -72,6 +74,9 @@ test("v2 graph positions, edges, configuration, and bypass survive round trip", 
   assert.equal(model.readOnly, false);
   assert.equal(model.metadata.description, "A graph workflow description.");
   assert.equal(saved.description, "A graph workflow description.");
+  assert.deepEqual(model.metadata.datasets, graph.datasets);
+  assert.deepEqual(saved.datasets, graph.datasets);
+  assert.deepEqual(saved.dataSources, graph.dataSources);
   assert.deepEqual(saved.nodes[0].position, { x: 321, y: 654 });
   assert.equal(saved.nodes[0].data.executionMode, "conditional");
   assert.equal(saved.nodes[0].data.skipWhen, "{{skip_save}}");

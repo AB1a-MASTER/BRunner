@@ -13,6 +13,8 @@ const legacy = {
   description: "Cross-site legacy acceptance flow.",
   boundDomain: "example.com",
   variables: { seed: "ready" },
+  datasets: { users: [{ id: 1, name: "Ada" }] },
+  dataSources: [{ id: "users_csv", format: "csv", relativePath: "users.csv" }],
   settings: { reuseExistingTabs: true },
   steps: [
     {
@@ -36,6 +38,8 @@ test("v1 upgrades to a deterministic linear v2 graph", () => {
   assert.equal(graph.schemaVersion, 2);
   assert.equal(graph.id, "flow-1");
   assert.equal(graph.description, legacy.description);
+  assert.deepEqual(graph.datasets, legacy.datasets);
+  assert.deepEqual(graph.dataSources, legacy.dataSources);
   assert.equal(graph.entryNodeId, "first");
   assert.deepEqual(graph.nodes.map((node) => node.id), ["first", "second"]);
   assert.deepEqual(graph.edges.map((edge) => [edge.source, edge.target]), [["first", "second"]]);
@@ -50,9 +54,13 @@ test("v2 sequential adapter preserves runtime step fields", () => {
   assert.deepEqual(sequential.steps[0].page, legacy.steps[0].page);
   assert.deepEqual(sequential.steps[1].config, legacy.steps[1].config);
   assert.deepEqual(sequential.variables, legacy.variables);
+  assert.deepEqual(sequential.datasets, legacy.datasets);
+  assert.deepEqual(sequential.dataSources, legacy.dataSources);
   assert.equal(sequential.description, legacy.description);
   assert.equal(normalizeWorkflow(graph).description, legacy.description);
   assert.equal(normalizeWorkflow(graph).settings.reuseExistingTabs, true);
+  assert.deepEqual(normalizeWorkflow(graph).datasets, legacy.datasets);
+  assert.deepEqual(normalizeWorkflow(graph).dataSources, legacy.dataSources);
   assert.equal(getWorkflowSteps(graph).length, 2);
   assert.equal(isWorkflowLike(graph), true);
 });

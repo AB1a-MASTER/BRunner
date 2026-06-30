@@ -202,6 +202,12 @@ class NativeBridgeClient {
     });
   }
 
+  async readDataSource(source) {
+    return this.request(NativeCommands.ReadDataSource, {
+      source: source && typeof source === "object" ? source : {},
+    });
+  }
+
   getStatus() {
     return {
       connected: this.isConnected,
@@ -209,6 +215,7 @@ class NativeBridgeClient {
         ? [
             NativeHostCapabilities.OsKeystroke,
             NativeHostCapabilities.LocalFileRead,
+            NativeHostCapabilities.DataSourceRead,
             NativeHostCapabilities.ExecutionLogSave,
           ]
         : [],
