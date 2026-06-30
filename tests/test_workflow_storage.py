@@ -29,6 +29,7 @@ class WorkflowStorageTests(unittest.TestCase):
         self.assertEqual(json.loads(self.workflow_path.read_text(encoding="utf-8")), v2)
         self.assertEqual(json.loads(backup.read_text(encoding="utf-8")), self.v1)
         self.assertEqual(result["backupFilename"], "sample.json.v1.bak")
+        self.assertEqual(list(self.workflow_path.parent.glob("*.tmp")), [])
 
     def test_invalid_upgrade_leaves_original_untouched(self):
         with self.assertRaisesRegex(WorkflowUpgradeError, "schemaVersion 2"):

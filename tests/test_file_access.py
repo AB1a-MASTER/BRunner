@@ -69,6 +69,74 @@ class LocalFileAccessTests(unittest.TestCase):
                 max_bytes=3,
             )
 
+    def test_reads_file_from_approved_directory_alias(self):
+        file_path = self.allowed / "alias.txt"
+        file_path.write_text("Alias", encoding="utf-8")
+        config = {
+            "approvedDirectories": [{
+                "id": "imports",
+                "displayName": "Imports",
+                "path": str(self.allowed),
+                "read": True,
+                "write": False,
+                "recursive": True,
+            }]
+        }
+
+        result = read_allowed_file(
+            config,
+            self.base_dir,
+            {"directoryAlias": "imports", "relativePath": "alias.txt"},
+        )
+
+        self.assertEqual(result["filename"], "alias.txt")
+        self.assertEqual(base64.b64decode(result["content"]), b"Alias")
+
+    def test_approved_directory_alias_requires_read_permission(self):
+        (self.allowed / "blocked.txt").write_text("blocked", encoding="utf-8")
+        config = {
+            "approvedDirectories": [{
+                "id": "imports",
+                "path": str(self.allowed),
+                "read": False,
+                "recursive": True,
+            }]
+        }
+
+        with self.assertRaisesRegex(LocalFileAccessError, "does not allow reads"):
+            read_allowed_file(
+                config,
+                self.base_dir,
+                {"directoryAlias": "imports", "relativePath": "blocked.txt"},
+            )
+
+    def test_approved_directory_alias_rejects_escape_and_non_recursive_child(self):
+        child = self.allowed / "child"
+        child.mkdir()
+        (child / "nested.txt").write_text("nested", encoding="utf-8")
+        config = {
+            "approvedDirectories": [{
+                "id": "imports",
+                "path": str(self.allowed),
+                "read": True,
+                "recursive": False,
+            }]
+        }
+
+        with self.assertRaisesRegex(LocalFileAccessError, "recursive"):
+            read_allowed_file(
+                config,
+                self.base_dir,
+                {"directoryAlias": "imports", "relativePath": "child/nested.txt"},
+            )
+
+        with self.assertRaisesRegex(LocalFileAccessError, "does not exist|outside approved"):
+            read_allowed_file(
+                config,
+                self.base_dir,
+                {"directoryAlias": "imports", "relativePath": "../outside.txt"},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

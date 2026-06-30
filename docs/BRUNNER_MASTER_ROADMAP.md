@@ -2,7 +2,33 @@
 
 ## Product direction
 
-BRunner evolves from a reliable sequential recorder into a graph-based automation system. Each milestone is gated: the next milestone begins only after its acceptance tests pass.
+BRunner evolves from a reliable sequential recorder into a graph-based
+automation system with a native Windows companion app, a dependable internal
+element mapper, and a complete node catalog. Each milestone is gated: the next
+milestone begins only after its acceptance tests pass.
+
+## Revised forward roadmap
+
+The next work is no longer general Studio polish or broad node expansion. The
+project now moves through three deliberate foundations:
+
+1. **Windows companion app transition.** Replace the current localhost manager
+   UI with a native Windows companion app, centralize workflow persistence,
+   introduce approved directory aliases, and prepare structured visible host
+   fallback.
+2. **Mapper reliability transition.** Replace step-owned locators with
+   workflow-owned component maps, locked Component IDs, schema-v3 unresolved
+   routing, a dedicated Mapper Inspector, and safe static/open-shadow support.
+3. **Final node implementation program.** Implement the finalized node list in
+   `workflow_nodes_implementation_blueprint.md`, domain by domain, using shared
+   resolver, logging, text-matching, output, retry, and host-fallback adapters.
+
+The immediate source of truth for the companion phase is
+[07_WINDOWS_COMPANION_APP.md](specs/07_WINDOWS_COMPANION_APP.md). The source of
+truth for the mapper phase is
+[08_MAPPER_RELIABILITY_TRANSITION.md](specs/08_MAPPER_RELIABILITY_TRANSITION.md).
+The source of truth for the later node phase is the root-level
+`workflow_nodes_implementation_blueprint.md`.
 
 ## Current baseline — complete
 
@@ -67,7 +93,7 @@ complete. Live extension acceptance and responsive visual tuning remain.
 
 See [03_STUDIO_GRAPH_UX.md](specs/03_STUDIO_GRAPH_UX.md).
 
-## Milestone 3.1 — Runtime and authoring closure (next)
+## Milestone 3.1 — Runtime and authoring closure (complete for current scope)
 
 Correct the integration gaps found during the Studio review before expanding
 control flow:
@@ -93,42 +119,95 @@ recordings survive reordered controls, and every node exposes usage guidance.
 See
 [06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](specs/06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
 
-## Milestone 3.2 — Managed data authoring
+## Milestone 3.2 — Windows companion app transition (next)
 
-Replace the basic runtime-variable preview with a complete shared Data panel for
-seed variables, runtime values, lists/tables, mappings, previews, and bounded
-host-backed TXT/CSV/JSON data sources from approved directories.
+Move the existing localhost-managed Python host into a purpose-built Windows
+companion app. The extension remains the workflow runtime and browser-awareness
+layer; the companion app owns workflow storage, approved directory aliases,
+service status, pairing, diagnostics, and final visible host fallback.
 
-Add a native-host desktop UI packaged as an easy-to-run executable. The UI must
-let a user start/stop the backend, see connection/auth status, inspect and edit
-backend settings such as allowed data/file directories and pairing, and diagnose
-host capability availability without editing JSON files by hand.
+Implementation phases:
 
-**Gate:** users can declare and preview safe workflow data, map it into workflow
-inputs, diagnose unavailable/malformed sources, and run ordinary workflows
-without leaking unrestricted paths or persistent runtime values.
+1. Baseline and safety-net tests for current host CRUD, config, file access,
+   data parsing, execution logs, and protocol behavior.
+2. Application path helper and shared atomic I/O.
+3. Workflow repository service.
+4. Native PySide6 companion shell with Status, Workflow Storage, Pairing,
+   Diagnostics, and tray behavior.
+5. User-selectable workflow directory with use-new, copy, and move migration
+   choices.
+6. Approved directory registry and alias-based file/data access.
+7. Versioned protocol v2 and structured visible host fallback.
+8. Packaging and release cleanup.
 
-See [02_DATA_NODE_ENGINE.md](specs/02_DATA_NODE_ENGINE.md) and
-[06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](specs/06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
+**Gate:** the packaged app opens as a Windows companion, no production browser
+manager page is needed, workflows are saved atomically beside the executable by
+default or in the user's selected folder, approved folders are managed by alias,
+existing v1 commands still work, and structured host fallback refuses unsafe
+foreground/window/coordinate contexts.
 
-## Milestone 3.3 — Nodes completeness and friendliness pass
+See [07_WINDOWS_COMPANION_APP.md](specs/07_WINDOWS_COMPANION_APP.md).
 
-After the Data panel foundations are in place, audit the full node catalog
-against the goal of complete practical browser/host automation. This pass must:
+## Milestone 3.3 — Mapper reliability transition
 
-- verify which required nodes are present, missing, duplicated, or too narrow;
-- improve node names, grouping, defaults, examples, and safety copy;
-- replace free-text fields with friendlier controls where possible;
-- add valid-value autocomplete for variable-name entries and expression fields;
-- add guided keyboard controls: Send Text versus Send Keystroke, with a
-  searchable/autofill list of supported keys and common modifier combinations
-  such as Ctrl/Alt/Shift/Meta plus key;
-- keep advanced/manual entry available for uncommon values while validating the
-  common path.
+Replace the current per-step locator recorder with a workflow-scoped,
+component-oriented mapper. DOM nodes reference persistent `componentRef`
+records, not raw selectors, snapshots, or `ctrlHash` identities. Supported-scope
+parity is static/bounded pages plus open Shadow DOM. Dynamic regions,
+infinite/repeating feeds, frame support, and closed Shadow DOM remain deferred.
 
-**Gate:** a user can discover the right node, configure it without memorizing
-internal names or key syntax, and confirm that the catalog covers the required
-automation scenarios before final macro-recording polish.
+Implementation phases:
+
+1. Mapper Core foundation, build outputs, `workflow.settings.mapper`, graph
+   schema v3, placeholder `ComponentRef`, and Chrome-storage `MapStore`
+   skeleton.
+2. Static page map, page normalization, workflow-local site/page overrides,
+   canonical Component ID naming, fixed scoring, primary-first resolution,
+   action validation, ambiguity handling, and `dynamic_deferred` safe decline.
+3. Open Shadow DOM traversal, shadow paths, bounded map history, stale-map
+   reconciliation, stable Component IDs across drift, and structured resolver
+   output/logging.
+4. Dedicated Mapper Inspector window with map browsing, live resolution checks,
+   highlight, Review Queue, aliases, sensitive-site badges, and effective policy
+   view.
+5. Filesystem `MapStore` adapter through the existing companion/local-host
+   bridge, with atomic writes, timeouts, bounded retention, and last-write-wins
+   conflict records.
+6. Deferred dynamic, feed, and same-origin frame work only after static/open-
+   shadow reliability tests are stable.
+
+**Gate:** every recorded DOM node uses a locked readable Component ID; resolver
+states are `resolved`, `resolved_with_fallback`, `ambiguous`, `not_found`,
+`map_stale`, or `protected_unsupported`; ambiguous/not-found targets never
+receive events; workflows route unresolved DOM outcomes through explicit
+`unresolved` edges; maps are compact, workflow-scoped, redacted on sensitive
+pages, and versioned; open-shadow controls work; dynamic-heavy and closed-shadow
+surfaces fail honestly; the Inspector explains resolution without unsafe
+auto-selection.
+
+See [08_MAPPER_RELIABILITY_TRANSITION.md](specs/08_MAPPER_RELIABILITY_TRANSITION.md).
+
+## Milestone 3.4 — Final node implementation program
+
+Implement the finalized node list from
+`workflow_nodes_implementation_blueprint.md`, replacing or modifying the current
+node catalog domain by domain. This phase starts only after the companion app
+and mapper foundations are accepted.
+
+Implementation order:
+
+1. Shared node adapters and foundational browser nodes.
+2. Core interaction nodes.
+3. Form and page-level UI nodes.
+4. Data input and storage integration nodes.
+5. Data transformation and advanced logic nodes.
+6. Workflow control and extraction nodes.
+7. Output, reporting, and end-to-end acceptance packs.
+
+**Gate:** every implemented node has metadata, schema, ports, structured output,
+disabled/bypass behavior, retry policy where safe, sensitive-value exclusion,
+target-resolution output where applicable, host fallback status where
+applicable, deterministic tests, and cross-node acceptance workflow coverage.
 
 ## Milestone 4 — Advanced automation
 
@@ -145,7 +224,7 @@ automation scenarios before final macro-recording polish.
 
 | Todo | Status |
 |---|---|
-| Stable semantic identifiers and internal DOM fallback | Complete |
+| Stable semantic identifiers and internal DOM fallback | Current foundation complete; superseded by Milestone 3.3 mapper reliability transition |
 | Hide sidebar content on Studio | Complete |
 | Auto-bind recorded domain | Complete |
 | Same/new-tab navigation execution | Complete |
@@ -159,14 +238,14 @@ automation scenarios before final macro-recording polish.
 | Runtime state colors in graph minimap/overview | Milestone 3 |
 | User-directed final Graph Studio UI/UX refinement | After Milestone 3 functional gate; ask user for details first |
 | Saved/runtime variable browser and table/list output previews | Milestone 3 |
-| Managed seed/dataset panel and allowlisted TXT/CSV/JSON sources | Milestone 3.2 |
-| Native-host settings UI and packaged executable | Milestone 3.2 |
+| Managed seed/dataset panel and allowlisted TXT/CSV/JSON sources | Fold into companion approved-directory and final node phases |
+| Native-host settings UI and packaged executable | Superseded by Milestone 3.2 Windows companion app |
 | Required/fallback native-host capability contract | Milestone 3.1 |
 | Cross-Studio open-workflow continuity | Milestone 3.1 |
 | Semantic text-first select/click recording | Milestone 3.1 |
 | Registry-backed node descriptions and examples in Inspector | Milestone 3.1 |
-| Nodes completeness and user-friendly controls pass | Milestone 3.3 |
-| Workflow Call and bounded data For Each | Milestone 4 |
+| Nodes completeness and user-friendly controls pass | Superseded by Milestone 3.4 final node implementation program |
+| Workflow Call and bounded data For Each | Milestone 3.4 node program after host and mapper foundations |
 | Stop/cancel running workflow from Studio and sidebar | Runtime foundation; immediate |
 
 ## Development rules

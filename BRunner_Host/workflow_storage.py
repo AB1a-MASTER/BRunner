@@ -1,8 +1,8 @@
-import json
 import os
 import secrets
 import shutil
 from pathlib import Path
+from atomic_io import atomic_write_json
 
 
 class WorkflowUpgradeError(ValueError):
@@ -28,11 +28,7 @@ def atomic_upgrade_workflow(path, content):
     backup_temp = workflow_path.with_name(f".{workflow_path.name}.{token}.backup.tmp")
 
     try:
-        with open(content_temp, "w", encoding="utf-8") as stream:
-            json.dump(content, stream, indent=4)
-            stream.flush()
-            os.fsync(stream.fileno())
-
+        atomic_write_json(content_temp, content, indent=4)
         shutil.copyfile(workflow_path, backup_temp)
         os.replace(backup_temp, backup_path)
         os.replace(content_temp, workflow_path)

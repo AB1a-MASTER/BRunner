@@ -173,6 +173,32 @@ Nodes contain `id`, `type`, `version`, position, and configuration. Edges contai
 
 Initial v2 execution permits one success path. Conditions, loops, and merge semantics are deferred to Milestone 4.
 
+## Forward graph schema v3 for mapper outcomes
+
+The mapper reliability transition introduces graph schema v3 for DOM-dependent
+nodes. The current one-success-path validation is incompatible with the mapper
+requirement that ambiguous, missing, stale, or unsupported targets are handled
+workflow outcomes rather than crashes or silent success-path skips.
+
+Under schema v3, every DOM-dependent node exposes:
+
+```text
+success
+unresolved
+```
+
+`unresolved` covers mapper states `ambiguous`, `not_found`, `map_stale` after
+refresh/reconcile exhaustion, and `protected_unsupported`. On unresolved states,
+the node must not dispatch the browser action. It stores the structured resolver
+result, logs it, and follows the `unresolved` edge.
+
+The validator must reject workflows containing DOM nodes without an unresolved
+edge. Add a terminal **Needs attention** node for authors who want an explicit
+visible end state. Runtime execution must move from linear `for`-loop stepping
+to graph traversal that chooses outgoing edges from node outcomes.
+
+See [08_MAPPER_RELIABILITY_TRANSITION.md](08_MAPPER_RELIABILITY_TRANSITION.md).
+
 ## Compatibility and migration
 
 - Load v1 `steps` workflows through an adapter without modifying the source file.

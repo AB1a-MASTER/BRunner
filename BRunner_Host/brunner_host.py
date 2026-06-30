@@ -2,26 +2,30 @@ import asyncio
 import websockets
 import json
 import pyautogui
-import os
-import secrets
 import logging
-import shutil
-from pathlib import Path
+from app_paths import (
+    application_directory,
+    default_config_file,
+    default_log_file,
+    default_logs_directory,
+    default_workflows_directory,
+)
 from file_access import read_allowed_file
 from data_source import read_data_source
-from workflow_storage import atomic_upgrade_workflow
+from workflow_repository import WorkflowRepository
 from execution_log_storage import save_execution_log
 from host_settings import load_or_create_config
 
 # --- Paths ---
 
-BASE_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = BASE_DIR / "brunner_config.json"
-WORKFLOWS_DIR = BASE_DIR / "Workflows"
-EXECUTION_LOGS_DIR = BASE_DIR / "Logs"
-LOG_FILE = BASE_DIR / "brunner_host.log"
+BASE_DIR = application_directory(__file__)
+CONFIG_FILE = default_config_file(__file__)
+WORKFLOWS_DIR = default_workflows_directory(__file__)
+EXECUTION_LOGS_DIR = default_logs_directory(__file__)
+LOG_FILE = default_log_file(__file__)
 config = load_or_create_config(CONFIG_FILE, BASE_DIR)
 PORT = config["port"]
+WORKFLOW_REPOSITORY = WorkflowRepository(WORKFLOWS_DIR)
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)
 EXECUTION_LOGS_DIR.mkdir(exist_ok=True)
@@ -91,33 +95,6 @@ def success(request_id=None, **kwargs):
 
 def failure(request_id=None, error="Unknown error", status="failed"):
     return response(request_id=request_id, status=status, error=str(error))
-
-
-def sanitize_filename(filename):
-    if not filename:
-        raise ValueError("Missing filename.")
-
-    name = os.path.basename(str(filename))
-
-    if not name.lower().endswith(".json"):
-        name += ".json"
-
-    if name in [".json", "..json"]:
-        raise ValueError("Invalid filename.")
-
-    return name
-
-
-def workflow_path(filename):
-    safe_name = sanitize_filename(filename)
-    path = WORKFLOWS_DIR / safe_name
-
-    # Safety check against traversal tricks.
-    resolved = path.resolve()
-    if WORKFLOWS_DIR.resolve() not in resolved.parents and resolved != WORKFLOWS_DIR.resolve():
-        raise ValueError("Invalid workflow path.")
-
-    return resolved
 
 
 def parse_keys(raw_keys):
@@ -244,17 +221,9 @@ async def handle_read_data_source(websocket, request_id, payload):
 
 
 async def handle_list_workflows(websocket, request_id):
-    WORKFLOWS_DIR.mkdir(exist_ok=True)
-
-    files = sorted([
-        path.name
-        for path in WORKFLOWS_DIR.iterdir()
-        if path.is_file() and path.name.lower().endswith(".json")
-    ])
-
     await send_json(
         websocket,
-        success(request_id, files=files)
+        success(request_id, files=WORKFLOW_REPOSITORY.list_workflows())
     )
 
 
@@ -265,14 +234,11 @@ async def handle_save_workflow(websocket, request_id, payload):
     if content is None:
         content = payload.get("workflow")
 
-    path = workflow_path(filename)
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(content, f, indent=4)
+    result = WORKFLOW_REPOSITORY.save_workflow(filename, content)
 
     await send_json(
         websocket,
-        success(request_id, filename=path.name)
+        success(request_id, **result)
     )
 
 
@@ -295,7 +261,7 @@ async def handle_save_execution_log(websocket, request_id, payload):
 async def handle_upgrade_workflow(websocket, request_id, payload):
     filename = payload.get("filename")
     content = payload.get("content")
-    result = atomic_upgrade_workflow(workflow_path(filename), content)
+    result = WORKFLOW_REPOSITORY.upgrade_workflow(filename, content)
 
     await send_json(
         websocket,
@@ -305,40 +271,19 @@ async def handle_upgrade_workflow(websocket, request_id, payload):
 
 async def handle_load_workflow(websocket, request_id, payload):
     filename = payload.get("filename")
-    path = workflow_path(filename)
-
-    if not path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "File not found.")
-        )
-        return
-
-    with open(path, "r", encoding="utf-8") as f:
-        content = json.load(f)
-
+    result = WORKFLOW_REPOSITORY.load_workflow(filename)
     await send_json(
         websocket,
-        success(request_id, filename=path.name, content=content)
+        success(request_id, **result)
     )
 
 
 async def handle_delete_workflow(websocket, request_id, payload):
     filename = payload.get("filename")
-    path = workflow_path(filename)
-
-    if not path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "File not found.")
-        )
-        return
-
-    path.unlink()
-
+    result = WORKFLOW_REPOSITORY.delete_workflow(filename)
     await send_json(
         websocket,
-        success(request_id, filename=path.name)
+        success(request_id, **result)
     )
 
 
@@ -350,32 +295,10 @@ async def handle_duplicate_workflow(websocket, request_id, payload):
         or payload.get("targetFilename")
     )
 
-    original_path = workflow_path(original)
-    new_path = workflow_path(new_name)
-
-    if not original_path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "Original workflow not found.")
-        )
-        return
-
-    if new_path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "Target workflow already exists.")
-        )
-        return
-
-    shutil.copyfile(original_path, new_path)
-
+    result = WORKFLOW_REPOSITORY.duplicate_workflow(original, new_name)
     await send_json(
         websocket,
-        success(
-            request_id,
-            filename=original_path.name,
-            newFilename=new_path.name
-        )
+        success(request_id, **result)
     )
 
 
@@ -388,59 +311,10 @@ async def handle_rename_workflow(websocket, request_id, payload):
     )
     content = payload.get("content")
 
-    original_path = workflow_path(original)
-    new_path = workflow_path(new_name)
-
-    if not original_path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "Original workflow not found.")
-        )
-        return
-
-    if original_path != new_path and new_path.exists():
-        await send_json(
-            websocket,
-            failure(request_id, "A workflow with the new name already exists.")
-        )
-        return
-
-    if content is None:
-        with open(original_path, "r", encoding="utf-8") as f:
-            content = json.load(f)
-
-    token = secrets.token_hex(6)
-    temp_path = WORKFLOWS_DIR / f".{new_path.name}.{token}.tmp"
-    backup_path = WORKFLOWS_DIR / f".{original_path.name}.{token}.bak"
-
-    try:
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(content, f, indent=4)
-
-        if original_path == new_path:
-            os.replace(temp_path, original_path)
-        else:
-            original_path.rename(backup_path)
-
-            try:
-                os.replace(temp_path, new_path)
-                backup_path.unlink()
-            except Exception:
-                if new_path.exists():
-                    new_path.unlink()
-                backup_path.rename(original_path)
-                raise
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
-
+    result = WORKFLOW_REPOSITORY.rename_workflow(original, new_name, content)
     await send_json(
         websocket,
-        success(
-            request_id,
-            filename=original_path.name,
-            newFilename=new_path.name
-        )
+        success(request_id, **result)
     )
 
 

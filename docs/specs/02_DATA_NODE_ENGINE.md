@@ -30,6 +30,12 @@ Existing hard-coded action lists become compatibility shims during migration.
 
 Each extraction node requires an output variable. Legacy `element.extract` maps to text extraction.
 
+Forward mapper transition: DOM extraction nodes are DOM-dependent nodes. They
+must resolve targets through mapper `componentRef` records, use the same
+resolver states as interaction nodes, and route `ambiguous`, `not_found`,
+exhausted `map_stale`, or `protected_unsupported` through the graph
+`unresolved` handle without extracting stale or arbitrary content.
+
 `logic.wait` supports either fixed milliseconds or random `minMs`/`maxMs`, including expressions.
 
 ## Deferred UX refinements
@@ -54,16 +60,17 @@ authoring surface. Milestone 3.2 adds one shared model for:
 - inspecting current/last-run values and producing nodes;
 - managing scalar, object, list, and table datasets;
 - previewing columns/schema and mapping fields into workflow inputs;
-- declaring bounded host-backed TXT/CSV/JSON sources from approved directories.
+- declaring bounded companion-backed TXT/CSV/JSON sources from approved
+  directory aliases.
 
 Persist data-source declarations and seed values in workflow schema. Keep
-last-run values transient. Native file sources use safe identifiers or
-allowlisted relative references, never unrestricted paths, and follow the
-required-host node contract. See
+last-run values transient. Companion file sources use approved directory aliases
+and relative references, never unrestricted paths, and follow the required-host
+node contract. See
 [06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md](06_RUNTIME_AUTHORING_AND_DATA_FOLLOWUP.md).
 
 Dataset file sources must support user-provided list and table data in `.txt`
-or `.csv` form, loaded from a configured approved directory each time the
+or `.csv` form, loaded from a configured approved directory alias each time the
 workflow runs. A declared source can point to a safe relative file such as
 `list.txt`, parse it into a bounded list of numbers or a table of rows, validate
 encoding/size/row limits, and expose the parsed dataset to later workflow nodes.

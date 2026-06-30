@@ -5,6 +5,16 @@
 Approved roadmap scope captured from live UI review on 2026-06-20. This work
 follows the Studio shell refinement and precedes general visual polish.
 
+Forward planning update: the next implementation phase is now the Windows
+companion app transition in
+[07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md). The Data panel,
+approved-directory, host capability, and final node-catalog work in this spec
+should be interpreted through that companion-app architecture. After the
+companion foundation is accepted, implement the mapper reliability transition in
+[08_MAPPER_RELIABILITY_TRANSITION.md](08_MAPPER_RELIABILITY_TRANSITION.md),
+then implement the finalized node set from the root-level
+`workflow_nodes_implementation_blueprint.md`.
+
 ## Goal
 
 Close the remaining gaps between recording, authoring, execution, native-host
@@ -120,22 +130,19 @@ and the native host can preview parsed approved-directory sources without
 returning unrestricted paths. Runtime injection into workflow variables and
 bounded For Each consumption remain next.
 
-### Native-host settings UI and executable
+### Windows companion app and executable
 
-Add a small desktop UI for the native host and package it as a user-runnable
-executable. The UI must let users start or stop the host, confirm connection and
-pairing status, view advertised capabilities, edit backend settings such as
-allowed file/data directories, local-file access enablement, pairing key, port,
-and log location, and surface bounded diagnostics. Users should not need to edit
-`brunner_config.json` manually for ordinary backend setup. The packaged host UI
-must preserve the same allowlist and authentication safety model as the current
-Python service.
+The earlier small native-host settings UI is superseded by the Windows
+companion app transition. The companion app must be a native desktop application
+that starts/stops the host service, shows connection and pairing status, manages
+workflow storage, manages approved folder aliases, exposes host-fallback
+settings, and surfaces bounded diagnostics. Users should not need to edit
+`brunner_config.json` manually for ordinary backend setup.
 
-Initial foundation: `BRunner_Host/host_ui.py` provides a Tkinter settings app
-for starting/stopping the host, editing pairing/port/allowlisted roots, and
-viewing logs. `BRunner_Host/build_host_ui.py` is the PyInstaller entry point for
-building a one-file `BRunnerHost` executable when packaging dependencies are
-available.
+Current implementation note: `BRunner_Host/host_ui.py` and
+`BRunner_Host/build_host_ui.py` are transitional artifacts from the earlier
+Tkinter-based host UI and should be replaced or retired during the companion app
+packaging phase. See [07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md).
 
 ### Host-managed file data sources
 
@@ -159,12 +166,18 @@ numbers. A bounded For Each node later iterates `numbers`, passes the current
 number into a called workflow, and that child workflow uses it to fill forms,
 perform lookups, or collect additional data.
 
-## Track B.5 — Nodes completeness and friendliness pass
+## Track B.5 — Historical nodes friendliness pass
 
-After the Data panel model is in place, perform a dedicated nodes pass before
-the final macro-recording polish. This pass verifies that the catalog contains
-the required nodes for complete practical automation and makes node authoring
-more approachable.
+This earlier pass is superseded as the active node plan by
+`workflow_nodes_implementation_blueprint.md`. Preserve the authoring goals below
+when implementing the finalized node set, but do not use this section as the
+catalog or ordering source. The new node program starts only after the companion
+app and internal mapper foundations are accepted.
+
+Original intent: after the Data panel model is in place, perform a dedicated
+nodes pass before the final macro-recording polish. This pass verifies that the
+catalog contains the required nodes for complete practical automation and makes
+node authoring more approachable.
 
 Scope:
 
@@ -234,9 +247,13 @@ scenario are updated.
    registry definitions now expose guidance metadata and both Graph and
    Sequential Studios render description, example, I/O, config, and safety
    notes.**
-5. Specify and implement the managed Data panel and safe file data sources.
-6. Perform the nodes completeness and authoring-friendliness pass.
-7. Specify graph traversal, Workflow Call, and bounded For Each execution.
+5. Implement the Windows companion app transition.
+6. Implement the mapper reliability transition, including Mapper Core,
+   `workflow.settings.mapper`, graph schema v3 unresolved routing, ComponentRef
+   targets, Chrome-storage MapStore, open Shadow DOM support, and Mapper
+   Inspector.
+7. Implement the finalized node set from
+   `workflow_nodes_implementation_blueprint.md`.
 8. Complete live acceptance and final visual polish.
 
 ## Acceptance gates
@@ -250,8 +267,9 @@ scenario are updated.
 4. Selects replay by visible text before value/index; clicks prefer semantic
    user-facing targets.
 5. Every selected node shows canonical description and usage guidance.
-6. The Data panel can manage seed data and preview bounded host-backed JSON/CSV.
-7. Nodes pass confirms required automation coverage and friendlier controls such
-   as variable-name autocomplete and guided keystroke entry.
-8. For Each safely runs a mapped workflow once per list/table record with
-   limits, cancellation, and deterministic outputs.
+6. The companion app manages workflow storage, approved directories, pairing,
+   diagnostics, and structured host capability status.
+7. Mapper/resolver behavior is accepted for static/bounded pages and open
+   Shadow DOM before final browser-targeting node expansion.
+8. The final node program confirms required automation coverage, friendlier
+   controls, bounded data/control flow, and deterministic outputs.

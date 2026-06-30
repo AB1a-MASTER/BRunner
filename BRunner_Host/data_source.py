@@ -18,7 +18,7 @@ def read_data_source(config, base_dir, source):
     if not isinstance(source, dict):
         raise DataSourceError("Data source declaration is missing.")
 
-    requested_path = (
+    requested_path = source if source.get("directoryAlias") else (
         source.get("relativePath")
         or source.get("path")
         or source.get("filePath")

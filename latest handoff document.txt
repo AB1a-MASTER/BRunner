@@ -1,5 +1,5 @@
 BRunner - Latest Development Handoff
-Updated: 2026-06-20
+Updated: 2026-06-30
 
 PURPOSE
 This is the starting point for the next development chat. Read this file, then
@@ -20,8 +20,26 @@ GIT OWNERSHIP
   - add node summaries, bypass, collapse, and runtime states
 
 CURRENT MILESTONE
-Milestone 3 - Studio Graph UX functional acceptance is complete. The dedicated
-user-directed UI/UX refinement phase is now active.
+Milestone 3 - Studio Graph UX functional acceptance is complete. The roadmap has
+been reset by the new host and node planning docs. The next implementation
+phase is the Windows companion app transition, not general Studio UI/UX polish.
+
+New planning sources:
+- `BRunner_Windows_Companion_Transition_Plan.md`
+- `windows_companion_app_design_notes.docx`
+- `BRunner_Mapper_Reliability_Transition_Plan.md`
+- `workflow_nodes_implementation_blueprint.md`
+- `docs/specs/07_WINDOWS_COMPANION_APP.md`
+- `docs/specs/08_MAPPER_RELIABILITY_TRANSITION.md`
+
+Forward order:
+1. Implement the Windows companion app transition.
+2. Implement the mapper reliability transition: shared Mapper Core,
+   workflow-scoped component maps, graph schema v3 unresolved routing,
+   ComponentRef targets, Chrome-storage MapStore, open Shadow DOM support, and
+   dedicated Mapper Inspector.
+3. Implement the finalized node list from
+   `workflow_nodes_implementation_blueprint.md`, domain by domain.
 
 The sequential runtime and Phase A/Phase B node expansion are complete and live
 accepted. The Variables/Data Inspector, autocomplete/validation, extraction UX,
@@ -223,10 +241,14 @@ Implemented and live accepted:
 
 FINAL USER-DIRECTED UI/UX PASS
 
-After the functional Milestone 3 acceptance gate, perform a dedicated Graph
-Studio UI/UX refinement pass. Do not guess the requested redesign. At the start
-of that phase, explicitly ask the user for their priorities, references, and
-detailed direction. Preserve accepted behavior and rerun responsive and
+This is no longer the immediate next phase. Keep the notes below as historical
+context for accepted Studio polish work and possible later refinement, but start
+the next implementation thread with the Windows companion app transition.
+
+After the functional Milestone 3 acceptance gate, the previous plan was to
+perform a dedicated Graph Studio UI/UX refinement pass. Do not guess any future
+redesign; if this work resumes later, ask the user for priorities, references,
+and detailed direction. Preserve accepted behavior and rerun responsive and
 accessibility checks after applying their feedback.
 
 The detailed implementation plan is now in:
@@ -237,9 +259,10 @@ persistence, shared global UI preferences/density tokens, icon2 identity, and
 the authenticated host-backed `.log` save command are implemented and verified.
 The native host must be restarted before live-testing SAVE_EXECUTION_LOG.
 
-Next, begin Slice 2: replace Graph Studio's two top bars with the grouped unified
-command bar, add centered host status, and move workflow controls plus saveability
-state into the pinned-by-default Inspector workflow view.
+Former Slice 2, now deferred: replace Graph Studio's two top bars with the
+grouped unified command bar, add centered host status, and move workflow
+controls plus saveability state into the pinned-by-default Inspector workflow
+view.
 
 DEFERRED VISIBILITY/PRECONDITION REQUIREMENT
 
@@ -266,19 +289,25 @@ See:
 
 NEXT IMPLEMENTATION PLAN
 
-Next isolated Milestone 3 slice:
-1. Ask the user for their UI/UX priorities, references, and detailed direction.
-2. Translate that direction into an agreed refinement scope without changing
-   accepted workflow behavior.
-3. Implement the user-directed refinement and repeat responsive/accessibility
-   acceptance before beginning Milestone 4.
+Next isolated implementation slice:
+1. Add companion-app dependency manifest and host baseline tests.
+2. Add `BRunner_Host/app_paths.py` so packaged builds store workflows beside
+   `BRunnerHost.exe`.
+3. Add shared atomic JSON/text I/O.
+4. Route normal workflow saves, duplicate, rename, upgrade, config save, and
+   execution-log save through shared atomic I/O.
+5. Extract `workflow_repository.py` so WebSocket handlers no longer write
+   workflow files directly.
+6. Begin the PySide6 companion shell with Status and Workflow Storage pages,
+   tray behavior, and existing v1 WebSocket command compatibility.
 
-After Milestone 3 acceptance:
-- Conditions, switch, merge, stop/fail, and retry boundaries.
-- Repeat/while/for-each with limits.
-- Error branches and sub-workflows.
-- Registry-driven foreground/visibility/focus preconditions.
-- Native-dialog strategies, CDP/headless execution, audit, and telemetry.
+After the companion app is accepted:
+- implement the mapper reliability transition from
+  `docs/specs/08_MAPPER_RELIABILITY_TRANSITION.md`;
+- implement the finalized node set from
+  `workflow_nodes_implementation_blueprint.md`;
+- keep graph control flow tied to graph traversal, branch handles, cycle
+  validation, and iteration limits.
 
 DO NOT IMPLEMENT GRAPH CONTROL FLOW IN THE LINEAR EXECUTOR.
 Conditions, loops, merge paths, and error branches depend on graph traversal,

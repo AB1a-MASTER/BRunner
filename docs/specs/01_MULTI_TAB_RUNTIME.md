@@ -58,6 +58,13 @@ interactions prioritize accessible name, label, visible text, role, and stable
 attributes before structural position. Both Studios consume one authoritative
 recorded-step stream so an action appears exactly once in the active editor.
 
+Forward mapper transition: recorded DOM interactions will store `componentRef`
+values to workflow-scoped mapper Component IDs instead of per-step target
+snapshots. Restricted pages, closed Shadow DOM, unsupported frames, and deferred
+dynamic pages should surface as `protected_unsupported` or another unresolved
+mapper state and route through the graph node's `unresolved` handle without
+dispatching the action.
+
 ## Runtime state
 
 Add messages:

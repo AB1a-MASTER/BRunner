@@ -4,6 +4,22 @@
 
 Define the supported automation vocabulary before implementation. Nodes must be added through the canonical registry and must not introduce one-off Studio forms.
 
+## Forward status
+
+This file records the implemented and previously planned catalog for the
+current runtime. The finalized future node inventory, shared node contracts, and
+domain-by-domain implementation order now live in the root-level
+`workflow_nodes_implementation_blueprint.md`.
+
+Do not start the final node expansion from this older phase list. First complete
+the Windows companion app transition in
+[07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md), then complete the
+mapper reliability transition in
+[08_MAPPER_RELIABILITY_TRANSITION.md](08_MAPPER_RELIABILITY_TRANSITION.md).
+After those foundations are accepted, implement nodes from the blueprint using
+shared target-resolution, text-matching, output, logging, retry, and
+host-fallback adapters.
+
 ## Implemented foundation
 
 - Browser: Navigate URL, recorded tab switch.
@@ -164,6 +180,13 @@ only as a last fallback. Click-like nodes prefer accessible name, label, visible
 text, role, and stable attributes before structural selectors or ordinal
 position. Ambiguity must produce target diagnostics rather than arbitrary
 selection.
+
+Forward mapper requirement: newly recorded DOM-dependent nodes will store a
+`componentRef` to a persistent mapper Component ID instead of `targetFallbacks`,
+`targetSnapshot`, `ctrlHash`, `friendlyName`, or raw CSS selector identity.
+DOM nodes must expose `success` and `unresolved` handles under graph schema v3.
+`unresolved` covers `ambiguous`, `not_found`, exhausted `map_stale`, and
+`protected_unsupported`; no browser action may dispatch on those outcomes.
 
 ## Planned data-driven nodes
 

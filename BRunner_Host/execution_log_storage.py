@@ -1,9 +1,8 @@
 import json
-import os
 import re
-import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+from atomic_io import atomic_write_text
 
 
 MAX_LOG_ENTRIES = 200
@@ -35,22 +34,16 @@ def save_execution_log(logs_dir, workflow_name, run_id, entries, saved_at=None):
     if directory not in destination.parents:
         raise ExecutionLogStorageError("Invalid execution log destination.")
 
-    temp = directory / f".{filename}.{secrets.token_hex(5)}.tmp"
-    try:
-        with open(temp, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write("BRunner Execution Log\n")
-            stream.write(f"Workflow: {_safe_line(workflow_name, 120)}\n")
-            stream.write(f"Run ID: {_safe_line(run_id, 120)}\n")
-            stream.write(f"Saved At: {moment.astimezone(timezone.utc).isoformat()}\n")
-            stream.write(f"Events: {len(safe_entries)}\n\n")
-            for entry in safe_entries:
-                stream.write(_format_entry(entry) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temp, destination)
-    finally:
-        if temp.exists():
-            temp.unlink()
+    lines = [
+        "BRunner Execution Log",
+        f"Workflow: {_safe_line(workflow_name, 120)}",
+        f"Run ID: {_safe_line(run_id, 120)}",
+        f"Saved At: {moment.astimezone(timezone.utc).isoformat()}",
+        f"Events: {len(safe_entries)}",
+        "",
+    ]
+    lines.extend(_format_entry(entry) for entry in safe_entries)
+    atomic_write_text(destination, "\n".join(lines) + "\n")
 
     return {"filename": filename, "entries": len(safe_entries)}
 

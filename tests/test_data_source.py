@@ -208,6 +208,33 @@ class DataSourceTests(unittest.TestCase):
 
         self.assertEqual(result["data"], ["x"])
 
+    def test_directory_alias_source_reads_relative_file(self):
+        (self.allowed / "alias.csv").write_text("id,name\n1,Ada\n", encoding="utf-8")
+        config = {
+            "approvedDirectories": [{
+                "id": "imports",
+                "displayName": "Imports",
+                "path": str(self.allowed),
+                "read": True,
+                "write": False,
+                "recursive": True,
+            }]
+        }
+
+        result = read_data_source(
+            config,
+            self.base_dir,
+            {
+                "id": "alias-users",
+                "directoryAlias": "imports",
+                "relativePath": "alias.csv",
+            },
+        )
+
+        self.assertEqual(result["kind"], "table")
+        self.assertEqual(result["data"], [{"id": 1, "name": "Ada"}])
+        self.assertEqual(result["filename"], "alias.csv")
+
     def test_row_limit_fails(self):
         (self.allowed / "list.txt").write_text("1\n2\n", encoding="utf-8")
 
