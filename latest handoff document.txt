@@ -49,7 +49,7 @@ and live accepted.
 
 CURRENT TEST BASELINE
 - 84 deterministic JavaScript tests pass across 18 test files.
-- 10 deterministic Python tests pass.
+- 59 deterministic Python tests pass.
 - `npm run studio:build` succeeds with Vite 8 and extension-safe relative assets.
 - Background and native-host syntax checks pass.
 
@@ -289,17 +289,30 @@ See:
 
 NEXT IMPLEMENTATION PLAN
 
+Completed companion foundation slices:
+1. Added `BRunner_Host/requirements.txt` with PySide6 and packaging
+   dependencies.
+2. Added executable-aware `app_paths.py` and active workflow-directory
+   resolution.
+3. Added shared atomic JSON/text I/O and routed config, workflow save,
+   duplicate, rename, upgrade, and execution-log writes through it.
+4. Extracted `workflow_repository.py`; WebSocket workflow handlers now delegate
+   to the repository.
+5. Added schema-v2 settings normalization with legacy aliases and one-time v1
+   backup migration.
+6. Added approved-directory aliases for read/data-source access while preserving
+   legacy `local_file_access` behavior.
+7. Added PySide6 `app.py`, `companion_service.py`, and initial desktop shell
+   with Status, Workflow Storage, Pairing, Diagnostics, and tray behavior.
+8. Added workflow storage location migration helpers and UI controls for
+   use-new, copy, move, and default restore.
+
 Next isolated implementation slice:
-1. Add companion-app dependency manifest and host baseline tests.
-2. Add `BRunner_Host/app_paths.py` so packaged builds store workflows beside
-   `BRunnerHost.exe`.
-3. Add shared atomic JSON/text I/O.
-4. Route normal workflow saves, duplicate, rename, upgrade, config save, and
-   execution-log save through shared atomic I/O.
-5. Extract `workflow_repository.py` so WebSocket handlers no longer write
-   workflow files directly.
-6. Begin the PySide6 companion shell with Status and Workflow Storage pages,
-   tray behavior, and existing v1 WebSocket command compatibility.
+1. Build the dedicated Approved Folders UI in the companion app.
+2. Add add/edit/remove alias workflows with read/write/recursive controls.
+3. Add find/write/export service behavior under approved-directory permissions.
+4. Continue preserving legacy v1 WebSocket commands while preparing protocol v2
+   capability surfaces.
 
 After the companion app is accepted:
 - implement the mapper reliability transition from

@@ -4,11 +4,11 @@ import json
 import pyautogui
 import logging
 from app_paths import (
+    active_workflows_directory,
     application_directory,
     default_config_file,
     default_log_file,
     default_logs_directory,
-    default_workflows_directory,
 )
 from file_access import read_allowed_file
 from data_source import read_data_source
@@ -20,11 +20,11 @@ from host_settings import load_or_create_config
 
 BASE_DIR = application_directory(__file__)
 CONFIG_FILE = default_config_file(__file__)
-WORKFLOWS_DIR = default_workflows_directory(__file__)
 EXECUTION_LOGS_DIR = default_logs_directory(__file__)
 LOG_FILE = default_log_file(__file__)
 config = load_or_create_config(CONFIG_FILE, BASE_DIR)
 PORT = config["port"]
+WORKFLOWS_DIR = active_workflows_directory(config, BASE_DIR)
 WORKFLOW_REPOSITORY = WorkflowRepository(WORKFLOWS_DIR)
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)

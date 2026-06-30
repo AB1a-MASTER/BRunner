@@ -19,11 +19,13 @@ def main():
         "brunner_host",
         "--hidden-import",
         "pyautogui",
-        "--exclude-module",
-        "tkinter",
-        "--exclude-module",
-        "_tkinter",
-        "host_ui.py",
+        "--hidden-import",
+        "PySide6.QtCore",
+        "--hidden-import",
+        "PySide6.QtGui",
+        "--hidden-import",
+        "PySide6.QtWidgets",
+        "app.py",
     ]
     try:
         subprocess.run(command, cwd=BASE_DIR, check=True)

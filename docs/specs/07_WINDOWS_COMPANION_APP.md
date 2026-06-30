@@ -2,7 +2,7 @@
 
 ## Status
 
-Planning source of truth for the next implementation phase. This spec is
+Active implementation spec for the Windows companion transition. This spec is
 derived from:
 
 - `BRunner_Windows_Companion_Transition_Plan.md`
@@ -362,20 +362,23 @@ breaks current extension behavior.
 
 ### Phase 0 - Baseline and Safety Net
 
-- Add dependency manifest.
+- Add dependency manifest. **Implemented.**
 - Add tests for current workflow CRUD, config load/save, allowed-file
   resolution, data parsing, execution-log save, and protocol behavior.
+  **Implemented for current host services.**
 - Remove or isolate obsolete production-build files such as copied host source.
+  **Pending release cleanup.**
 
 Exit: existing operations are testable without launching the UI.
 
 ### Phase 1 - Application Paths and Atomic I/O
 
-- Add `app_paths.py`.
-- Add shared `atomic_write_json` and `atomic_write_text`.
+- Add `app_paths.py`. **Implemented.**
+- Add shared `atomic_write_json` and `atomic_write_text`. **Implemented.**
 - Route config, workflow upgrade, normal workflow save, duplicate, rename, and
-  logs through atomic I/O.
-- Introduce settings schema versioning and migration.
+  logs through atomic I/O. **Implemented.**
+- Introduce settings schema versioning and migration. **Implemented with
+  schema v2 plus legacy compatibility aliases.**
 
 Exit: workflow saves are atomic and packaged builds resolve storage next to the
 executable.
@@ -383,19 +386,23 @@ executable.
 ### Phase 2 - Workflow Repository
 
 - Move all workflow path validation and CRUD into `workflow_repository.py`.
-- Return workflow summaries.
-- Preserve v1 command compatibility.
+  **Implemented.**
+- Return workflow summaries. **Implemented.**
+- Preserve v1 command compatibility. **Implemented for existing workflow
+  commands.**
 - Add import/export foundations if package format is settled.
 
 Exit: WebSocket handlers no longer write workflow files directly.
 
 ### Phase 3 - Native Windows Companion Shell
 
-- Add PySide6 app entry point and service lifecycle controller.
+- Add PySide6 app entry point and service lifecycle controller. **Implemented.**
 - Implement Status, Workflow Storage, Pairing, and Diagnostics first.
-- Add tray behavior and clean shutdown.
-- Remove HTTP manager UI from production packaging.
-- Update PyInstaller entry point.
+  **Initial implementation complete.**
+- Add tray behavior and clean shutdown. **Initial implementation complete.**
+- Remove HTTP manager UI from production packaging. **Packaging now targets
+  `app.py`; old `host_ui.py` remains as a transitional artifact.**
+- Update PyInstaller entry point. **Implemented.**
 
 Exit: packaged app opens a Windows companion app and can start/stop the
 WebSocket host.
@@ -403,16 +410,20 @@ WebSocket host.
 ### Phase 4 - User-Selectable Workflow Directory
 
 - Add current path, open folder, change location, and use default controls.
-- Implement use-new, copy, and move migration options.
-- Verify target-folder write access before applying changes.
+  **Initial implementation complete.**
+- Implement use-new, copy, and move migration options. **Implemented in
+  `workflow_location.py`.**
+- Verify target-folder write access before applying changes. **Implemented.**
 
 Exit: a user can move the active workflow library without hand-editing JSON.
 
 ### Phase 5 - Approved Directory Registry
 
-- Implement alias registry in settings and UI.
-- Migrate allowed roots to provisional aliases.
+- Implement alias registry in settings and UI. **Settings model implemented;
+  dedicated UI pending.**
+- Migrate allowed roots to provisional aliases. **Implemented.**
 - Update file and data-source call paths to use alias plus relative path.
+  **Implemented for read/data-source paths.**
 - Add find/read/write behavior under configured permissions.
 
 Exit: normal file operations no longer require arbitrary raw filesystem paths.

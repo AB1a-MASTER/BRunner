@@ -2,15 +2,15 @@
 
 
 a = Analysis(
-    ['host_ui.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['brunner_host', 'pyautogui'],
+    hiddenimports=['brunner_host', 'pyautogui', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', '_tkinter'],
+    excludes=[],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

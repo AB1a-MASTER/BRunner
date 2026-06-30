@@ -7,12 +7,28 @@ def application_directory(anchor_file=None):
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     if anchor_file is not None:
-        return Path(anchor_file).resolve().parent
+        anchor = Path(anchor_file).resolve()
+        if anchor.is_dir():
+            return anchor
+        return anchor.parent
     return Path(__file__).resolve().parent
 
 
 def default_workflows_directory(anchor_file=None):
     return application_directory(anchor_file) / "Workflows"
+
+
+def active_workflows_directory(config, anchor_file=None):
+    storage = config.get("workflowStorage") if isinstance(config, dict) else {}
+    if not isinstance(storage, dict):
+        storage = {}
+    directory = str(storage.get("directory") or "").strip()
+    if storage.get("mode") == "custom" and directory:
+        path = Path(directory)
+        if not path.is_absolute():
+            path = application_directory(anchor_file) / path
+        return path.resolve()
+    return default_workflows_directory(anchor_file)
 
 
 def default_config_file(anchor_file=None):

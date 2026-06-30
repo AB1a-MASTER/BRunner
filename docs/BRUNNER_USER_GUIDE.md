@@ -82,10 +82,10 @@ support.
 
 ## Windows companion app
 
-The companion app replaces the old local browser management page. It is planned
-as a native Windows desktop app with tray behavior, service status, workflow
-storage controls, approved folder management, pairing, host-fallback settings,
-and diagnostics.
+The companion app replaces the old local browser management page. The initial
+native Windows desktop shell is implemented with tray behavior, service status,
+workflow storage, pairing, and diagnostics tabs. Dedicated approved-folder
+management and host-fallback settings remain next.
 
 Default workflow storage is the `Workflows` folder beside `BRunnerHost.exe`.
 Users can choose a different workflow folder from the companion app and can

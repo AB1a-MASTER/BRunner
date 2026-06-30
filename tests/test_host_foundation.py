@@ -9,6 +9,7 @@ HOST_DIR = Path(__file__).resolve().parents[1] / "BRunner_Host"
 sys.path.insert(0, str(HOST_DIR))
 
 from app_paths import (
+    active_workflows_directory,
     application_directory,
     default_config_file,
     default_log_file,
@@ -36,6 +37,27 @@ class HostFoundationTests(unittest.TestCase):
         self.assertEqual(default_workflows_directory(anchor), anchor.parent / "Workflows")
         self.assertEqual(default_logs_directory(anchor), anchor.parent / "Logs")
         self.assertEqual(default_log_file(anchor), anchor.parent / "brunner_host.log")
+
+    def test_source_mode_accepts_directory_anchor(self):
+        self.assertEqual(application_directory(self.base_dir), self.base_dir)
+        self.assertEqual(default_workflows_directory(self.base_dir), self.base_dir / "Workflows")
+
+    def test_active_workflows_directory_uses_custom_or_default(self):
+        custom = self.base_dir / "CustomFlows"
+        self.assertEqual(
+            active_workflows_directory(
+                {"workflowStorage": {"mode": "custom", "directory": str(custom)}},
+                self.base_dir,
+            ),
+            custom.resolve(),
+        )
+        self.assertEqual(
+            active_workflows_directory(
+                {"workflowStorage": {"mode": "default", "directory": str(custom)}},
+                self.base_dir,
+            ),
+            self.base_dir / "Workflows",
+        )
 
     def test_frozen_paths_use_executable_directory(self):
         original_executable = sys.executable

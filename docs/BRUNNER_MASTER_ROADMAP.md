@@ -126,17 +126,28 @@ companion app. The extension remains the workflow runtime and browser-awareness
 layer; the companion app owns workflow storage, approved directory aliases,
 service status, pairing, diagnostics, and final visible host fallback.
 
+Current implementation status: baseline host tests, executable-aware app paths,
+shared atomic I/O, schema-v2 settings migration, workflow repository service,
+approved-directory read/data-source aliases, PySide6 app entry point, initial
+Status/Workflow Storage/Pairing/Diagnostics tabs, tray behavior, and workflow
+folder use-new/copy/move/default controls are implemented. Dedicated Approved
+Folders and Host Fallback UI, protocol v2, structured visible host actions, and
+release packaging cleanup remain.
+
 Implementation phases:
 
 1. Baseline and safety-net tests for current host CRUD, config, file access,
-   data parsing, execution logs, and protocol behavior.
-2. Application path helper and shared atomic I/O.
-3. Workflow repository service.
+   data parsing, execution logs, and protocol behavior. **Implemented for
+   current host services.**
+2. Application path helper and shared atomic I/O. **Implemented.**
+3. Workflow repository service. **Implemented.**
 4. Native PySide6 companion shell with Status, Workflow Storage, Pairing,
-   Diagnostics, and tray behavior.
+   Diagnostics, and tray behavior. **Initial implementation complete.**
 5. User-selectable workflow directory with use-new, copy, and move migration
-   choices.
-6. Approved directory registry and alias-based file/data access.
+   choices. **Implemented.**
+6. Approved directory registry and alias-based file/data access. **Partially
+   implemented: schema and read/data-source aliases are in; full UI and
+   write/find behavior remain.**
 7. Versioned protocol v2 and structured visible host fallback.
 8. Packaging and release cleanup.
 
