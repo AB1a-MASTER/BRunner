@@ -1,11 +1,19 @@
 {
-  "name": "HTTP Request Acceptance",
-  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "name": "[NEW 2026-07-02] HTTP Request Acceptance",
+  "description": "Fresh host-served acceptance workflow. Fetches a local JSON fixture and types a value from the response into Account name.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
   "variables": {},
   "settings": {
     "reuseExistingTabs": false
   },
   "steps": [
+    {
+      "id": "http_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
     {
       "id": "http_acceptance_request",
       "action": "http.request",
@@ -19,7 +27,8 @@
         "timeoutMs": 5000,
         "httpErrorPolicy": "fail",
         "variableName": "http_result"
-      }
+      },
+      "friendlyName": "Fetch local JSON fixture"
     },
     {
       "id": "http_acceptance_visible_output",
@@ -28,8 +37,11 @@
         "strategy": "id",
         "value": "name-input"
       },
-      "value": "{{http_result.data.source}}",
-      "friendlyName": "HTTP output: Account name"
+      "config": {
+        "value": "{{http_result.data.source}}",
+        "verificationText": "BRunner live acceptance"
+      },
+      "friendlyName": "Type HTTP response source into Account name"
     }
   ]
 }

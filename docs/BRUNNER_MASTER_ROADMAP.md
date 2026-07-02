@@ -130,9 +130,18 @@ Current implementation status: baseline host tests, executable-aware app paths,
 shared atomic I/O, schema-v2 settings migration, workflow repository service,
 approved-directory read/data-source aliases, PySide6 app entry point, initial
 Status/Workflow Storage/Pairing/Diagnostics tabs, tray behavior, and workflow
-folder use-new/copy/move/default controls are implemented. Dedicated Approved
-Folders and Host Fallback UI, protocol v2, structured visible host actions, and
-release packaging cleanup remain.
+folder use-new/copy/move/default controls, dedicated Approved Folders UI,
+alias add/edit/remove, read/write/recursive controls, and find/write/export
+directory service behavior are implemented. Initial `host.hello`,
+`host.window`, and `host.action` service/bridge foundations are implemented,
+including foreground-window checks, coordinate bounds checks, and visible
+pointer/keyboard dispatch helpers. Host Fallback companion tab and capability
+activity diagnostics are implemented. Initial browser-runtime fallback
+integration is implemented for opt-in click, double-click, and type nodes with
+post-action verification and a dedicated live acceptance workflow. The refreshed
+host-served manual acceptance workflows passed for browser smoke, file upload,
+clipboard, download wait, HTTP request, data inspector, screenshot capture, and
+visible host fallback. Release packaging cleanup remains.
 
 Implementation phases:
 
@@ -146,9 +155,20 @@ Implementation phases:
 5. User-selectable workflow directory with use-new, copy, and move migration
    choices. **Implemented.**
 6. Approved directory registry and alias-based file/data access. **Partially
-   implemented: schema and read/data-source aliases are in; full UI and
-   write/find behavior remain.**
-7. Versioned protocol v2 and structured visible host fallback.
+   implemented: schema, read/data-source aliases, folder-management UI, and
+   find/write/export service behavior and approved-directory workflow
+   acceptance are in.**
+7. Versioned protocol v2 and structured visible host fallback. **Started:
+   initial `host.hello`, `host.window`, `host.action`, and
+   `host.visual_match` service/bridge
+   foundations are in, and the Host Fallback companion tab plus diagnostics are
+   in; opt-in browser-runtime fallback integration for click, double-click, and
+   type is in with refreshed host-served manual acceptance workflow coverage
+   passing; initial opt-in PyAutoGUI visual-match recovery is implemented
+   after coordinate/debugger recovery.** Manual acceptance for the visual-match
+   tier remains next. This visual fallback remains opt-in, foreground-window
+   gated, confidence-thresholded, and verified by extension-side post-action
+   checks before the step counts as successful.
 8. Packaging and release cleanup.
 
 **Gate:** the packaged app opens as a Windows companion, no production browser
@@ -267,3 +287,6 @@ applicable, deterministic tests, and cross-node acceptance workflow coverage.
 4. Reliability and diagnostics precede polish.
 5. Keep [BRUNNER_USER_GUIDE.md](BRUNNER_USER_GUIDE.md) synchronized with the
    registry, Inspector guidance, and node behavior.
+6. Whenever a phase or milestone is completed or materially re-scoped, update
+   the roadmap, relevant spec, handoff notes, and user-facing docs before
+   moving to the next phase.

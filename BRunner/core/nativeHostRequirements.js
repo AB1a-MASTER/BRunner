@@ -9,7 +9,14 @@ export const NativeHostRequirementModes = Object.freeze({
 
 export const NativeHostCapabilities = Object.freeze({
   OsKeystroke: "os.keystroke",
+  HostWindow: "host.window",
+  HostAction: "host.action",
+  HostVisualMatch: "host.visual_match",
   LocalFileRead: "local_file.read",
+  ApprovedDirectoryList: "approved_directory.list",
+  ApprovedFileFind: "approved_file.find",
+  ApprovedFileWrite: "approved_file.write",
+  DataFileExport: "data_file.export",
   DataSourceRead: "data_source.read",
   ExecutionLogSave: "execution_log.save",
 });
@@ -21,7 +28,14 @@ export const DEFAULT_NATIVE_HOST_REQUIREMENT = Object.freeze({
 
 const CAPABILITY_LABELS = Object.freeze({
   [NativeHostCapabilities.OsKeystroke]: "OS keystroke",
+  [NativeHostCapabilities.HostWindow]: "visible host window check",
+  [NativeHostCapabilities.HostAction]: "visible host action",
+  [NativeHostCapabilities.HostVisualMatch]: "visible visual-match action",
   [NativeHostCapabilities.LocalFileRead]: "local file read",
+  [NativeHostCapabilities.ApprovedDirectoryList]: "approved directory list",
+  [NativeHostCapabilities.ApprovedFileFind]: "approved file find",
+  [NativeHostCapabilities.ApprovedFileWrite]: "approved file write",
+  [NativeHostCapabilities.DataFileExport]: "data file export",
   [NativeHostCapabilities.DataSourceRead]: "data source read",
   [NativeHostCapabilities.ExecutionLogSave]: "execution log save",
 });

@@ -1,0 +1,33 @@
+{
+  "name": "[NEW 2026-07-02] Visible Host Fallback Acceptance",
+  "description": "Fresh host-served acceptance workflow. Forces a trusted native click fallback and verifies the page status.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "fallback_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
+    {
+      "id": "fallback_acceptance_trusted_click",
+      "action": "element.click",
+      "target": {
+        "strategy": "id",
+        "value": "trusted-submit"
+      },
+      "config": {
+        "allowVisibleHostFallback": true,
+        "allowVisualMatchFallback": true,
+        "verificationSelector": "#status",
+        "verificationText": "Trusted Submit accepted via visible host fallback."
+      },
+      "friendlyName": "Trusted Submit visible host fallback"
+    }
+  ]
+}

@@ -74,6 +74,7 @@ const Messages = Object.freeze({
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
   SaveExecutionLog: "OS_SAVE_EXECUTION_LOG",
   ReadDataSource: "OS_READ_DATA_SOURCE",
+  ListApprovedDirectories: "OS_LIST_APPROVED_DIRECTORIES",
   StudioReceiveStep: "STUDIO_RECEIVE_STEP",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   ToggleRecording: "TOGGLE_RECORDING",
@@ -105,6 +106,7 @@ function GraphStudioCanvas() {
   const [canvasHasFocus, setCanvasHasFocus] = useState(false);
   const [hostStatus, setHostStatus] = useState("checking");
   const [hostCapabilities, setHostCapabilities] = useState([]);
+  const [approvedDirectories, setApprovedDirectories] = useState([]);
   const [recording, setRecording] = useState({
     isRecording: false,
     tabPolicy: "openerDescendants",
@@ -186,10 +188,21 @@ function GraphStudioCanvas() {
       setHostStatus(connected ? "connected" : "disconnected");
       setHostCapabilities(Array.isArray(response?.capabilities) ? response.capabilities : []);
       if (connected) await refreshWorkflows();
+      if (connected) {
+        try {
+          const directories = await chrome.runtime.sendMessage({ type: Messages.ListApprovedDirectories });
+          setApprovedDirectories(Array.isArray(directories?.directories) ? directories.directories : []);
+        } catch {
+          setApprovedDirectories([]);
+        }
+      } else {
+        setApprovedDirectories([]);
+      }
       return connected;
     } catch {
       setHostStatus("disconnected");
       setHostCapabilities([]);
+      setApprovedDirectories([]);
       return false;
     }
   }, [refreshWorkflows]);
@@ -949,6 +962,8 @@ function GraphStudioCanvas() {
           busy={busy || executionActive || recordingActive}
           hostConnected={hostStatus === "connected"}
           hostCapabilities={hostCapabilities}
+          approvedDirectories={approvedDirectories}
+          onRefreshApprovedDirectories={checkHostStatus}
           onUpgrade={upgradeWorkflow}
           layoutDirection={layoutDirection}
           onLayoutDirection={arrangeGraph}
@@ -1175,6 +1190,8 @@ function InspectorPanel(props) {
               readOnly={readOnly || props.busy}
               onSeedsChange={(variables) => props.onMetadata({ variables })}
               hostConnected={props.hostConnected}
+              approvedDirectories={props.approvedDirectories}
+              onRefreshApprovedDirectories={props.onRefreshApprovedDirectories}
               onDataSourcesChange={(dataSources) => props.onMetadata({ dataSources })}
             />
           )}
@@ -1304,12 +1321,15 @@ function WorkflowDataView({
   readOnly = false,
   onSeedsChange = () => {},
   hostConnected = false,
+  approvedDirectories = [],
+  onRefreshApprovedDirectories = () => {},
   onDataSourcesChange = () => {},
 }) {
   const [seedName, setSeedName] = useState("");
   const [seedValue, setSeedValue] = useState("");
   const [seedError, setSeedError] = useState("");
   const [sourceName, setSourceName] = useState("");
+  const [sourceAlias, setSourceAlias] = useState("");
   const [sourcePath, setSourcePath] = useState("");
   const [sourceFormat, setSourceFormat] = useState("txt");
   const [sourceError, setSourceError] = useState("");
@@ -1322,6 +1342,9 @@ function WorkflowDataView({
   ];
   const datasetEntries = Object.entries(datasets || {});
   const safeSources = Array.isArray(dataSources) ? dataSources : [];
+  const readableDirectories = Array.isArray(approvedDirectories)
+    ? approvedDirectories.filter((directory) => directory?.read === true)
+    : [];
 
   const addSeed = () => {
     const name = seedName.trim();
@@ -1357,9 +1380,14 @@ function WorkflowDataView({
       setSourceError("Choose a relative file such as list.txt.");
       return;
     }
+    if (readableDirectories.length && !sourceAlias) {
+      setSourceError("Choose an approved folder alias.");
+      return;
+    }
     const nextSource = {
       id,
       name: id,
+      ...(sourceAlias ? { directoryAlias: sourceAlias } : {}),
       relativePath,
       format: sourceFormat,
       shape: sourceFormat === "csv" ? "table" : "list",
@@ -1370,6 +1398,7 @@ function WorkflowDataView({
     ];
     onDataSourcesChange(next);
     setSourceName("");
+    setSourceAlias("");
     setSourcePath("");
     setSourceFormat("txt");
     setSourceError("");
@@ -1432,6 +1461,12 @@ function WorkflowDataView({
         <h4 id="data-source-heading">File data sources</h4>
         <div className="data-source-editor">
           <input value={sourceName} disabled={readOnly} onChange={(event) => setSourceName(event.target.value)} placeholder="numbers" aria-label="Data source name" />
+          <select value={sourceAlias} disabled={readOnly || !hostConnected || !readableDirectories.length} onChange={(event) => setSourceAlias(event.target.value)} aria-label="Approved folder alias">
+            <option value="">{readableDirectories.length ? "Choose approved folder" : "No approved folders"}</option>
+            {readableDirectories.map((directory) => (
+              <option key={directory.id} value={directory.id}>{directory.displayName || directory.id}</option>
+            ))}
+          </select>
           <input value={sourcePath} disabled={readOnly} onChange={(event) => setSourcePath(event.target.value)} placeholder="list.txt" aria-label="Data source relative file" />
           <select value={sourceFormat} disabled={readOnly} onChange={(event) => setSourceFormat(event.target.value)} aria-label="Data source format">
             <option value="txt">TXT list</option>
@@ -1439,14 +1474,16 @@ function WorkflowDataView({
             <option value="json">JSON</option>
           </select>
           <button type="button" className="inspector-secondary-action" onClick={addDataSource} disabled={readOnly}>Add source</button>
+          <button type="button" className="inspector-secondary-action" onClick={onRefreshApprovedDirectories} disabled={!hostConnected}>Refresh folders</button>
         </div>
+        {hostConnected && !readableDirectories.length && <p className="readonly-help">Add a readable folder in the companion app to use alias-based sources.</p>}
         {sourceError && <p className="panel-error">{sourceError}</p>}
         {!safeSources.length && <p>No host-backed JSON/CSV sources declared.</p>}
         {safeSources.map((source, index) => (
           <article key={source.id || index} className="data-variable-row">
             <strong>{source.name || source.id || `source_${index + 1}`}</strong>
             <span>{source.format || "source"}</span>
-            <p>{source.status || source.relativePath || "Declared host-managed source"}</p>
+            <p>{source.status || formatDataSourceLocation(source) || "Declared host-managed source"}</p>
             <div className="data-row-actions">
               <button type="button" onClick={() => previewDataSource(source)} disabled={!hostConnected || sourceBusy} title={hostConnected ? "Preview parsed source data" : "Connect native host to preview"}>Preview</button>
               <button type="button" onClick={() => removeDataSource(source.id)} disabled={readOnly}>Remove</button>
@@ -1491,6 +1528,12 @@ function getRecordedStepKey(step = {}) {
 }
 function isSuccess(response) { return Boolean(response && (response.ok === true || response.status === "success")); }
 function stripJson(filename) { return String(filename || "Untitled").replace(/\.json$/i, ""); }
+function formatDataSourceLocation(source = {}) {
+  const relativePath = String(source.relativePath || source.path || source.filePath || "").trim();
+  const alias = String(source.directoryAlias || source.alias || "").trim();
+  if (alias && relativePath) return `${alias} / ${relativePath}`;
+  return relativePath || "";
+}
 function parseSeedValue(input) {
   const raw = String(input || "").trim();
   if (!raw) return "";

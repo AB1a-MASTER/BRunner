@@ -1,0 +1,68 @@
+{
+  "name": "[NEW 2026-07-02] Manual Smoke Acceptance",
+  "description": "Fresh host-served acceptance workflow. Exercises type, select, toggle, and click on the deterministic harness.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "manual_smoke_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
+    {
+      "id": "manual_smoke_type_name",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "config": {
+        "value": "BRunner manual smoke",
+        "verificationText": "BRunner manual smoke"
+      },
+      "friendlyName": "Type smoke value into Account name"
+    },
+    {
+      "id": "manual_smoke_select_country",
+      "action": "element.select",
+      "target": {
+        "strategy": "id",
+        "value": "country"
+      },
+      "config": {
+        "value": "Pakistan"
+      },
+      "friendlyName": "Select Pakistan"
+    },
+    {
+      "id": "manual_smoke_accept_terms",
+      "action": "element.toggle",
+      "target": {
+        "strategy": "id",
+        "value": "agree"
+      },
+      "config": {
+        "value": true
+      },
+      "friendlyName": "Accept terms"
+    },
+    {
+      "id": "manual_smoke_submit",
+      "action": "element.click",
+      "target": {
+        "strategy": "id",
+        "value": "result-button"
+      },
+      "config": {
+        "verificationSelector": "#status",
+        "verificationText": "Submit Test clicked"
+      },
+      "friendlyName": "Submit smoke test"
+    }
+  ]
+}

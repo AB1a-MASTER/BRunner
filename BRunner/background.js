@@ -130,6 +130,13 @@ async function handleMessage(request, sender) {
 
   switch (type) {
     case Messages.CheckBridgeStatus:
+      if (NativeBridge.getStatus().connected) {
+        try {
+          await NativeBridge.hostHello();
+        } catch (error) {
+          console.warn("[BRunner] Native host hello failed:", error);
+        }
+      }
       return {
         ok: true,
         ...NativeBridge.getStatus(),
@@ -185,6 +192,18 @@ async function handleMessage(request, sender) {
 
     case Messages.OsReadDataSource:
       return await NativeBridge.readDataSource(request.source);
+
+    case Messages.OsListApprovedDirectories:
+      return await NativeBridge.listApprovedDirectories();
+
+    case Messages.OsFindApprovedFiles:
+      return await NativeBridge.findApprovedFiles(request.request || request);
+
+    case Messages.OsWriteApprovedFile:
+      return await NativeBridge.writeApprovedFile(request.request || request);
+
+    case Messages.OsExportDataFile:
+      return await NativeBridge.exportDataFile(request.request || request);
 
     case Messages.ToggleRecording:
       if (request.enabled && runtimeState.isRunning()) {
@@ -869,6 +888,11 @@ async function executeStep(
     return currentTab;
   }
 
+  if (isApprovedDirectoryAction(action)) {
+    await executeApprovedDirectoryStep(action, step, variableRegistry);
+    return currentTab;
+  }
+
   if (action === Actions.ScreenshotCapture) {
     const captureTab = step?.page?.url
       ? await ensureStepPageContext(currentTab, step)
@@ -1001,7 +1025,11 @@ async function executeStep(
     };
   }
 
-  const response = await executeContentStep(contextReadyTab, step, runId);
+  const response = await executeContentStepWithVisibleHostFallback(
+    contextReadyTab,
+    step,
+    runId,
+  );
 
   if (isExtractionAction(action)) {
     variableRegistry?.set(extractionVariableName, response?.value ?? "");
@@ -1094,6 +1122,26 @@ function sanitizeStepForLog(step) {
     };
   }
 
+  if (action === Actions.ApprovedFileWrite) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        content: step.config?.content ? "[REDACTED]" : "",
+      },
+    };
+  }
+
+  if (action === Actions.DataFileExport) {
+    return {
+      ...step,
+      config: {
+        ...step.config,
+        data: step.config?.data === undefined ? undefined : "[REDACTED]",
+      },
+    };
+  }
+
   if (action === Actions.DownloadWait) {
     return {
       ...step,
@@ -1115,6 +1163,42 @@ function sanitizeStepForLog(step) {
       body: step.config?.body ? "[REDACTED]" : "",
     },
   };
+}
+
+function isApprovedDirectoryAction(action) {
+  return [
+    Actions.ApprovedFilesFind,
+    Actions.ApprovedFileWrite,
+    Actions.DataFileExport,
+  ].includes(action);
+}
+
+async function executeApprovedDirectoryStep(action, step, variableRegistry) {
+  const variableName = String(
+    step.config?.variableName || step.variableName || "",
+  ).trim();
+
+  if (!variableName) {
+    const error = new Error(`${action} requires an output variable name.`);
+    error.diagnostics = {
+      action,
+      finalReason: "approved_directory_output_variable_missing",
+    };
+    throw error;
+  }
+
+  let value;
+  if (action === Actions.ApprovedFilesFind) {
+    value = await NativeBridge.findApprovedFiles(step.config || {});
+  } else if (action === Actions.ApprovedFileWrite) {
+    value = await NativeBridge.writeApprovedFile(step.config || {});
+  } else if (action === Actions.DataFileExport) {
+    value = await NativeBridge.exportDataFile(step.config || {});
+  } else {
+    throw new Error(`Unsupported approved directory action: ${action || "unknown"}`);
+  }
+
+  variableRegistry?.set(variableName, value);
 }
 
 async function executeClipboardStep(action, step, variableRegistry, runId) {
@@ -1611,6 +1695,387 @@ async function executeContentStep(tab, step, runId = "") {
     };
     throw wrappedError;
   }
+}
+
+async function executeContentStepWithVisibleHostFallback(tab, step, runId = "") {
+  try {
+    return await executeContentStep(tab, step, runId);
+  } catch (error) {
+    if (!shouldAllowVisibleHostFallback(step)) {
+      throw error;
+    }
+
+    try {
+      return await executeVisibleHostFallback(tab, step, runId, error);
+    } catch (fallbackError) {
+      const wrapped = new Error(
+        fallbackError.message || "Visible host fallback failed.",
+      );
+      wrapped.diagnostics = {
+        action: step?.action || step?.type || "unknown",
+        nodeId: step?.id || "",
+        browserFailure: error.diagnostics || null,
+        fallbackFailure: fallbackError.diagnostics || null,
+        finalReason: fallbackError.diagnostics?.finalReason || "host_fallback_failed",
+      };
+      throw wrapped;
+    }
+  }
+}
+
+async function executeVisibleHostFallback(tab, step, runId, browserError) {
+  const action = step?.action || step?.type || "unknown";
+  throwIfRunCancelled(runId);
+
+  const prepared = await sendContentRequest(tab, {
+    type: Messages.PrepareHostFallback,
+    step,
+    runId,
+  });
+
+  if (!prepared?.ok) {
+    const error = new Error(prepared?.error || "Host fallback target preparation failed.");
+    error.diagnostics = prepared?.diagnostics || {
+      action,
+      finalReason: "host_fallback_prepare_failed",
+    };
+    throw error;
+  }
+
+  await chrome.windows.update(tab.windowId, { focused: true });
+  await chrome.tabs.update(tab.id, { active: true });
+  await delay(150);
+  throwIfRunCancelled(runId);
+
+  await NativeBridge.hostWindow({
+    expectedWindowTitle: prepared.window?.title || tab.title || "",
+  });
+
+  let hostResult = null;
+  let hostActionError = null;
+  try {
+    hostResult = await NativeBridge.hostAction({
+      action: prepared.action,
+      text: prepared.text || "",
+      point: prepared.point,
+      target: prepared.target,
+      coordinateConfidence: prepared.confidence,
+      expectedWindowTitle: prepared.window?.title || tab.title || "",
+      browserFailure: browserError?.diagnostics || null,
+      nodeId: step?.id || "",
+      workflowRunId: runId || "",
+    });
+  } catch (error) {
+    hostActionError = error;
+    if (!shouldAllowVisualMatchFallback(step)) {
+      throw error;
+    }
+  }
+  throwIfRunCancelled(runId);
+
+  let verified = hostResult
+    ? await verifyVisibleHostFallback(tab, step, runId)
+    : {
+        ok: false,
+        error: hostActionError?.message || "Coordinate host fallback failed.",
+        diagnostics: {
+          action,
+          finalReason: "host_coordinate_fallback_failed",
+          coordinateError: hostActionError?.message || null,
+        },
+      };
+
+  let debuggerRecovery = null;
+  let visualRecovery = null;
+  if (!verified?.ok && hostResult) {
+    debuggerRecovery = await recoverVisibleHostFallbackWithDebugger(
+      tab,
+      prepared,
+      runId,
+    );
+    if (debuggerRecovery?.ok) {
+      verified = await verifyVisibleHostFallback(tab, step, runId);
+      if (verified?.ok) {
+        verified.verification = "debugger_pointer_recovery";
+      }
+    }
+  }
+
+  if (!verified?.ok && shouldAllowVisualMatchFallback(step)) {
+    visualRecovery = await recoverVisibleHostFallbackWithVisualMatch(
+      tab,
+      step,
+      prepared,
+      runId,
+      browserError,
+    );
+    if (visualRecovery?.ok) {
+      verified = await verifyVisibleHostFallback(tab, step, runId);
+      if (verified?.ok) {
+        verified.verification = "visual_match_recovery";
+      }
+    }
+  }
+
+  if (!verified?.ok) {
+    const error = new Error(verified?.error || "Host fallback verification failed.");
+    error.diagnostics = verified?.diagnostics || {
+      action,
+      finalReason: "host_fallback_verification_failed",
+    };
+    error.diagnostics.debuggerRecovery = debuggerRecovery?.skipped || debuggerRecovery?.error || null;
+    error.diagnostics.visualRecovery = visualRecovery?.skipped || visualRecovery?.error || null;
+    error.diagnostics.coordinateError = hostActionError?.message || null;
+    throw error;
+  }
+
+  return {
+    ok: true,
+    usedStrategy: "visible_host_fallback",
+    hostAction: hostResult?.action || visualRecovery?.action || prepared.action,
+    browserFailure: browserError?.diagnostics || null,
+    verification: verified.verification || "target_resolved",
+    visualRecovery: visualRecovery?.ok === true,
+  };
+}
+
+async function verifyVisibleHostFallback(tab, step, runId) {
+  return await sendContentRequest(tab, {
+    type: Messages.VerifyHostFallback,
+    step,
+    runId,
+  });
+}
+
+async function recoverVisibleHostFallbackWithDebugger(tab, prepared, runId) {
+  const action = prepared?.action;
+  if (![ "click", "doubleClick" ].includes(action)) {
+    return { ok: false, skipped: "unsupported_debugger_recovery_action" };
+  }
+
+  const point = prepared?.clientPoint;
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return { ok: false, skipped: "missing_debugger_recovery_point" };
+  }
+
+  throwIfRunCancelled(runId);
+  const target = { tabId: tab.id };
+  let attachedHere = false;
+
+  const targets = await chrome.debugger.getTargets();
+  const alreadyAttached = targets.some((item) => {
+    return item.tabId === tab.id && item.attached;
+  });
+
+  if (!alreadyAttached) {
+    await chrome.debugger.attach(target, "1.3");
+    attachedHere = true;
+  }
+
+  try {
+    const clicks = action === "doubleClick" ? 2 : 1;
+    for (let index = 0; index < clicks; index++) {
+      const clickCount = index + 1;
+      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x,
+        y,
+      });
+      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x,
+        y,
+        button: "left",
+        clickCount,
+      });
+      await delay(40);
+      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x,
+        y,
+        button: "left",
+        clickCount,
+      });
+      await delay(60);
+      throwIfRunCancelled(runId);
+    }
+
+    return { ok: true, method: "debugger_pointer_recovery" };
+  } finally {
+    if (attachedHere) {
+      try {
+        await chrome.debugger.detach(target);
+      } catch {
+        // The debugger may already be detached if Chrome navigated or closed.
+      }
+    }
+  }
+}
+
+async function recoverVisibleHostFallbackWithVisualMatch(
+  tab,
+  step,
+  prepared,
+  runId,
+  browserError,
+) {
+  const action = prepared?.action;
+  if (![ "click", "doubleClick" ].includes(action)) {
+    return { ok: false, skipped: "unsupported_visual_match_action" };
+  }
+
+  try {
+    throwIfRunCancelled(runId);
+    const componentImage = await capturePreparedComponentImage(tab, prepared);
+    const config = step?.config || {};
+    const matchConfidence = normalizeVisualMatchConfidence(
+      config.visualMatchConfidence,
+      prepared.confidence,
+    );
+    const hostResult = await NativeBridge.hostVisualMatch({
+      action,
+      imageDataUrl: componentImage.dataUrl,
+      imageWidth: componentImage.width,
+      imageHeight: componentImage.height,
+      matchConfidence,
+      expectedWindowTitle: prepared.window?.title || tab.title || "",
+      browserFailure: browserError?.diagnostics || null,
+      nodeId: step?.id || "",
+      workflowRunId: runId || "",
+    });
+    throwIfRunCancelled(runId);
+
+    return {
+      ok: true,
+      action: hostResult?.action || action,
+      method: hostResult?.method || "visible_host_visual_match",
+      x: hostResult?.x,
+      y: hostResult?.y,
+      matchConfidence: hostResult?.matchConfidence ?? matchConfidence,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+async function capturePreparedComponentImage(tab, prepared) {
+  const bounds = prepared?.clientBounds || {};
+  const width = Number(bounds.width);
+  const height = Number(bounds.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error("Visual match fallback is missing target bounds.");
+  }
+
+  const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
+    format: "png",
+  });
+  const imageBitmap = await dataUrlToImageBitmap(screenshot);
+  const scale = positiveNumber(
+    prepared?.devicePixelRatio ?? bounds.devicePixelRatio,
+    1,
+  );
+  const padding = Math.max(4, Math.ceil(4 * scale));
+  const sourceLeft = Math.max(0, Math.floor(Number(bounds.left) * scale) - padding);
+  const sourceTop = Math.max(0, Math.floor(Number(bounds.top) * scale) - padding);
+  const sourceRight = Math.min(
+    imageBitmap.width,
+    Math.ceil(Number(bounds.right ?? bounds.left + bounds.width) * scale) + padding,
+  );
+  const sourceBottom = Math.min(
+    imageBitmap.height,
+    Math.ceil(Number(bounds.bottom ?? bounds.top + bounds.height) * scale) + padding,
+  );
+  const sourceWidth = Math.max(1, sourceRight - sourceLeft);
+  const sourceHeight = Math.max(1, sourceBottom - sourceTop);
+
+  const canvas = new OffscreenCanvas(sourceWidth, sourceHeight);
+  const context = canvas.getContext("2d");
+  context.drawImage(
+    imageBitmap,
+    sourceLeft,
+    sourceTop,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    sourceWidth,
+    sourceHeight,
+  );
+
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  return {
+    dataUrl: await blobToDataUrl(blob),
+    width: sourceWidth,
+    height: sourceHeight,
+  };
+}
+
+async function dataUrlToImageBitmap(dataUrl) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return await createImageBitmap(blob);
+}
+
+async function blobToDataUrl(blob) {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return `data:${blob.type || "image/png"};base64,${btoa(binary)}`;
+}
+
+function normalizeVisualMatchConfidence(value, fallback) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 0 && number <= 1) {
+    return number;
+  }
+  const fallbackNumber = Number(fallback);
+  if (Number.isFinite(fallbackNumber) && fallbackNumber >= 0 && fallbackNumber <= 1) {
+    return Math.max(0.75, fallbackNumber);
+  }
+  return 0.9;
+}
+
+function positiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+async function sendContentRequest(tab, payload) {
+  if (!tab?.id) {
+    throw new Error("Cannot send content request without a target tab.");
+  }
+
+  return await chrome.tabs.sendMessage(tab.id, payload);
+}
+
+function shouldAllowVisibleHostFallback(step = {}) {
+  const action = step.action || step.type;
+  if (![Actions.ElementClick, Actions.ElementDoubleClick, Actions.ElementType].includes(action)) {
+    return false;
+  }
+
+  const config = step.config || {};
+  return [true, "true", "allow"].includes(config.allowVisibleHostFallback);
+}
+
+function shouldAllowVisualMatchFallback(step = {}) {
+  const action = step.action || step.type;
+  if (![Actions.ElementClick, Actions.ElementDoubleClick].includes(action)) {
+    return false;
+  }
+
+  const config = step.config || {};
+  return [true, "true", "allow"].includes(config.allowVisualMatchFallback);
 }
 
 async function executeTabSwitch(currentTab, step, tabsByRef) {

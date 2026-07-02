@@ -1,5 +1,11 @@
 import asyncio
 import sys
+from pathlib import Path
+
+
+HOST_DIR = Path(__file__).resolve().parent
+if str(HOST_DIR) not in sys.path:
+    sys.path.insert(0, str(HOST_DIR))
 
 
 def run_embedded_host():

@@ -24,6 +24,7 @@
         <button id="stop-recording" type="button">Stop Recording</button>
         <button id="mutate-target" type="button">Invalidate Primary ID</button>
         <button id="replay-last-click" type="button">Replay Last Click</button>
+        <button id="trusted-submit" type="button">Trusted Submit</button>
         <button id="test-toggle" type="button">Test Toggle States</button>
         <button id="clear-results" type="button">Clear</button>
         <a id="download-fixture" href="../tests/fixtures/download-acceptance.txt" download="download-acceptance.txt">Download Fixture</a>
@@ -124,6 +125,13 @@
             const count = Number(resultButton.dataset.clickCount || 0) + 1;
             resultButton.dataset.clickCount = String(count);
             setStatus(`Submit Test clicked ${count} time(s).`);
+        });
+        document.getElementById("trusted-submit").addEventListener("click", (event) => {
+            if (!event.isTrusted) {
+                setStatus("Trusted Submit ignored untrusted browser event.");
+                return;
+            }
+            setStatus("Trusted Submit accepted via visible host fallback.", "pass");
         });
 
         uploadFileInput.addEventListener("change", async () => {

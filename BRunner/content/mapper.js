@@ -6,6 +6,8 @@
 (function () {
   const Messages = Object.freeze({
     ExecuteStep: "EXECUTE_STEP",
+    PrepareHostFallback: "PREPARE_HOST_FALLBACK",
+    VerifyHostFallback: "VERIFY_HOST_FALLBACK",
     ToggleRecording: "TOGGLE_RECORDING",
     GetRecordingState: "GET_RECORDING_STATE",
     SetRecordingState: "SET_RECORDING_STATE",
@@ -155,6 +157,12 @@
       switch (request?.type) {
         case Messages.ExecuteStep:
           return await this.executeStep(request.step, request.runId || "");
+
+        case Messages.PrepareHostFallback:
+          return await this.prepareHostFallback(request.step, request.runId || "");
+
+        case Messages.VerifyHostFallback:
+          return await this.verifyHostFallback(request.step, request.runId || "");
 
         case Messages.CancelExecution:
           if (request.runId) this.cancelledRunIds.add(request.runId);
@@ -577,6 +585,7 @@
 
       if (action === Actions.ElementClick) {
         await this.executeClick(element);
+        this.assertPostActionVerification(step, resolved);
 
         return {
           ok: true,
@@ -586,7 +595,8 @@
       }
 
       if (action === Actions.ElementType) {
-        await this.executeType(element, step.value || step.text || "");
+        await this.executeType(element, this.stepTextValue(step));
+        this.assertPostActionVerification(step, resolved);
 
         return {
           ok: true,
@@ -608,6 +618,7 @@
 
       if (action === Actions.ElementDoubleClick) {
         await this.executeDoubleClick(element);
+        this.assertPostActionVerification(step, resolved);
 
         return {
           ok: true,
@@ -683,7 +694,7 @@
       if (action === Actions.ElementSelect) {
         await this.executeSelect(
           element,
-          step.value || step.option || step.text || "",
+          this.stepOptionValue(step),
         );
 
         return {
@@ -694,7 +705,7 @@
       }
 
       if (action === Actions.ElementToggle) {
-        await this.executeToggle(element, step.value);
+        await this.executeToggle(element, this.stepToggleValue(step));
 
         return {
           ok: true,
@@ -712,6 +723,242 @@
           "unsupported_content_action",
         ),
       };
+    }
+
+    async prepareHostFallback(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
+      const action = step.action || step.type;
+      const hostAction = this.toHostFallbackAction(action);
+      if (!hostAction) {
+        return {
+          ok: false,
+          error: `Host fallback is not supported for ${action || "unknown"}.`,
+          diagnostics: {
+            action: action || "unknown",
+            finalReason: "host_fallback_unsupported_action",
+          },
+        };
+      }
+
+      const resolved = resolver.resolveRecordedTarget(step, this.controls);
+      if (!resolved.element) {
+        return {
+          ok: false,
+          error: `Could not resolve target for host fallback: ${action || "unknown"}`,
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            "host_fallback_target_resolution_failed",
+          ),
+        };
+      }
+
+      const element = resolved.element;
+      element.scrollIntoView({
+        block: "center",
+        inline: "center",
+        behavior: "instant",
+      });
+      await this.delay(50);
+
+      const rect = element.getBoundingClientRect();
+      const clientPoint = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      };
+      const devicePixelRatio = Number(window.devicePixelRatio || 1);
+      const clientBounds = {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        devicePixelRatio,
+      };
+      const point = this.clientPointToScreen(
+        clientPoint.x,
+        clientPoint.y,
+      );
+      const confidence = this.normalizeHostCoordinateConfidence(
+        resolved.confidence,
+      );
+      const visible = this.isVisibleElement(element);
+      const interactable = this.passesJitOcclusionCheck(element);
+
+      return {
+        ok: true,
+        action: hostAction,
+        text: action === Actions.ElementType ? this.stepTextValue(step) : "",
+        confidence,
+        clientPoint,
+        clientBounds,
+        devicePixelRatio,
+        point,
+        target: {
+          left: point.x - rect.width / 2,
+          top: point.y - rect.height / 2,
+          width: rect.width,
+          height: rect.height,
+          confidence,
+        },
+        window: {
+          title: document.title || "",
+          url: window.location.href,
+        },
+        visible,
+        interactable,
+        usedStrategy: resolved.strategy,
+        usedValue: resolved.value,
+      };
+    }
+
+    async verifyHostFallback(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
+      const action = step.action || step.type;
+      const resolved = resolver.resolveRecordedTarget(step, this.controls);
+      if (!resolved.element) {
+        return {
+          ok: false,
+          error: "Host fallback verification could not resolve target.",
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            "host_fallback_verification_target_missing",
+          ),
+        };
+      }
+
+      if (action === Actions.ElementType) {
+        const expected = this.stepTextValue(step);
+        const actual = this.extractValue(resolved.element);
+        if (actual !== expected) {
+          return {
+            ok: false,
+            error: "Host fallback typed value verification failed.",
+            diagnostics: {
+              ...this.createExecutionDiagnostics(
+                step,
+                resolved,
+                "host_fallback_verification_failed",
+              ),
+              expectedLength: expected.length,
+              actualLength: actual.length,
+            },
+          };
+        }
+      }
+
+      this.assertPostActionVerification(step, resolved);
+
+      return {
+        ok: true,
+        usedStrategy: resolved.strategy,
+        usedValue: resolved.value,
+        verification: "target_resolved",
+      };
+    }
+
+    toHostFallbackAction(action) {
+      if (action === Actions.ElementClick) return "click";
+      if (action === Actions.ElementDoubleClick) return "doubleClick";
+      if (action === Actions.ElementType) return "type";
+      return "";
+    }
+
+    stepTextValue(step = {}) {
+      return String(step.config?.value ?? step.value ?? step.text ?? "");
+    }
+
+    stepOptionValue(step = {}) {
+      return String(step.config?.value ?? step.value ?? step.option ?? step.text ?? "");
+    }
+
+    stepToggleValue(step = {}) {
+      return step.config?.value ?? step.value;
+    }
+
+    normalizeHostCoordinateConfidence(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+      if (numeric <= 1) return numeric;
+      return Math.max(0, Math.min(1, numeric / 100));
+    }
+
+    clientPointToScreen(clientX, clientY) {
+      const chromeX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
+      const chromeY = Math.max(0, window.outerHeight - window.innerHeight - chromeX);
+      return {
+        x: (window.screenX ?? window.screenLeft ?? 0) + chromeX + clientX,
+        y: (window.screenY ?? window.screenTop ?? 0) + chromeY + clientY,
+      };
+    }
+
+    assertPostActionVerification(step = {}, resolved = {}) {
+      const config = step.config || {};
+      const expected = String(config.verificationText || "").trim();
+      if (!expected) return;
+
+      const selector = String(config.verificationSelector || "").trim();
+      let verificationElement = null;
+
+      if (selector) {
+        try {
+          verificationElement = document.querySelector(selector);
+        } catch {
+          verificationElement = null;
+        }
+      } else {
+        verificationElement = resolved.element || null;
+      }
+
+      const actual = this.extractVerificationText(verificationElement);
+
+      if (actual.includes(expected)) return;
+
+      const error = new Error("Post-action verification failed.");
+      error.diagnostics = {
+        ...this.createExecutionDiagnostics(
+          step,
+          resolved,
+          "post_action_verification_failed",
+        ),
+        verificationSelector: selector,
+        expectedText: expected,
+        actualText: actual,
+      };
+      throw error;
+    }
+
+    extractVerificationText(element) {
+      if (!element) return "";
+
+      if (element.isContentEditable) {
+        return String(element.innerText || element.textContent || "");
+      }
+
+      if (["INPUT", "TEXTAREA"].includes(element.tagName)) {
+        if (element.type === "checkbox" || element.type === "radio") {
+          return String(element.checked);
+        }
+        return String(element.value || "");
+      }
+
+      if (element.tagName === "SELECT") {
+        const selectedText = element.selectedOptions?.[0]?.textContent || "";
+        return `${element.value || ""} ${selectedText}`.trim();
+      }
+
+      return String(
+        element.innerText ??
+          element.textContent ??
+          ("value" in element ? element.value : "") ??
+          "",
+      );
     }
 
     createExecutionDiagnostics(step, resolved, finalReason) {

@@ -149,6 +149,44 @@ Local File Upload live acceptance:
 4. Change the node path outside `BRunner_Host/AllowedFiles` and confirm it fails
    without exposing the rejected path in logs or workflow diagnostics.
 
+Approved Directory live acceptance:
+
+1. In the companion app, ensure the `allowedfiles` alias has read, write, and
+   recursive permissions.
+2. Restart the native host so it reloads approved-folder permissions.
+3. Reload the extension, keep the local fixture server active, and run
+   `Approved Directory Acceptance`.
+4. Confirm the Account name field becomes
+   `generated-write.txt exported-data.json 1`.
+5. Confirm `BRunner_Host/AllowedFiles/acceptance/generated-write.txt` and
+   `BRunner_Host/AllowedFiles/acceptance/exported-data.json` exist.
+6. Disable write permission and rerun; confirm write/export fail with
+   approved-directory diagnostics rather than silent success.
+
+Visible Host Fallback live acceptance:
+
+1. Start the companion app, keep Host Fallback enabled, and keep the local
+   fixture server active at `http://127.0.0.1:8765`.
+2. Reload the extension, then load and run `Visible Host Fallback Acceptance`.
+3. Keep the browser window foregrounded during the Trusted Submit step.
+4. Confirm the page status becomes
+   `Trusted Submit accepted via visible host fallback.`
+5. Disable Host Fallback in the companion tab and rerun; confirm the workflow
+   fails with host fallback diagnostics rather than silently passing.
+6. Turn off `allowVisibleHostFallback` on the Trusted Submit node and rerun;
+   confirm the browser-native untrusted click does not pass verification.
+7. Visual-match fallback is now available behind `allowVisualMatchFallback`:
+   capture the resolved component image in the extension, send the bounded crop
+   to the companion, use PyAutoGUI image matching to locate the component on the
+   foreground browser window, click the matched center, and require the same
+   post-action verification text before passing. Manual acceptance for this
+   recovery tier remains pending.
+8. To force visual-match acceptance, temporarily raise the companion Host
+   Fallback coordinate confidence threshold above the resolver confidence
+   reported by the Trusted Submit step, keep `allowVisualMatchFallback` enabled,
+   rerun `Visible Host Fallback Acceptance`, and confirm the workflow passes by
+   visual recovery rather than coordinate recovery.
+
 ## Phase C — Graph-dependent control flow
 
 - If/else, switch, merge, stop/fail, retry boundary.

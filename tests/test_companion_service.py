@@ -1,4 +1,5 @@
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,12 +14,20 @@ from companion_service import HostServiceController
 class FakeProcess:
     def __init__(self):
         self.terminated = False
+        self.killed = False
 
     def poll(self):
         return 1 if self.terminated else None
 
     def terminate(self):
         self.terminated = True
+
+    def kill(self):
+        self.killed = True
+        self.terminated = True
+
+    def wait(self, timeout=None):
+        return self.poll()
 
 
 class FakePopen:
@@ -28,6 +37,21 @@ class FakePopen:
 
     def __call__(self, command, **kwargs):
         process = FakeProcess()
+        self.calls.append((command, kwargs))
+        self.processes.append(process)
+        return process
+
+
+class StubbornProcess(FakeProcess):
+    def wait(self, timeout=None):
+        if not self.killed:
+            raise subprocess.TimeoutExpired("host", timeout)
+        return self.poll()
+
+
+class StubbornPopen(FakePopen):
+    def __call__(self, command, **kwargs):
+        process = StubbornProcess()
         self.calls.append((command, kwargs))
         self.processes.append(process)
         return process
@@ -80,6 +104,19 @@ class HostServiceControllerTests(unittest.TestCase):
             }),
             {"running": False, "port": 9002, "pairedExtensionId": "legacy"},
         )
+
+    def test_stop_kills_process_when_terminate_times_out(self):
+        popen = StubbornPopen()
+        controller = HostServiceController(
+            self.base_dir,
+            self.host_script,
+            popen_factory=popen,
+        )
+
+        self.assertTrue(controller.start())
+        self.assertTrue(controller.stop(timeout=0.01))
+        self.assertTrue(popen.processes[0].killed)
+        self.assertFalse(controller.is_running())
 
 
 if __name__ == "__main__":

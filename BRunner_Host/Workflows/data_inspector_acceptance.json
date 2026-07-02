@@ -1,6 +1,8 @@
 {
-  "name": "Data Inspector Acceptance",
-  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "name": "[NEW 2026-07-02] Data Inspector Acceptance",
+  "description": "Fresh host-served acceptance workflow. Seeds variables and produces scalar, table, and template outputs for the Data Inspector.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
   "variables": {
     "seed_name": "BRunner seed",
     "seed_object": {
@@ -13,12 +15,19 @@
   },
   "steps": [
     {
+      "id": "inspector_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
+    {
       "id": "inspector_scalar",
       "action": "data.set",
       "config": {
         "variableName": "scalar_result",
         "value": "ready"
-      }
+      },
+      "friendlyName": "Set scalar result"
     },
     {
       "id": "inspector_table",
@@ -29,7 +38,8 @@
           { "name": "alpha", "score": 10 },
           { "name": "beta", "score": 20 }
         ]
-      }
+      },
+      "friendlyName": "Set table result"
     },
     {
       "id": "inspector_template",
@@ -37,7 +47,21 @@
       "config": {
         "variableName": "message",
         "template": "{{seed_name}} complete"
-      }
+      },
+      "friendlyName": "Create template result"
+    },
+    {
+      "id": "inspector_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "config": {
+        "value": "{{message}}",
+        "verificationText": "BRunner seed complete"
+      },
+      "friendlyName": "Type inspector message into Account name"
     }
   ]
 }

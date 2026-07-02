@@ -1,67 +1,43 @@
 {
-    "schemaVersion": 2,
-    "id": "workflow-v2",
-    "name": "screenshot_capture_acceptance",
-    "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
-    "settings": {
-        "reuseExistingTabs": false
+  "name": "[NEW 2026-07-02] Screenshot Capture Acceptance",
+  "description": "Fresh host-served acceptance workflow. Opens the harness, captures a PNG screenshot, and types the saved filename into Account name.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "screenshot_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
     },
-    "variables": {},
-    "entryNodeId": "screenshot_acceptance_capture",
-    "nodes": [
-        {
-            "id": "screenshot_acceptance_capture",
-            "type": "screenshot.capture",
-            "version": 1,
-            "position": {
-                "x": 120,
-                "y": 70
-            },
-            "config": {
-                "format": "png",
-                "quality": 90,
-                "outputMode": "download",
-                "filename": "brunner-acceptance.png",
-                "variableName": "screenshot_result"
-            },
-            "data": {
-                "target": "",
-                "executionMode": "enabled",
-                "skipWhen": "",
-                "collapsed": false,
-                "navigationLocked": false
-            }
-        },
-        {
-            "id": "screenshot_acceptance_visible_output",
-            "type": "element.type",
-            "version": 1,
-            "position": {
-                "x": 120,
-                "y": 370
-            },
-            "config": {},
-            "data": {
-                "target": {
-                    "strategy": "id",
-                    "value": "name-input"
-                },
-                "value": "{{screenshot_result.filename}}",
-                "friendlyName": "Screenshot filename: Account name",
-                "executionMode": "enabled",
-                "skipWhen": "",
-                "collapsed": false,
-                "navigationLocked": false
-            }
-        }
-    ],
-    "edges": [
-        {
-            "id": "edge-screenshot_acceptance_capture-screenshot_acceptance_visible_output",
-            "source": "screenshot_acceptance_capture",
-            "sourceHandle": "success",
-            "target": "screenshot_acceptance_visible_output",
-            "targetHandle": "input"
-        }
-    ]
+    {
+      "id": "screenshot_acceptance_capture",
+      "action": "screenshot.capture",
+      "config": {
+        "format": "png",
+        "quality": 90,
+        "outputMode": "download",
+        "filename": "brunner-acceptance.png",
+        "variableName": "screenshot_result"
+      },
+      "friendlyName": "Capture acceptance screenshot"
+    },
+    {
+      "id": "screenshot_acceptance_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "config": {
+        "value": "{{screenshot_result.filename}}",
+        "verificationText": "brunner-acceptance"
+      },
+      "friendlyName": "Type screenshot filename into Account name"
+    }
+  ]
 }

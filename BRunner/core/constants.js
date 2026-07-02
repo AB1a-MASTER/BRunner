@@ -22,6 +22,10 @@ export const Messages = Object.freeze({
   OsUpgradeWorkflow: "OS_UPGRADE_WORKFLOW",
   OsSaveExecutionLog: "OS_SAVE_EXECUTION_LOG",
   OsReadDataSource: "OS_READ_DATA_SOURCE",
+  OsListApprovedDirectories: "OS_LIST_APPROVED_DIRECTORIES",
+  OsFindApprovedFiles: "OS_FIND_APPROVED_FILES",
+  OsWriteApprovedFile: "OS_WRITE_APPROVED_FILE",
+  OsExportDataFile: "OS_EXPORT_DATA_FILE",
 
   // Workflow execution
   RunWorkflowByName: "RUN_WORKFLOW_BY_NAME",
@@ -37,6 +41,8 @@ export const Messages = Object.freeze({
 
   // Content script execution
   ExecuteStep: "EXECUTE_STEP",
+  PrepareHostFallback: "PREPARE_HOST_FALLBACK",
+  VerifyHostFallback: "VERIFY_HOST_FALLBACK",
   CancelExecution: "CANCEL_EXECUTION",
 
   // Hardware / OS fallback
@@ -94,6 +100,9 @@ export const Actions = Object.freeze({
 
   FileInputUpload: "file.input.upload",
   FileLocalUpload: "file.local.upload",
+  ApprovedFilesFind: "approved.files.find",
+  ApprovedFileWrite: "approved.file.write",
+  DataFileExport: "data.file.export",
 
   DownloadWait: "download.wait",
 
@@ -130,6 +139,10 @@ export const NavigationTargets = Object.freeze({
 
 export const NativeCommands = Object.freeze({
   Auth: "AUTH",
+  HostHello: "HOST_HELLO",
+  HostWindow: "HOST_WINDOW",
+  HostAction: "HOST_ACTION",
+  HostVisualMatch: "HOST_VISUAL_MATCH",
   ListWorkflows: "LIST_WORKFLOWS",
   SaveWorkflow: "SAVE_WORKFLOW",
   LoadWorkflow: "LOAD_WORKFLOW",
@@ -141,6 +154,10 @@ export const NativeCommands = Object.freeze({
   OsKeystroke: "OS_KEYSTROKE",
   ReadFile: "READ_FILE",
   ReadDataSource: "READ_DATA_SOURCE",
+  ListApprovedDirectories: "LIST_APPROVED_DIRECTORIES",
+  FindApprovedFiles: "FIND_APPROVED_FILES",
+  WriteApprovedFile: "WRITE_APPROVED_FILE",
+  ExportDataFile: "EXPORT_DATA_FILE",
 });
 
 export const Defaults = Object.freeze({

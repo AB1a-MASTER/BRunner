@@ -139,6 +139,14 @@ workflow storage, manages approved folder aliases, exposes host-fallback
 settings, and surfaces bounded diagnostics. Users should not need to edit
 `brunner_config.json` manually for ordinary backend setup.
 
+Host fallback should grow a visual-match tier after coordinate fallback. When a
+browser-native action and coordinate fallback do not produce verified page
+state, the extension may capture a bounded image of the resolved component and
+send it to the companion. The companion then uses PyAutoGUI image matching on
+the foreground browser window to find the component, click the matched center,
+and return bounded match diagnostics. The extension must still perform
+post-action verification before the workflow marks the step successful.
+
 Current implementation note: `BRunner_Host/host_ui.py` and
 `BRunner_Host/build_host_ui.py` are transitional artifacts from the earlier
 Tkinter-based host UI and should be replaced or retired during the companion app
@@ -254,7 +262,8 @@ scenario are updated.
    Inspector.
 7. Implement the finalized node set from
    `workflow_nodes_implementation_blueprint.md`.
-8. Complete live acceptance and final visual polish.
+8. Complete remaining final visual polish. Refreshed host-served manual
+   acceptance workflows have passed for the current companion/runtime batch.
 
 ## Acceptance gates
 

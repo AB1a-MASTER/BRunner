@@ -1,0 +1,76 @@
+{
+  "name": "[NEW 2026-07-02] Approved Directory Acceptance",
+  "description": "Fresh host-served acceptance workflow. Writes a file, exports JSON data, finds the exported file through the approved folder alias, and types the safe result summary.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "approved_directory_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
+    {
+      "id": "approved_directory_write",
+      "action": "approved.file.write",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "relativePath": "acceptance/generated-write.txt",
+        "content": "BRunner approved write accepted",
+        "encoding": "utf-8",
+        "variableName": "approved_write_result"
+      },
+      "friendlyName": "Write approved text file"
+    },
+    {
+      "id": "approved_directory_export",
+      "action": "data.file.export",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "relativePath": "acceptance/exported-data.json",
+        "format": "json",
+        "data": [
+          {
+            "name": "alpha",
+            "score": 10
+          },
+          {
+            "name": "beta",
+            "score": 20
+          }
+        ],
+        "variableName": "approved_export_result"
+      },
+      "friendlyName": "Export approved JSON file"
+    },
+    {
+      "id": "approved_directory_find",
+      "action": "approved.files.find",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "pattern": "acceptance/exported-data.json",
+        "extensions": "json",
+        "maxResults": 10,
+        "variableName": "approved_find_result"
+      },
+      "friendlyName": "Find exported approved file"
+    },
+    {
+      "id": "approved_directory_visible_output",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "config": {
+        "value": "{{approved_write_result.filename}} {{approved_export_result.filename}} {{approved_find_result.count}}",
+        "verificationText": "generated-write.txt exported-data.json 1"
+      },
+      "friendlyName": "Type approved directory result summary"
+    }
+  ]
+}

@@ -25,11 +25,37 @@ test("native host required nodes declare exact capabilities", () => {
     mode: NativeHostRequirementModes.Required,
     capabilities: [NativeHostCapabilities.OsKeystroke],
   });
+  assert.equal(NativeHostCapabilities.HostWindow, "host.window");
+  assert.equal(NativeHostCapabilities.HostAction, "host.action");
+  assert.equal(NativeHostCapabilities.HostVisualMatch, "host.visual_match");
   assert.deepEqual(getNodeDefinition("file.local.upload").nativeHost, {
     mode: NativeHostRequirementModes.Required,
     capabilities: [NativeHostCapabilities.LocalFileRead],
   });
-  assert.equal(getNodeDefinition("element.click").nativeHost.mode, NativeHostRequirementModes.None);
+  assert.deepEqual(getNodeDefinition("element.click").nativeHost, {
+    mode: NativeHostRequirementModes.Fallback,
+    capabilities: [
+      NativeHostCapabilities.HostWindow,
+      NativeHostCapabilities.HostAction,
+      NativeHostCapabilities.HostVisualMatch,
+    ],
+  });
+  assert.deepEqual(getNodeDefinition("element.type").nativeHost, {
+    mode: NativeHostRequirementModes.Fallback,
+    capabilities: [
+      NativeHostCapabilities.HostWindow,
+      NativeHostCapabilities.HostAction,
+      NativeHostCapabilities.HostVisualMatch,
+    ],
+  });
+  assert.deepEqual(getNodeDefinition("element.double_click").nativeHost, {
+    mode: NativeHostRequirementModes.Fallback,
+    capabilities: [
+      NativeHostCapabilities.HostWindow,
+      NativeHostCapabilities.HostAction,
+      NativeHostCapabilities.HostVisualMatch,
+    ],
+  });
 });
 
 test("native host requirement fails only required reached nodes", () => {
@@ -64,9 +90,11 @@ test("native capability labels are human readable", () => {
   assert.equal(
     formatNativeCapabilities([
       NativeHostCapabilities.OsKeystroke,
+      NativeHostCapabilities.HostAction,
+      NativeHostCapabilities.HostVisualMatch,
       NativeHostCapabilities.LocalFileRead,
       NativeHostCapabilities.DataSourceRead,
     ]),
-    "OS keystroke, local file read and data source read",
+    "OS keystroke, visible host action, visible visual-match action, local file read and data source read",
   );
 });

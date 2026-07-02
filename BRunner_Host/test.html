@@ -1,20 +1,112 @@
 <!doctype html>
-<html>
-
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BRunner Host Acceptance Harness</title>
+    <style>
+        body { max-width: 760px; margin: 40px auto; padding: 0 20px; font: 16px/1.5 system-ui, sans-serif; }
+        fieldset { display: grid; gap: 12px; margin-bottom: 20px; padding: 20px; }
+        label { display: grid; gap: 4px; }
+        input, select, button { padding: 9px; font: inherit; }
+        #status[data-state="pass"] { color: #047857; }
+        #status[data-state="fail"] { color: #b91c1c; }
+    </style>
+</head>
 <body>
-    <input id="name-input" placeholder="Name">
+    <h1>BRunner Host Acceptance Harness</h1>
+    <p>Use this page when the fixture server is started from BRunner_Host.</p>
 
-    <select id="country">
-        <option value="">Choose</option>
-        <option value="pk">Pakistan</option>
-        <option value="us">United States</option>
-    </select>
+    <fieldset>
+        <legend>Deterministic controls</legend>
 
-    <input id="agree" type="checkbox">
+        <label for="name-input">
+            Account name
+            <input
+                id="name-input"
+                name="account_name"
+                aria-label="Account name"
+                data-testid="account-name"
+                placeholder="Enter account name"
+            >
+        </label>
 
-    <button id="result-button" onclick="document.body.dataset.clicked='yes'">
-        Click Me
-    </button>
+        <label for="country">
+            Country
+            <select id="country" name="country" aria-label="Country">
+                <option value="">Choose</option>
+                <option value="pk">Pakistan</option>
+                <option value="us">United States</option>
+            </select>
+        </label>
+
+        <label for="agree">
+            <input id="agree" name="terms" type="checkbox">
+            Accept terms
+        </label>
+
+        <label for="upload-file">
+            Upload test file
+            <input id="upload-file" name="upload_file" type="file">
+        </label>
+        <p id="uploaded-file-result">No uploaded file.</p>
+
+        <a
+            id="download-fixture"
+            href="tests/fixtures/download-acceptance.txt"
+            download="download-acceptance.txt"
+        >Download Fixture</a>
+
+        <button
+            id="result-button"
+            name="submit_result"
+            aria-label="Submit reliability test"
+            data-testid="submit-result"
+            type="button"
+        >Submit Test</button>
+
+        <button
+            id="trusted-submit"
+            name="trusted_submit"
+            aria-label="Trusted submit"
+            type="button"
+        >Trusted Submit</button>
+    </fieldset>
+
+    <p id="status" role="status">Ready.</p>
+
+    <script>
+        const status = document.getElementById("status");
+        const resultButton = document.getElementById("result-button");
+        const uploadFileInput = document.getElementById("upload-file");
+        const uploadedFileResult = document.getElementById("uploaded-file-result");
+
+        function setStatus(message, state = "") {
+            status.textContent = message;
+            status.dataset.state = state;
+        }
+
+        resultButton.addEventListener("click", () => {
+            const count = Number(resultButton.dataset.clickCount || 0) + 1;
+            resultButton.dataset.clickCount = String(count);
+            setStatus(`Submit Test clicked ${count} time(s).`, "pass");
+        });
+
+        document.getElementById("trusted-submit").addEventListener("click", (event) => {
+            if (!event.isTrusted) {
+                setStatus("Trusted Submit ignored untrusted browser event.", "fail");
+                return;
+            }
+            setStatus("Trusted Submit accepted via visible host fallback.", "pass");
+        });
+
+        uploadFileInput.addEventListener("change", async () => {
+            const file = uploadFileInput.files?.[0];
+            uploadedFileResult.textContent = file
+                ? `${file.name} | ${file.type} | ${file.size} bytes | ${await file.text()}`
+                : "No uploaded file.";
+            setStatus(file ? "Upload accepted." : "No uploaded file.", file ? "pass" : "fail");
+        });
+    </script>
 </body>
-
 </html>

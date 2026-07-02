@@ -275,11 +275,30 @@ Required flow:
    confidence, and policy.
 6. Companion app performs the visible input.
 7. Extension verifies the intended page-state change.
-8. Logs record browser versus companion-host execution method.
+8. If coordinate fallback was performed but verification still fails and the
+   node opts into visual matching, the extension captures a bounded
+   screenshot/crop of the resolved component and sends it to the companion; the
+   companion uses PyAutoGUI image matching against the foreground browser
+   window to locate the visible component and click its matched center.
+9. Extension verifies the intended page-state change again after any visual
+   fallback attempt.
+10. Logs record browser versus companion-host execution method, including
+    whether coordinate or visual matching was used.
 
 Refuse host input when the browser window is not foregrounded, monitor mapping
 is stale, confidence is below threshold, secure desktop is active, the session
 is locked, or user presence is required.
+
+Visual-match fallback constraints:
+
+- Component images sent to the companion are bounded crops, not full workflow
+  screenshots unless explicitly required for matching context.
+- The companion must apply a confidence threshold and refuse ambiguous,
+  off-window, off-screen, or multi-match results.
+- The host must not persist component screenshots by default; diagnostics should
+  store only bounded metadata unless the user enables screenshot diagnostics.
+- Visual matching remains a fallback tier, never a replacement for semantic DOM
+  resolution or browser-native execution.
 
 ## Protocol Transition
 
@@ -420,20 +439,40 @@ Exit: a user can move the active workflow library without hand-editing JSON.
 ### Phase 5 - Approved Directory Registry
 
 - Implement alias registry in settings and UI. **Settings model implemented;
-  dedicated UI pending.**
+  dedicated Approved Folders UI implemented.**
 - Migrate allowed roots to provisional aliases. **Implemented.**
 - Update file and data-source call paths to use alias plus relative path.
   **Implemented for read/data-source paths.**
-- Add find/read/write behavior under configured permissions.
+- Add find/read/write behavior under configured permissions. **Implemented for
+  service behavior; read/local upload acceptance passed manually. Extension
+  workflow actions and `Approved Directory Acceptance` now cover find, write,
+  and export; manual acceptance passed.**
 
 Exit: normal file operations no longer require arbitrary raw filesystem paths.
 
 ### Phase 6 - Structured Host Fallback
 
-- Add `host.hello` and v2 capability reporting.
-- Implement `host.window` and `host.action`.
-- Add foreground-window validation and coordinate conversion.
+- Add `host.hello` and v2 capability reporting. **Initial implementation
+  complete; legacy command compatibility preserved.**
+- Implement `host.window` and `host.action`. **Initial service and extension
+  bridge foundations implemented.**
+- Add foreground-window validation and coordinate conversion. **Initial
+  foreground title, confidence, screen-bound checks, and viewport-to-screen
+  conversion implemented; visible host fallback acceptance passed manually.**
 - Implement click, double-click, scroll, typing, key press, shortcut, and paste.
+  **Initial visible dispatch helpers implemented behind validation.**
+- Add Host Fallback companion UI and diagnostics. **Initial tab implemented
+  with enable/threshold/screenshot settings, foreground status, supported
+  actions, and filtered capability activity.**
+- Integrate browser-runtime fallback only where a node explicitly allows it.
+  **Initial opt-in integration implemented for click, double-click, and type,
+  with content-side target preparation, post-action verification, and a live
+  acceptance workflow that passed manually.**
+- Add PyAutoGUI visual-match fallback after coordinate fallback: extension
+  captures the resolved component image, companion matches it on the foreground
+  browser window, clicks the matched center, and reports match confidence and
+  bounded diagnostics. **Initial opt-in implementation complete; manual
+  visual-match acceptance remains next.**
 - Keep v1 `OS_KEYSTROKE` until migration is complete.
 
 Exit: browser-first nodes can request validated visible fallback and report the
@@ -449,6 +488,12 @@ result clearly.
 
 Exit: packaged app behaves like source build and stores default workflows next
 to the executable.
+
+## Documentation Rule
+
+When a phase or milestone is completed, accepted, or materially re-scoped, the
+implementing change must update this spec, the master roadmap, current handoff
+notes, and any affected user-facing guide before the next phase begins.
 
 ### Future Mapper MapStore Adapter
 
@@ -472,6 +517,8 @@ conflict rule with retained diff metadata.
 - Existing v1/v2 workflows continue to load.
 - Workflows use approved directory aliases for ordinary local file operations.
 - Host fallback refuses unsafe foreground/window/coordinate contexts.
+- Visual-match fallback refuses unsafe foreground/window, low-confidence,
+  ambiguous, off-screen, or multi-match contexts.
 - Extension verification is required before fallback action counts as workflow
   success.
 - Existing v1 WebSocket commands continue during migration.

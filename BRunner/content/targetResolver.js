@@ -219,7 +219,7 @@
           element,
           strategy: candidate.strategy,
           value: candidate.value,
-          confidence: candidate.score || 0,
+          confidence: candidateConfidence(candidate),
           mode: "direct",
           attempts,
           controlsTreeAttempted: false,
@@ -323,7 +323,7 @@
           element: control.element,
           strategy: "controls_tree_hash",
           value: candidate.value,
-          confidence: candidate.score || 0,
+          confidence: candidateConfidence(candidate),
           mode: "controls_tree",
         };
       }
@@ -388,6 +388,31 @@
     }
 
     return [];
+  }
+
+  function candidateConfidence(candidate = {}) {
+    const score = Number(candidate.score);
+    if (Number.isFinite(score) && score > 0) return score;
+
+    return defaultStrategyScore(candidate.strategy);
+  }
+
+  function defaultStrategyScore(strategy) {
+    const scores = {
+      [TargetStrategies.AriaLabel]: 100,
+      [TargetStrategies.LabelText]: 98,
+      [TargetStrategies.Text]: 94,
+      [TargetStrategies.Id]: 92,
+      [TargetStrategies.Name]: 90,
+      [TargetStrategies.DataTestId]: 88,
+      [TargetStrategies.DataTest]: 88,
+      [TargetStrategies.DataQa]: 88,
+      [TargetStrategies.CssSelector]: 68,
+      [TargetStrategies.CtrlHash]: 40,
+      [TargetStrategies.FallbackHash]: 40,
+    };
+
+    return scores[strategy] || 50;
   }
 
   function normalizeTargetInput(stepOrTarget) {

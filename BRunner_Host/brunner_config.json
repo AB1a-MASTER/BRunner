@@ -1,10 +1,37 @@
 {
-  "pairing_key": "ac1890957e38af28cd5d0961e6d0d530",
-  "paired_extension_id": "fihaandflhogafpibmkadkkacicclblh",
-  "local_file_access": {
-    "enabled": true,
-    "allowed_roots": [
-      "AllowedFiles"
-    ]
-  }
+    "schemaVersion": 2,
+    "pairingKey": "ac1890957e38af28cd5d0961e6d0d530",
+    "pairedExtensionId": "fihaandflhogafpibmkadkkacicclblh",
+    "host": {
+        "port": 8999,
+        "startWithApp": true
+    },
+    "workflowStorage": {
+        "mode": "default",
+        "directory": null
+    },
+    "approvedDirectories": [
+        {
+            "id": "allowedfiles",
+            "displayName": "AllowedFiles",
+            "path": "AllowedFiles",
+            "read": true,
+            "write": true,
+            "recursive": true
+        }
+    ],
+    "hostFallback": {
+        "enabled": true,
+        "minimumCoordinateConfidence": 0.9,
+        "captureDiagnosticsScreenshots": false
+    },
+    "pairing_key": "ac1890957e38af28cd5d0961e6d0d530",
+    "paired_extension_id": "fihaandflhogafpibmkadkkacicclblh",
+    "port": 8999,
+    "local_file_access": {
+        "enabled": true,
+        "allowed_roots": [
+            "AllowedFiles"
+        ]
+    }
 }

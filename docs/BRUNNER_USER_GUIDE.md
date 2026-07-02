@@ -102,6 +102,13 @@ display mapping, and coordinate confidence before issuing visible input. The
 extension must still verify the intended page result before the workflow treats
 the action as successful.
 
+The companion also includes an opt-in visual-match fallback for cases where
+Windows coordinate mapping is unreliable. In that tier, the extension captures
+a bounded image of the resolved component and sends it to the companion. The
+companion uses PyAutoGUI image matching on the foreground browser window,
+clicks the matched center only when confidence is high and unambiguous, and the
+extension still requires post-action verification before passing the step.
+
 ## Mapper Inspector
 
 The mapper phase adds a dedicated extension window for reviewing maps. It lets a
@@ -129,6 +136,21 @@ version.
   companion capability. If reached while unavailable, the node fails with a
   stable error. Current required-host nodes are **Send Keystroke** (`os.keystroke`) and
   **Upload Allowed Local File** (`local_file.read`).
+
+The companion now reports structured visible-fallback capabilities:
+`host.hello`, `host.window`, `host.action`, and `host.visual_match`. These
+cover foreground-window validation, visible pointer/keyboard dispatch, and the
+opt-in visual recovery tier. The desktop companion includes a Host Fallback tab
+for enabling the feature, setting the confidence threshold, checking
+foreground-window status, and seeing supported actions. Click, Double-Click,
+and Type nodes expose an opt-in `allowVisibleHostFallback` setting; Click and
+Double-Click can additionally enable `allowVisualMatchFallback`. When enabled,
+the extension still tries browser-native action first, then visible host
+fallback after target preparation, and finally visual matching only if
+post-action verification fails. Use `verificationSelector` and
+`verificationText` when a workflow needs to prove that the visible action
+changed page state. The refreshed host-served coordinate fallback workflows
+have passed manual testing; manual visual-match acceptance remains next.
 
 ## Node reference format
 
@@ -180,6 +202,21 @@ available to later nodes.
 External operations use explicit permissions, size/time limits, safe outputs,
 and secret-safe logs. Local-file operations require node approval, a connected
 companion app, and an approved directory alias.
+
+Approved-directory operations are host-backed workflow nodes:
+
+- **Find Approved Files** lists safe metadata for files under an approved folder
+  alias. It returns filenames, relative paths, MIME types, sizes, and modified
+  timestamps without exposing unrestricted absolute paths.
+- **Write Approved File** writes text/base64 content under an approved folder
+  alias that has write permission. Content is redacted from execution logs.
+- **Export Data File** serializes workflow data as JSON, CSV, or TXT under an
+  approved folder alias that has write permission. Export data is redacted from
+  execution logs.
+
+The companion app must be connected, the selected alias must allow the required
+read/write permission, and output paths must remain relative to the approved
+folder.
 
 ### Logic and reusable workflows
 

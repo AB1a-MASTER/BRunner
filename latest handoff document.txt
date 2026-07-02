@@ -1,5 +1,5 @@
 BRunner - Latest Development Handoff
-Updated: 2026-06-30
+Updated: 2026-07-01
 
 PURPOSE
 This is the starting point for the next development chat. Read this file, then
@@ -306,13 +306,35 @@ Completed companion foundation slices:
    with Status, Workflow Storage, Pairing, Diagnostics, and tray behavior.
 8. Added workflow storage location migration helpers and UI controls for
    use-new, copy, move, and default restore.
+9. Added dedicated Approved Folders UI with add/edit/remove aliases and
+   read/write/recursive controls.
+10. Added approved-directory find/write/export service behavior and extension
+    graph-authoring access to approved folder aliases for file data sources.
+11. Fixed PySide6 enum/import compatibility, host start/stop diagnostics
+    refresh, Clear Logs, and stop-process status updates.
+12. Added initial `HOST_HELLO` / `host.hello` version and capability reporting,
+    with extension-side status hydration and legacy command compatibility.
+13. Added initial structured fallback services for `host.window` and
+    `host.action`, including foreground-title checks, confidence checks,
+    screen-bound coordinate validation, visible pointer/keyboard dispatch
+    helpers, v2 request helpers, and deterministic tests.
+14. Added the Host Fallback companion tab with enable/threshold/screenshot
+    settings, foreground-window status, supported action status, and filtered
+    capability activity in Diagnostics.
+15. Added initial browser-runtime visible host fallback integration for opt-in
+    click, double-click, and type nodes, including content-side target
+    preparation, `host.window` / `host.action` calls, and post-action
+    verification.
+16. Added `Visible Host Fallback Acceptance`, a trusted-click fixture target,
+    optional `verificationSelector` / `verificationText` checks, and
+    viewport-to-screen coordinate conversion for host fallback preparation.
 
 Next isolated implementation slice:
-1. Build the dedicated Approved Folders UI in the companion app.
-2. Add add/edit/remove alias workflows with read/write/recursive controls.
-3. Add find/write/export service behavior under approved-directory permissions.
-4. Continue preserving legacy v1 WebSocket commands while preparing protocol v2
-   capability surfaces.
+1. Run live acceptance for approved-directory services and structured fallback;
+   keep v1 `OS_KEYSTROKE` compatibility until migration is complete.
+2. Refine viewport-to-screen coordinate conversion if live fallback acceptance
+   shows browser chrome or monitor-offset drift.
+3. Continue release-packaging cleanup once runtime fallback acceptance passes.
 
 After the companion app is accepted:
 - implement the mapper reliability transition from
@@ -332,4 +354,7 @@ DEVELOPMENT RULES
 - Keep secret-bearing payloads out of logs and shared runtime state.
 - Keep changes isolated and covered by deterministic plus live acceptance tests.
 - Preserve cancellation, persistence, navigation, and tab-recovery behavior.
+- When a phase or milestone is completed or materially re-scoped, update the
+  roadmap, relevant spec, current handoff notes, and affected user-facing docs
+  before moving to the next phase.
 - Never perform Git operations; the user owns them.

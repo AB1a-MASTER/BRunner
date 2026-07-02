@@ -11,6 +11,7 @@ class NativeBridgeClient {
     this.isConnected = false;
     this.pendingRequests = new Map();
     this.nextRequestId = 1;
+    this.lastHello = null;
   }
 
   connect() {
@@ -35,11 +36,13 @@ class NativeBridgeClient {
 
     this.socket.onclose = () => {
       this.isConnected = false;
+      this.lastHello = null;
       console.warn("[BRunner] Native host disconnected.");
     };
 
     this.socket.onerror = (error) => {
       this.isConnected = false;
+      this.lastHello = null;
       console.error("[BRunner] Native host socket error:", error);
     };
 
@@ -109,6 +112,61 @@ class NativeBridgeClient {
     });
   }
 
+  requestCapability(capability, payload = {}) {
+    this.connect();
+
+    return new Promise((resolve, reject) => {
+      const requestId = String(this.nextRequestId++);
+
+      this.pendingRequests.set(requestId, {
+        resolve,
+        reject,
+      });
+
+      const sendWhenReady = () => {
+        try {
+          this.sendRaw({
+            id: requestId,
+            requestId,
+            protocolVersion: 2,
+            capability,
+            payload,
+          });
+        } catch (error) {
+          this.pendingRequests.delete(requestId);
+          reject(error);
+        }
+      };
+
+      if (this.socket.readyState === WebSocket.OPEN) {
+        sendWhenReady();
+        return;
+      }
+
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (!this.socket) {
+          clearInterval(timer);
+          this.pendingRequests.delete(requestId);
+          reject(new Error("Native host socket was not created."));
+          return;
+        }
+
+        if (this.socket.readyState === WebSocket.OPEN) {
+          clearInterval(timer);
+          sendWhenReady();
+          return;
+        }
+
+        if (Date.now() - startedAt > 5000) {
+          clearInterval(timer);
+          this.pendingRequests.delete(requestId);
+          reject(new Error("Timed out connecting to native host."));
+        }
+      }, 100);
+    });
+  }
+
   handleMessage(raw) {
     let message;
 
@@ -139,6 +197,35 @@ class NativeBridgeClient {
 
   async listWorkflows() {
     return this.request(NativeCommands.ListWorkflows);
+  }
+
+  async hostHello() {
+    const response = await this.request(NativeCommands.HostHello);
+    if (Array.isArray(response?.capabilities)) {
+      this.lastHello = response;
+    }
+    return response;
+  }
+
+  async hostWindow(request = {}) {
+    return this.requestCapability(
+      NativeHostCapabilities.HostWindow,
+      request && typeof request === "object" ? request : {},
+    );
+  }
+
+  async hostAction(request = {}) {
+    return this.requestCapability(
+      NativeHostCapabilities.HostAction,
+      request && typeof request === "object" ? request : {},
+    );
+  }
+
+  async hostVisualMatch(request = {}) {
+    return this.requestCapability(
+      NativeHostCapabilities.HostVisualMatch,
+      request && typeof request === "object" ? request : {},
+    );
   }
 
   async loadWorkflow(filename) {
@@ -208,16 +295,48 @@ class NativeBridgeClient {
     });
   }
 
+  async listApprovedDirectories() {
+    return this.request(NativeCommands.ListApprovedDirectories);
+  }
+
+  async findApprovedFiles(request) {
+    return this.request(NativeCommands.FindApprovedFiles, {
+      request: request && typeof request === "object" ? request : {},
+    });
+  }
+
+  async writeApprovedFile(request) {
+    return this.request(NativeCommands.WriteApprovedFile, {
+      request: request && typeof request === "object" ? request : {},
+    });
+  }
+
+  async exportDataFile(request) {
+    return this.request(NativeCommands.ExportDataFile, {
+      request: request && typeof request === "object" ? request : {},
+    });
+  }
+
   getStatus() {
+    const fallbackCapabilities = [
+      NativeHostCapabilities.OsKeystroke,
+      NativeHostCapabilities.HostWindow,
+      NativeHostCapabilities.HostAction,
+      NativeHostCapabilities.HostVisualMatch,
+      NativeHostCapabilities.LocalFileRead,
+      NativeHostCapabilities.ApprovedDirectoryList,
+      NativeHostCapabilities.ApprovedFileFind,
+      NativeHostCapabilities.ApprovedFileWrite,
+      NativeHostCapabilities.DataFileExport,
+      NativeHostCapabilities.DataSourceRead,
+      NativeHostCapabilities.ExecutionLogSave,
+    ];
     return {
       connected: this.isConnected,
+      protocolVersion: this.lastHello?.protocolVersion || null,
+      host: this.lastHello?.host || null,
       capabilities: this.isConnected
-        ? [
-            NativeHostCapabilities.OsKeystroke,
-            NativeHostCapabilities.LocalFileRead,
-            NativeHostCapabilities.DataSourceRead,
-            NativeHostCapabilities.ExecutionLogSave,
-          ]
+        ? (Array.isArray(this.lastHello?.capabilities) ? this.lastHello.capabilities : fallbackCapabilities)
         : [],
     };
   }

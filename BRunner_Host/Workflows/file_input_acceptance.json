@@ -1,11 +1,19 @@
 {
-  "name": "File Input Acceptance",
-  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "name": "[NEW 2026-07-02] File Input Acceptance",
+  "description": "Fresh host-served acceptance workflow. Uploads an in-memory text fixture to the page file input.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
   "variables": {},
   "settings": {
     "reuseExistingTabs": false
   },
   "steps": [
+    {
+      "id": "file_input_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
     {
       "id": "file_input_acceptance_upload",
       "action": "file.input.upload",

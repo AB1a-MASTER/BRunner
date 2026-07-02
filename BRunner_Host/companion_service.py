@@ -31,10 +31,15 @@ class HostServiceController:
         )
         return True
 
-    def stop(self):
+    def stop(self, timeout=3):
         if not self.is_running():
             return False
         self.process.terminate()
+        try:
+            self.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=timeout)
         return True
 
     def restart(self):

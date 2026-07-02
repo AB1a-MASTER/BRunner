@@ -1,11 +1,19 @@
 {
-  "name": "Download Wait Acceptance",
-  "boundDomain": "http://127.0.0.1:8765/BRunner/test.html",
+  "name": "[NEW 2026-07-02] Download Wait Acceptance",
+  "description": "Fresh host-served acceptance workflow. Starts a fixture download, waits for it, and types the safe filename metadata into Account name.",
+  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
+  "boundDomain": "http://127.0.0.1:8765/test.html",
   "variables": {},
   "settings": {
     "reuseExistingTabs": false
   },
   "steps": [
+    {
+      "id": "download_acceptance_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
     {
       "id": "download_acceptance_click",
       "action": "element.click",
@@ -25,7 +33,8 @@
         "startedWithinMs": 15000,
         "dangerPolicy": "fail",
         "variableName": "download_result"
-      }
+      },
+      "friendlyName": "Wait for fixture download"
     },
     {
       "id": "download_acceptance_visible_output",
@@ -34,8 +43,11 @@
         "strategy": "id",
         "value": "name-input"
       },
-      "value": "{{download_result.filename}}",
-      "friendlyName": "Download filename: Account name"
+      "config": {
+        "value": "{{download_result.filename}}",
+        "verificationText": "download-acceptance"
+      },
+      "friendlyName": "Type download filename into Account name"
     }
   ]
 }

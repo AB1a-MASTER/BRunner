@@ -38,8 +38,21 @@ const definitions = [
     label: "Click Element",
     icon: "🖱️",
     description: "Resolve and click a page element.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Fallback,
+      capabilities: [
+        NativeHostCapabilities.HostWindow,
+        NativeHostCapabilities.HostAction,
+        NativeHostCapabilities.HostVisualMatch,
+      ],
+    },
     targetRequired: true,
-    config: [],
+    config: [
+      visibleHostFallbackField(),
+      visibleHostVisualMatchField(),
+      visibleHostVerificationSelectorField(),
+      visibleHostVerificationTextField(),
+    ],
     inputs: ["input"],
     outputs: ["success"],
   },
@@ -154,8 +167,22 @@ const definitions = [
     label: "Type Text",
     icon: "⌨️",
     description: "Type text or an expression into an element.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Fallback,
+      capabilities: [
+        NativeHostCapabilities.HostWindow,
+        NativeHostCapabilities.HostAction,
+        NativeHostCapabilities.HostVisualMatch,
+      ],
+    },
     targetRequired: true,
-    config: [{ key: "value", label: "Text", kind: "text", required: true }],
+    config: [
+      { key: "value", label: "Text", kind: "text", required: true },
+      visibleHostFallbackField(),
+      visibleHostVisualMatchField(),
+      visibleHostVerificationSelectorField(),
+      visibleHostVerificationTextField(),
+    ],
     inputs: ["input"],
     outputs: ["success"],
   },
@@ -166,8 +193,21 @@ const definitions = [
     label: "Double-Click Element",
     icon: "🖱️",
     description: "Double-click a resolved page element.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Fallback,
+      capabilities: [
+        NativeHostCapabilities.HostWindow,
+        NativeHostCapabilities.HostAction,
+        NativeHostCapabilities.HostVisualMatch,
+      ],
+    },
     targetRequired: true,
-    config: [],
+    config: [
+      visibleHostFallbackField(),
+      visibleHostVisualMatchField(),
+      visibleHostVerificationSelectorField(),
+      visibleHostVerificationTextField(),
+    ],
     inputs: ["input"],
     outputs: ["success"],
   },
@@ -675,6 +715,134 @@ const definitions = [
     outputs: ["success", "file"],
   },
   {
+    type: Actions.ApprovedFilesFind,
+    version: 1,
+    category: "File",
+    label: "Find Approved Files",
+    icon: "FIND",
+    description: "List safe metadata for files under an approved folder alias.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Required,
+      capabilities: [NativeHostCapabilities.ApprovedFileFind],
+    },
+    targetRequired: false,
+    config: [
+      {
+        key: "directoryAlias",
+        label: "Approved Folder Alias",
+        kind: "text",
+        required: true,
+      },
+      {
+        key: "pattern",
+        label: "Filename Pattern",
+        kind: "text",
+        default: "*",
+      },
+      {
+        key: "extensions",
+        label: "Extensions",
+        kind: "text",
+        default: "",
+      },
+      {
+        key: "maxResults",
+        label: "Max Results",
+        kind: "number",
+        default: 50,
+      },
+      outputVariableField(),
+    ],
+    inputs: ["input"],
+    outputs: ["success", "files"],
+  },
+  {
+    type: Actions.ApprovedFileWrite,
+    version: 1,
+    category: "File",
+    label: "Write Approved File",
+    icon: "WRITE",
+    description: "Write text or base64 content under an approved folder alias.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Required,
+      capabilities: [NativeHostCapabilities.ApprovedFileWrite],
+    },
+    targetRequired: false,
+    config: [
+      {
+        key: "directoryAlias",
+        label: "Approved Folder Alias",
+        kind: "text",
+        required: true,
+      },
+      {
+        key: "relativePath",
+        label: "Relative Output Path",
+        kind: "text",
+        required: true,
+      },
+      {
+        key: "content",
+        label: "Content (kept out of logs)",
+        kind: "textarea",
+        required: true,
+      },
+      {
+        key: "encoding",
+        label: "Encoding",
+        kind: "select",
+        default: "utf-8",
+        options: ["utf-8", "utf-8-sig"],
+      },
+      outputVariableField(),
+    ],
+    inputs: ["input"],
+    outputs: ["success", "file"],
+  },
+  {
+    type: Actions.DataFileExport,
+    version: 1,
+    category: "File",
+    label: "Export Data File",
+    icon: "EXPORT",
+    description: "Export workflow data as JSON, CSV, or TXT under an approved folder alias.",
+    nativeHost: {
+      mode: NativeHostRequirementModes.Required,
+      capabilities: [NativeHostCapabilities.DataFileExport],
+    },
+    targetRequired: false,
+    config: [
+      {
+        key: "directoryAlias",
+        label: "Approved Folder Alias",
+        kind: "text",
+        required: true,
+      },
+      {
+        key: "relativePath",
+        label: "Relative Output Path",
+        kind: "text",
+        required: true,
+      },
+      {
+        key: "format",
+        label: "Format",
+        kind: "select",
+        default: "json",
+        options: ["json", "csv", "txt"],
+      },
+      {
+        key: "data",
+        label: "Data (kept out of logs)",
+        kind: "textarea",
+        required: true,
+      },
+      outputVariableField(),
+    ],
+    inputs: ["input"],
+    outputs: ["success", "file"],
+  },
+  {
     type: Actions.DownloadWait,
     version: 1,
     category: "File",
@@ -906,6 +1074,42 @@ function historyUnavailableField() {
     kind: "select",
     default: "continue",
     options: ["continue", "fail"],
+  };
+}
+
+function visibleHostFallbackField() {
+  return {
+    key: "allowVisibleHostFallback",
+    label: "Allow Visible Host Fallback",
+    kind: "boolean",
+    default: false,
+  };
+}
+
+function visibleHostVisualMatchField() {
+  return {
+    key: "allowVisualMatchFallback",
+    label: "Allow Visual Match Fallback",
+    kind: "boolean",
+    default: false,
+  };
+}
+
+function visibleHostVerificationSelectorField() {
+  return {
+    key: "verificationSelector",
+    label: "Verification Selector",
+    kind: "text",
+    default: "",
+  };
+}
+
+function visibleHostVerificationTextField() {
+  return {
+    key: "verificationText",
+    label: "Verification Text",
+    kind: "text",
+    default: "",
   };
 }
 

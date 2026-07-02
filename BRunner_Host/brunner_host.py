@@ -12,9 +12,18 @@ from app_paths import (
 )
 from file_access import read_allowed_file
 from data_source import read_data_source
+from directory_registry import (
+    export_data_file,
+    find_approved_files,
+    list_approved_directories,
+    write_approved_file,
+)
+from fallback_input import execute_host_action
+from visual_match import execute_visual_match_action
 from workflow_repository import WorkflowRepository
 from execution_log_storage import save_execution_log
 from host_settings import load_or_create_config
+from window_validation import HostFallbackError, host_window_status
 
 # --- Paths ---
 
@@ -26,6 +35,29 @@ config = load_or_create_config(CONFIG_FILE, BASE_DIR)
 PORT = config["port"]
 WORKFLOWS_DIR = active_workflows_directory(config, BASE_DIR)
 WORKFLOW_REPOSITORY = WorkflowRepository(WORKFLOWS_DIR)
+HOST_VERSION = "0.1.0"
+PROTOCOL_VERSION = 2
+SUPPORTED_CAPABILITIES = [
+    "host.hello",
+    "workflow.list",
+    "workflow.load",
+    "workflow.save",
+    "workflow.delete",
+    "workflow.duplicate",
+    "workflow.rename",
+    "workflow.upgrade",
+    "host.window",
+    "host.action",
+    "host.visual_match",
+    "os.keystroke",
+    "local_file.read",
+    "approved_directory.list",
+    "approved_file.find",
+    "approved_file.write",
+    "data_file.export",
+    "data_source.read",
+    "execution_log.save",
+]
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)
 EXECUTION_LOGS_DIR.mkdir(exist_ok=True)
@@ -130,6 +162,35 @@ async def send_json(websocket, body):
     await websocket.send(body)
 
 
+def current_config():
+    global config
+    config = load_or_create_config(CONFIG_FILE, BASE_DIR)
+    return config
+
+
+def host_hello_payload():
+    settings = current_config()
+    host = settings.get("host") if isinstance(settings.get("host"), dict) else {}
+    approved = settings.get("approvedDirectories")
+    return {
+        "protocolVersion": PROTOCOL_VERSION,
+        "host": {
+            "name": "BRunner Native Host",
+            "version": HOST_VERSION,
+            "port": host.get("port") or settings.get("port") or PORT,
+        },
+        "capabilities": list(SUPPORTED_CAPABILITIES),
+        "status": {
+            "workflowStorageMode": (
+                settings.get("workflowStorage", {}).get("mode")
+                if isinstance(settings.get("workflowStorage"), dict)
+                else "default"
+            ),
+            "approvedDirectoryCount": len(approved) if isinstance(approved, list) else 0,
+        },
+    }
+
+
 # --- Command Handlers ---
 
 
@@ -181,9 +242,59 @@ async def handle_os_keystroke(websocket, request_id, payload):
     logging.info(f"[Hardware] Keystroke executed successfully: {keys}")
 
 
+async def handle_host_hello(websocket, request_id, protocol_version=None):
+    payload = host_hello_payload()
+    host_status = payload.pop("status", None)
+    if host_status is not None:
+        payload["hostStatus"] = host_status
+    if protocol_version == 2:
+        payload["requestId"] = request_id
+    await send_json(
+        websocket,
+        success(request_id, **payload)
+    )
+    logging.info("[Protocol] host.hello returned %s capabilities", len(payload["capabilities"]))
+
+
+async def handle_host_window(websocket, request_id, payload, protocol_version=None):
+    result = host_window_status(current_config(), payload)
+    if protocol_version == 2:
+        result["requestId"] = request_id
+    await send_json(websocket, success(request_id, **result))
+    logging.info("[Fallback] host.window returned foreground-window status")
+
+
+async def handle_host_action(websocket, request_id, payload, protocol_version=None):
+    result = execute_host_action(current_config(), payload)
+    if protocol_version == 2:
+        result["requestId"] = request_id
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[Fallback] host.action performed: %s x=%s y=%s confidence=%s",
+        result["action"],
+        result.get("x"),
+        result.get("y"),
+        result.get("coordinateConfidence"),
+    )
+
+
+async def handle_host_visual_match(websocket, request_id, payload, protocol_version=None):
+    result = execute_visual_match_action(current_config(), payload)
+    if protocol_version == 2:
+        result["requestId"] = request_id
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[Fallback] host.visual_match performed: %s x=%s y=%s confidence=%s",
+        result["action"],
+        result.get("x"),
+        result.get("y"),
+        result.get("matchConfidence"),
+    )
+
+
 async def handle_read_file(websocket, request_id, payload):
     file_data = read_allowed_file(
-        config,
+        current_config(),
         BASE_DIR,
         payload.get("path") or payload.get("filePath")
     )
@@ -202,7 +313,7 @@ async def handle_read_file(websocket, request_id, payload):
 
 async def handle_read_data_source(websocket, request_id, payload):
     result = read_data_source(
-        config,
+        current_config(),
         BASE_DIR,
         payload.get("source") or payload,
     )
@@ -217,6 +328,58 @@ async def handle_read_data_source(websocket, request_id, payload):
         result["filename"],
         result["format"],
         result["rows"]
+    )
+
+
+async def handle_list_approved_directories(websocket, request_id):
+    directories = list_approved_directories(current_config(), BASE_DIR)
+    await send_json(
+        websocket,
+        success(request_id, directories=directories)
+    )
+
+
+async def handle_find_approved_files(websocket, request_id, payload):
+    result = find_approved_files(
+        current_config(),
+        BASE_DIR,
+        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+    )
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[Directory] Listed approved files: alias=%s count=%s",
+        result["directoryAlias"],
+        result["count"],
+    )
+
+
+async def handle_write_approved_file(websocket, request_id, payload):
+    result = write_approved_file(
+        current_config(),
+        BASE_DIR,
+        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+    )
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[Directory] Wrote approved file: alias=%s name=%s size=%s",
+        result["directoryAlias"],
+        result["filename"],
+        result["size"],
+    )
+
+
+async def handle_export_data_file(websocket, request_id, payload):
+    result = export_data_file(
+        current_config(),
+        BASE_DIR,
+        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+    )
+    await send_json(websocket, success(request_id, **result))
+    logging.info(
+        "[Directory] Exported approved data: alias=%s name=%s format=%s",
+        result["directoryAlias"],
+        result["filename"],
+        result["format"],
     )
 
 
@@ -335,8 +498,12 @@ async def handle_connection(websocket):
                 await send_json(websocket, failure(error="Invalid JSON."))
                 continue
 
-            request_id = data.get("id")
-            command = data.get("command", "UNKNOWN")
+            protocol_version = data.get("protocolVersion")
+            request_id = data.get("requestId") or data.get("id")
+            capability = str(data.get("capability") or "").strip()
+            command = data.get("command") or (
+                f"v2:{capability}" if protocol_version == 2 and capability else "UNKNOWN"
+            )
             payload = get_payload(data)
 
             logging.info(
@@ -359,7 +526,31 @@ async def handle_connection(websocket):
                 continue
 
             try:
-                if command == "OS_KEYSTROKE":
+                if command == "HOST_HELLO":
+                    await handle_host_hello(websocket, request_id)
+
+                elif protocol_version == 2 and capability == "host.hello":
+                    await handle_host_hello(websocket, request_id, protocol_version=2)
+
+                elif command == "HOST_WINDOW":
+                    await handle_host_window(websocket, request_id, payload)
+
+                elif protocol_version == 2 and capability == "host.window":
+                    await handle_host_window(websocket, request_id, payload, protocol_version=2)
+
+                elif command == "HOST_ACTION":
+                    await handle_host_action(websocket, request_id, payload)
+
+                elif protocol_version == 2 and capability == "host.action":
+                    await handle_host_action(websocket, request_id, payload, protocol_version=2)
+
+                elif command == "HOST_VISUAL_MATCH":
+                    await handle_host_visual_match(websocket, request_id, payload)
+
+                elif protocol_version == 2 and capability == "host.visual_match":
+                    await handle_host_visual_match(websocket, request_id, payload, protocol_version=2)
+
+                elif command == "OS_KEYSTROKE":
                     await handle_os_keystroke(websocket, request_id, payload)
 
                 elif command == "READ_FILE":
@@ -367,6 +558,18 @@ async def handle_connection(websocket):
 
                 elif command == "READ_DATA_SOURCE":
                     await handle_read_data_source(websocket, request_id, payload)
+
+                elif command == "LIST_APPROVED_DIRECTORIES":
+                    await handle_list_approved_directories(websocket, request_id)
+
+                elif command == "FIND_APPROVED_FILES":
+                    await handle_find_approved_files(websocket, request_id, payload)
+
+                elif command == "WRITE_APPROVED_FILE":
+                    await handle_write_approved_file(websocket, request_id, payload)
+
+                elif command == "EXPORT_DATA_FILE":
+                    await handle_export_data_file(websocket, request_id, payload)
 
                 elif command == "LIST_WORKFLOWS":
                     await handle_list_workflows(websocket, request_id)
@@ -403,6 +606,11 @@ async def handle_connection(websocket):
                     )
                     logging.warning(
                         f"[Router] Unhandled command received: {command}")
+
+            except HostFallbackError as e:
+                error_msg = str(e)
+                await send_json(websocket, failure(request_id, error_msg))
+                logging.warning(f"[Fallback] {command} refused: {error_msg}")
 
             except Exception as e:
                 error_msg = str(e)
