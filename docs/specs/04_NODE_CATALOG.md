@@ -180,12 +180,17 @@ Visible Host Fallback live acceptance:
    to the companion, use PyAutoGUI image matching to locate the component on the
    foreground browser window, click the matched center, and require the same
    post-action verification text before passing. Manual acceptance for this
-   recovery tier remains pending.
+   recovery tier passed.
 8. To force visual-match acceptance, temporarily raise the companion Host
    Fallback coordinate confidence threshold above the resolver confidence
    reported by the Trusted Submit step, keep `allowVisualMatchFallback` enabled,
    rerun `Visible Host Fallback Acceptance`, and confirm the workflow passes by
    visual recovery rather than coordinate recovery.
+9. Also run the same acceptance with Chrome side UI open. When the side UI
+   creates a large horizontal browser inset, the extension should prefer visual
+   matching so the OS pointer lands on the button instead of an estimated page
+   coordinate. This passed, but the visual-match path was noticeably slow and
+   should be optimized.
 
 ## Phase C — Graph-dependent control flow
 

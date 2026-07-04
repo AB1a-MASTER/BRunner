@@ -1,16 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+from packaging_config import APP_NAME, ENTRY_SCRIPT, HIDDEN_IMPORTS, MODULE_EXCLUDES
+
+BASE_DIR = Path.cwd()
 
 a = Analysis(
-    ['app.py'],
-    pathex=[],
+    [ENTRY_SCRIPT],
+    pathex=[str(BASE_DIR)],
     binaries=[],
     datas=[],
-    hiddenimports=['brunner_host', 'pyautogui', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets'],
+    hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=MODULE_EXCLUDES,
     noarchive=False,
 )
 pyz = PYZ(a.pure)
@@ -21,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='BRunnerHost',
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

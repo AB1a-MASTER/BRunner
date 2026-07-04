@@ -31,6 +31,8 @@ class CompanionWindowTests(unittest.TestCase):
             self.assertEqual(window.fallback_actions_table.columnCount(), 3)
             self.assertEqual(window.fallback_actions_table.horizontalHeaderItem(1).text(), "Description")
             self.assertIn("Left-clicks", window.host_fallback_action_description("click"))
+            self.assertTrue(hasattr(window, "pairing_port"))
+            self.assertTrue(hasattr(window, "save_pairing_settings"))
         finally:
             window.tray.hide()
             window.close()
@@ -60,6 +62,48 @@ class CompanionWindowTests(unittest.TestCase):
 
                 self.assertEqual(window.log_file.read_text(encoding="utf-8"), "")
                 self.assertEqual(window.logs.toPlainText(), "")
+            finally:
+                window.tray.hide()
+                window.close()
+
+    def test_pairing_settings_save_key_port_and_unpair(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        try:
+            from PySide6.QtGui import QAction
+            from PySide6.QtWidgets import QApplication
+        except ImportError:
+            self.skipTest("PySide6 is not installed")
+
+        from desktop.main_window import BRunnerCompanionWindow
+
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as temp:
+            window = BRunnerCompanionWindow(QAction)
+            try:
+                window.config_file = Path(temp) / "brunner_config.json"
+                window.log_file = Path(temp) / "brunner_host.log"
+                window.config = {
+                    "schemaVersion": 2,
+                    "pairingKey": "old",
+                    "pairedExtensionId": "extension",
+                    "host": {"port": 8999},
+                    "workflowStorage": {"mode": "default", "directory": None},
+                    "approvedDirectories": [],
+                    "hostFallback": {},
+                }
+                window.pairing_key.setText("new-key")
+                window.pairing_port.setText("9005")
+
+                window.save_pairing_settings()
+
+                saved = json.loads(window.config_file.read_text(encoding="utf-8"))
+                self.assertEqual(saved["pairingKey"], "new-key")
+                self.assertEqual(saved["host"]["port"], 9005)
+
+                window.unpair_extension()
+
+                saved = json.loads(window.config_file.read_text(encoding="utf-8"))
+                self.assertIsNone(saved["pairedExtensionId"])
             finally:
                 window.tray.hide()
                 window.close()

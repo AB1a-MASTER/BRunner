@@ -17,6 +17,8 @@ from app_paths import (
     default_workflows_directory,
 )
 from atomic_io import atomic_write_json, atomic_write_text
+import app
+from app import SERVE_HOST_ENV, launcher_log_file, should_serve_host
 
 
 class HostFoundationTests(unittest.TestCase):
@@ -79,6 +81,50 @@ class HostFoundationTests(unittest.TestCase):
                 sys.frozen = original_frozen
             else:
                 delattr(sys, "frozen")
+
+    def test_launcher_recognizes_argument_and_environment_serve_modes(self):
+        self.assertTrue(should_serve_host(["BRunnerHost.exe", "--serve-host"], {}))
+        self.assertTrue(should_serve_host(["BRunnerHost.exe"], {SERVE_HOST_ENV: "1"}))
+        self.assertTrue(should_serve_host(["BRunnerHost.exe"], {SERVE_HOST_ENV: "true"}))
+        self.assertFalse(should_serve_host(["BRunnerHost.exe"], {}))
+
+    def test_frozen_launcher_log_uses_executable_directory(self):
+        original_executable = sys.executable
+        had_frozen = hasattr(sys, "frozen")
+        original_frozen = getattr(sys, "frozen", None)
+        executable = self.base_dir / "dist" / "BRunnerHost.exe"
+        executable.parent.mkdir()
+
+        try:
+            sys.frozen = True
+            sys.executable = str(executable)
+
+            self.assertEqual(launcher_log_file(), executable.parent / "brunner_launcher.log")
+        finally:
+            sys.executable = original_executable
+            if had_frozen:
+                sys.frozen = original_frozen
+            else:
+                delattr(sys, "frozen")
+
+    def test_serve_host_startup_failure_returns_without_reraising(self):
+        original_argv = sys.argv
+        original_run_embedded_host = app.run_embedded_host
+        original_write_launcher_error = app.write_launcher_error
+
+        def fail_startup():
+            raise OSError("port already in use")
+
+        try:
+            sys.argv = ["BRunnerHost.exe", "--serve-host"]
+            app.run_embedded_host = fail_startup
+            app.write_launcher_error = lambda error: None
+
+            self.assertEqual(app.main(), 2)
+        finally:
+            sys.argv = original_argv
+            app.run_embedded_host = original_run_embedded_host
+            app.write_launcher_error = original_write_launcher_error
 
     def test_atomic_json_write_creates_normalized_file_without_temp_leftovers(self):
         destination = self.base_dir / "nested" / "config.json"

@@ -1,11 +1,17 @@
 import asyncio
+import os
 import sys
+import traceback
 from pathlib import Path
 
 
 HOST_DIR = Path(__file__).resolve().parent
 if str(HOST_DIR) not in sys.path:
     sys.path.insert(0, str(HOST_DIR))
+
+SERVE_HOST_FLAG = "--serve-host"
+SERVE_HOST_ENV = "BRUNNER_SERVE_HOST"
+LAUNCHER_DEBUG_ENV = "BRUNNER_LAUNCHER_DEBUG"
 
 
 def run_embedded_host():
@@ -14,11 +20,54 @@ def run_embedded_host():
     asyncio.run(main())
 
 
+def should_serve_host(argv=None, environ=None):
+    args = sys.argv if argv is None else argv
+    env = os.environ if environ is None else environ
+    value = str(env.get(SERVE_HOST_ENV, "")).strip().lower()
+    return SERVE_HOST_FLAG in args or value in {"1", "true", "yes"}
+
+
+def launcher_log_file():
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "brunner_launcher.log"
+    return HOST_DIR / "brunner_launcher.log"
+
+
+def write_launcher_error(error):
+    try:
+        launcher_log_file().write_text(
+            "".join(traceback.format_exception(type(error), error, error.__traceback__)),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def write_launcher_debug(message):
+    if str(os.environ.get(LAUNCHER_DEBUG_ENV, "")).strip() != "1":
+        return
+    try:
+        with open(launcher_log_file(), "a", encoding="utf-8") as handle:
+            handle.write(f"{message}\n")
+    except Exception:
+        pass
+
+
 def main():
-    if "--serve-host" in sys.argv:
-        run_embedded_host()
+    write_launcher_debug(
+        f"argv={sys.argv!r} frozen={getattr(sys, 'frozen', False)!r} "
+        f"serve_env={os.environ.get(SERVE_HOST_ENV)!r}"
+    )
+    if should_serve_host():
+        write_launcher_debug("mode=serve-host")
+        try:
+            run_embedded_host()
+        except Exception as error:
+            write_launcher_error(error)
+            return 2
         return 0
 
+    write_launcher_debug("mode=companion-app")
     from desktop.main_window import run_companion_app
 
     return run_companion_app()

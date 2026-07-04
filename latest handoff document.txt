@@ -1,5 +1,5 @@
 BRunner - Latest Development Handoff
-Updated: 2026-07-01
+Updated: 2026-07-04
 
 PURPOSE
 This is the starting point for the next development chat. Read this file, then
@@ -13,16 +13,39 @@ GIT OWNERSHIP
 - Do not assume the changes described here are committed.
 - The latest requested commit message was:
 
-  feat(studio): build executable graph editor
+  feat(host): add visual-match fallback
 
-  - add React Flow editing, persistence, layout, and live execution
-  - preserve v1 workflows with backup-backed upgrades
-  - add node summaries, bypass, collapse, and runtime states
+  Add opt-in PyAutoGUI visual recovery after coordinate host
+  fallback fails or post-action verification does not pass.
 
 CURRENT MILESTONE
-Milestone 3 - Studio Graph UX functional acceptance is complete. The roadmap has
-been reset by the new host and node planning docs. The next implementation
-phase is the Windows companion app transition, not general Studio UI/UX polish.
+Windows companion transition Phase 6 is functionally accepted. Approved
+directory find/write/export workflows pass, visible host fallback passes, and
+opt-in PyAutoGUI visual-match fallback passed manual acceptance with Chrome side
+UI open. The side-UI visual path is functional but slow. The current
+implementation phase is Phase 7 packaging and release cleanup. The
+pre-shipping Sequential Studio UI/error-channel code pass is implemented.
+Graph Studio view-setting refinement is also implemented so command controls,
+panels, nodes, inspector forms, canvas tools, and execution logs scale from the
+same density tokens. The user accepted the Studio visual pass as good enough
+to proceed. Final packaging now emits exactly two top-level release artifacts:
+`release/BRunner-extension.zip` and `release/BRunnerHost.exe`. The packaged
+host smoke passed from the final release directory: `--serve-host` entered
+host mode, created runtime folders beside the exe, wrote the host log, and
+listened on the configured WebSocket port.
+
+Pre-shipping blockers added by the user:
+- Sequential Studio view/display option now scales the broader shell, command
+  bar, panels, canvas spacing, cards, and form controls.
+- Sequential Studio action and workflow-details panels are independently
+  collapsible and persist through shared Studio preferences.
+- Sequential Studio layout has panel headers, clearer hierarchy, and restored
+  canvas space when panels are collapsed.
+- Chrome extension panel run failures now show a concise workflow status while
+  node/workflow details stay in Studio diagnostics/logs.
+- Graph Studio view/display option now uses local Graph density tokens for
+  text, controls, icons, node dimensions, panel rails, and log rows instead of
+  leaving key elements at fixed pixel sizes.
 
 New planning sources:
 - `BRunner_Windows_Companion_Transition_Plan.md`
@@ -48,10 +71,15 @@ canvas organization, bypass behavior, and live graph execution are implemented
 and live accepted.
 
 CURRENT TEST BASELINE
-- 84 deterministic JavaScript tests pass across 18 test files.
-- 59 deterministic Python tests pass.
+- 111 deterministic JavaScript tests pass.
+- 93 deterministic Python tests pass.
 - `npm run studio:build` succeeds with Vite 8 and extension-safe relative assets.
-- Background and native-host syntax checks pass.
+- PyInstaller `python build_host_ui.py` succeeds and `python release_builder.py`
+  produces the final two release artifacts.
+- Final packaged-host smoke passed from `release/BRunnerHost.exe`.
+- Pairing/auth source pass is implemented after this packaged baseline, but the
+  release artifacts have not been rebuilt because builds should run only when
+  the user explicitly asks.
 
 Do not lower this baseline. Rebuild Graph Studio after every source change under
 `BRunner/studio-graph-src/`.
@@ -328,13 +356,26 @@ Completed companion foundation slices:
 16. Added `Visible Host Fallback Acceptance`, a trusted-click fixture target,
     optional `verificationSelector` / `verificationText` checks, and
     viewport-to-screen coordinate conversion for host fallback preparation.
+17. Added initial key-based pairing source pass: extension pairing key is stored
+    in `chrome.storage.local`, sidebar exposes host auth status plus
+    save/generate/copy controls, host commands wait for `AUTH`, the companion
+    Pairing tab has key/port/save/generate/copy/unpair controls, and successful
+    auth stores the extension runtime ID internally as the trusted fingerprint.
 
 Next isolated implementation slice:
-1. Run live acceptance for approved-directory services and structured fallback;
-   keep v1 `OS_KEYSTROKE` compatibility until migration is complete.
-2. Refine viewport-to-screen coordinate conversion if live fallback acceptance
-   shows browser chrome or monitor-offset drift.
-3. Continue release-packaging cleanup once runtime fallback acceptance passes.
+1. Run one final manual install/load acceptance with the two release artifacts:
+   load `release/BRunner-extension.zip` as the extension package/unpacked
+   source as appropriate, then launch `release/BRunnerHost.exe`.
+2. Confirm the companion GUI start/stop path launches the embedded host service
+   using the same packaged executable path.
+3. Manually accept the new pairing source flow after the next user-requested
+   build/reload: extension generates or saves key, host accepts it in Pairing
+   tab, extension authenticates before workflow load, and a second extension
+   instance is rejected until the host is unpaired/regenerated.
+4. Ask the user before removing old source artifacts. Current cleanup
+   candidates are `BRunner/New folder/`, `BRunner/todo`, `BRunner/test.html`,
+   unused icon alternates `BRunner/icons/icon1.jfif`, `icon3.jfif`, `icon4.jfif`,
+   transitional `BRunner_Host/host_ui.py`, and `BRunner_Host/brunner_host copy.py`.
 
 After the companion app is accepted:
 - implement the mapper reliability transition from

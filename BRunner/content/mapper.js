@@ -890,11 +890,18 @@
     }
 
     clientPointToScreen(clientX, clientY) {
-      const chromeX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
-      const chromeY = Math.max(0, window.outerHeight - window.innerHeight - chromeX);
+      const horizontalInset = Math.max(0, window.outerWidth - window.innerWidth);
+      const verticalInset = Math.max(0, window.outerHeight - window.innerHeight);
+      const chromeX = Math.min(16, horizontalInset / 2);
+      const chromeY = Math.max(0, verticalInset - chromeX);
       return {
         x: (window.screenX ?? window.screenLeft ?? 0) + chromeX + clientX,
         y: (window.screenY ?? window.screenTop ?? 0) + chromeY + clientY,
+        chromeX,
+        chromeY,
+        horizontalInset,
+        verticalInset,
+        sideUiInset: Math.max(0, horizontalInset - chromeX * 2),
       };
     }
 

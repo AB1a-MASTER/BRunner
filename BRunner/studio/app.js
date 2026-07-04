@@ -96,6 +96,12 @@ const recordingTabPolicyInput = document.getElementById(
   "recording-tab-policy",
 );
 const actionPalette = document.getElementById("action-palette");
+const actionPanel = document.getElementById("action-panel");
+const workflowSidebar = document.getElementById("workflow-sidebar");
+const btnTogglePalette = document.getElementById("btn-toggle-palette");
+const btnToggleSidebar = document.getElementById("btn-toggle-sidebar");
+const btnCollapsePalette = document.getElementById("btn-collapse-palette");
+const btnCollapseSidebar = document.getElementById("btn-collapse-sidebar");
 const workflowManagerPanel = document.getElementById("workflow-manager-panel");
 const dataInspectorPanel = document.getElementById("data-inspector-panel");
 const dataInspectorList = document.getElementById("data-inspector-list");
@@ -136,15 +142,24 @@ function wireLayoutControls() {
       updateStateFromUI();
       refreshValidationUI();
     }));
-  document
-    .getElementById("btn-toggle-sidebar")
-    ?.addEventListener("click", () => {
-      const sidebar = document.getElementById("workflow-sidebar");
-      const button = document.getElementById("btn-toggle-sidebar");
-      const collapsed = sidebar?.classList.toggle("collapsed") === true;
-      button?.setAttribute("aria-expanded", String(!collapsed));
-      if (button) button.title = collapsed ? "Show workflow manager" : "Hide workflow manager";
+  [btnTogglePalette, btnCollapsePalette].filter(Boolean).forEach((button) => {
+    button.addEventListener("click", () => {
+      const expanded = actionPanel?.classList.contains("collapsed") === true;
+      setPanelPreference("nodeLibraryExpanded", expanded);
     });
+  });
+
+  [btnToggleSidebar, btnCollapseSidebar].filter(Boolean).forEach((button) => {
+    button.addEventListener("click", () => {
+      const expanded = workflowSidebar?.classList.contains("collapsed") === true;
+      setPanelPreference("workflowManagerExpanded", expanded);
+    });
+  });
+
+  globalThis.addEventListener("brunner:studio-preferences", (event) => {
+    applyPanelPreferences(event.detail);
+  });
+  applyPanelPreferences(globalThis.BRunnerStudioPreferences?.preferences);
 
   document.getElementById("tab-workflows")?.addEventListener("click", () => {
     setManagerPanel("workflows");
@@ -182,6 +197,61 @@ function wireLayoutControls() {
       activeStudio: STUDIO_KIND,
     }).catch(() => {});
   });
+}
+
+function applyPanelPreferences(preferences = {}) {
+  const panels = preferences?.panels || {};
+  const actionExpanded = panels.nodeLibraryExpanded !== false;
+  const managerExpanded = panels.workflowManagerExpanded !== false;
+
+  setPanelExpanded({
+    panel: actionPanel,
+    expanded: actionExpanded,
+    buttons: [btnTogglePalette, btnCollapsePalette],
+    expandedLabel: "Hide action browser",
+    collapsedLabel: "Show action browser",
+  });
+
+  setPanelExpanded({
+    panel: workflowSidebar,
+    expanded: managerExpanded,
+    buttons: [btnToggleSidebar, btnCollapseSidebar],
+    expandedLabel: "Hide workflow details",
+    collapsedLabel: "Show workflow details",
+  });
+}
+
+function setPanelExpanded({
+  panel,
+  expanded,
+  buttons,
+  expandedLabel,
+  collapsedLabel,
+}) {
+  panel?.classList.toggle("collapsed", !expanded);
+  for (const button of buttons || []) {
+    if (!button) continue;
+    button.setAttribute("aria-expanded", String(expanded));
+    button.title = expanded ? expandedLabel : collapsedLabel;
+    button.setAttribute("aria-label", expanded ? expandedLabel : collapsedLabel);
+  }
+}
+
+async function setPanelPreference(key, expanded) {
+  const current = globalThis.BRunnerStudioPreferences?.preferences || {};
+  const panels = {
+    ...(current.panels || {}),
+    [key]: Boolean(expanded),
+  };
+
+  if (globalThis.BRunnerStudioPreferences?.update) {
+    await globalThis.BRunnerStudioPreferences.update({ panels }).catch(() => {
+      applyPanelPreferences({ panels });
+    });
+    return;
+  }
+
+  applyPanelPreferences({ panels });
 }
 
 function wireWorkflowFileControls() {

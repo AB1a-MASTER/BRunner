@@ -1,4 +1,5 @@
 import os
+import secrets
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -87,7 +88,7 @@ class BRunnerCompanionWindow:
                 self._build_storage_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem)
                 self._build_folders_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem)
                 self._build_fallback_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox, QDoubleSpinBox)
-                self._build_pairing_tab(QWidget, QVBoxLayout, QLabel, QTextEdit)
+                self._build_pairing_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton)
                 self._build_diagnostics_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit)
                 self._build_tray(QSystemTrayIcon, QMenu, action_class, QApplication)
                 self.refresh()
@@ -202,16 +203,32 @@ class BRunnerCompanionWindow:
                 layout.addLayout(buttons)
                 self.tabs.addTab(tab, "Host Fallback")
 
-            def _build_pairing_tab(self, QWidget, QVBoxLayout, QLabel, QTextEdit):
+            def _build_pairing_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton):
                 tab = QWidget()
                 layout = QVBoxLayout(tab)
+                layout.addWidget(QLabel("Pair this host with one BRunner extension instance. Generate or paste the key from the extension, then save."))
+                self.pairing_state = QLabel()
+                layout.addWidget(self.pairing_state)
                 layout.addWidget(QLabel("Pairing key"))
-                self.pairing_key = QTextEdit()
-                self.pairing_key.setReadOnly(True)
-                self.pairing_key.setMaximumHeight(80)
+                self.pairing_key = QLineEdit()
                 layout.addWidget(self.pairing_key)
+                layout.addWidget(QLabel("WebSocket port"))
+                self.pairing_port = QLineEdit()
+                layout.addWidget(self.pairing_port)
                 self.paired_extension = QLabel()
                 layout.addWidget(self.paired_extension)
+                buttons = QHBoxLayout()
+                for label, handler in [
+                    ("Save Pairing", self.save_pairing_settings),
+                    ("Generate Host Key", self.regenerate_pairing_key),
+                    ("Copy Key", self.copy_pairing_key),
+                    ("Unpair", self.unpair_extension),
+                ]:
+                    button = QPushButton(label)
+                    button.clicked.connect(handler)
+                    buttons.addWidget(button)
+                buttons.addStretch(1)
+                layout.addLayout(buttons)
                 layout.addStretch(1)
                 self.tabs.addTab(tab, "Pairing")
 
@@ -266,12 +283,21 @@ class BRunnerCompanionWindow:
                 self.config = load_or_create_config(self.config_file, self.base_dir)
                 self.repository = WorkflowRepository(active_workflows_directory(self.config, self.base_dir))
                 status = self.service.status(self.config)
-                self.host_state.setText(f"Host: {'running' if status['running'] else 'stopped'}")
+                external = " (already listening)" if status.get("external") else ""
+                self.host_state.setText(f"Host: {'running' if status['running'] else 'stopped'}{external}")
                 self.host_port.setText(f"WebSocket port: {status.get('port') or 'unknown'}")
                 paired = status.get("pairedExtensionId") or "not paired"
                 self.extension_state.setText(f"Extension: {paired}")
-                self.pairing_key.setPlainText(str(self.config.get("pairingKey") or ""))
-                self.paired_extension.setText(f"Paired extension id: {paired}")
+                self.pairing_key.setText(str(self.config.get("pairingKey") or ""))
+                self.pairing_port.setText(str(status.get("port") or "8999"))
+                self.pairing_state.setText(
+                    "Pairing: paired"
+                    if status.get("pairedExtensionId") else
+                    "Pairing: waiting for extension"
+                )
+                self.paired_extension.setText(
+                    f"Trusted extension fingerprint: {paired}"
+                )
                 self.refresh_workflows()
                 self.refresh_folders()
                 self.refresh_fallback()
@@ -420,6 +446,69 @@ class BRunnerCompanionWindow:
                     return
                 self.write_companion_log("Host fallback settings saved.")
                 self.refresh()
+
+            def save_pairing_settings(self):
+                key = self.pairing_key.text().strip()
+                if not key:
+                    self.message_box.warning(self, "Pairing", "Pairing key is required.")
+                    return
+                try:
+                    port = int(self.pairing_port.text().strip() or "8999")
+                except ValueError:
+                    self.message_box.warning(self, "Pairing", "Port must be a number.")
+                    return
+                if port < 1 or port > 65535:
+                    self.message_box.warning(self, "Pairing", "Port must be between 1 and 65535.")
+                    return
+
+                host = self.config.get("host") if isinstance(self.config.get("host"), dict) else {}
+                host["port"] = port
+                self.config["host"] = host
+                old_key = str(self.config.get("pairingKey") or "")
+                self.config["pairingKey"] = key
+                if key != old_key:
+                    self.config["pairedExtensionId"] = None
+                try:
+                    self.config = save_config(self.config_file, self.config)
+                except Exception as error:
+                    self.message_box.warning(self, "Pairing", str(error))
+                    return
+                self.write_companion_log("Pairing settings saved.")
+                self.refresh()
+
+            def regenerate_pairing_key(self):
+                answer = self.message_box.question(
+                    self,
+                    "Pairing",
+                    "Generate a new host pairing key and unpair the current extension?",
+                    self.message_box.StandardButton.Yes | self.message_box.StandardButton.No,
+                    self.message_box.StandardButton.No,
+                )
+                if answer != self.message_box.StandardButton.Yes:
+                    return
+                self.config["pairingKey"] = secrets.token_hex(16)
+                self.config["pairedExtensionId"] = None
+                try:
+                    self.config = save_config(self.config_file, self.config)
+                except Exception as error:
+                    self.message_box.warning(self, "Pairing", str(error))
+                    return
+                self.write_companion_log("Pairing key regenerated; extension unpaired.")
+                self.refresh()
+
+            def unpair_extension(self):
+                self.config["pairedExtensionId"] = None
+                try:
+                    self.config = save_config(self.config_file, self.config)
+                except Exception as error:
+                    self.message_box.warning(self, "Pairing", str(error))
+                    return
+                self.write_companion_log("Extension unpaired.")
+                self.refresh()
+
+            def copy_pairing_key(self):
+                QApplication.clipboard().setText(self.pairing_key.text().strip())
+                self.write_companion_log("Pairing key copied.")
 
             def open_workflow_folder(self):
                 os.startfile(str(self.repository.workflows_dir))
@@ -635,32 +724,20 @@ class BRunnerCompanionWindow:
                 self.refresh()
 
             def start_host(self):
-                started = self.service.start()
-                self.write_companion_log(
-                    "Host start requested."
-                    if started else
-                    "Host start requested; host is already running."
-                )
+                self.service.start(self.config)
+                self.write_companion_log(self.service.last_message)
                 self.refresh()
                 self.refresh_logs_after_service_change()
 
             def stop_host(self):
-                stopped = self.service.stop()
-                self.write_companion_log(
-                    "Host stop requested."
-                    if stopped else
-                    "Host stop requested; host was not running."
-                )
+                self.service.stop()
+                self.write_companion_log(self.service.last_message)
                 self.refresh()
                 self.refresh_logs_after_service_change()
 
             def restart_host(self):
-                restarted = self.service.restart()
-                self.write_companion_log(
-                    "Host restart requested."
-                    if restarted else
-                    "Host restart requested; host did not start."
-                )
+                self.service.restart(self.config)
+                self.write_companion_log(self.service.last_message)
                 self.refresh()
                 self.refresh_logs_after_service_change()
 

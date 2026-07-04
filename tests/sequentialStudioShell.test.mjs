@@ -13,10 +13,31 @@ test("Sequential Studio uses shared identity, density, and one command bar", asy
   assert.match(html, /id="connection-status"[^>]*host-connection/);
   assert.match(html, /id="studio-density"/);
   assert.match(html, /id="workflow-description"/);
+  assert.match(html, /id="btn-toggle-palette"/);
+  assert.match(html, /id="btn-collapse-palette"/);
   assert.equal(html.includes('class="status-bar"'), false);
   assert.match(css, /var\(--studio-panel-width-scale\)/);
   assert.match(css, /var\(--studio-control-height\)/);
+  assert.match(css, /var\(--studio-density-scale\)/);
+  assert.match(css, /\.palette\.collapsed/);
+  assert.match(css, /\.workflow-manager\.collapsed/);
   assert.match(css, /\.node-guidance/);
+});
+
+test("sidebar keeps workflow failures out of extension-level error styling", async () => {
+  const [source, html] = await Promise.all([
+    readFile(new URL("BRunner/sidebar/sidebar.js", root), "utf8"),
+    readFile(new URL("BRunner/sidebar/sidebar.html", root), "utf8"),
+  ]);
+
+  assert.match(source, /Workflow failed\. See Studio diagnostics\/logs\./);
+  assert.match(source, /isWorkflowExecutionFailure/);
+  assert.match(source, /GetNativePairing/);
+  assert.match(source, /SaveNativePairing/);
+  assert.match(source, /GenerateNativePairingKey/);
+  assert.match(html, /host-pairing-status/);
+  assert.match(html, /host-pairing-key/);
+  assert.doesNotMatch(source, /setSelectedLabel\(`Failed: \$\{execution\.error\}`, true\)/);
 });
 
 test("Sequential Studio preserves description and dirty save state", async () => {
@@ -27,6 +48,8 @@ test("Sequential Studio preserves description and dirty save state", async () =>
   assert.match(source, /wireStudioSessionSync/);
   assert.match(source, /saveStudioSession/);
   assert.match(source, /applyInitialStudioSession/);
+  assert.match(source, /setPanelPreference/);
+  assert.match(source, /workflowManagerExpanded/);
   assert.match(source, /getNodeGuidanceHtml/);
   assert.match(source, /How to use/);
   assert.match(source, /workflow\.description = workflowDescriptionInput/);

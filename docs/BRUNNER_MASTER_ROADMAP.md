@@ -141,7 +141,15 @@ integration is implemented for opt-in click, double-click, and type nodes with
 post-action verification and a dedicated live acceptance workflow. The refreshed
 host-served manual acceptance workflows passed for browser smoke, file upload,
 clipboard, download wait, HTTP request, data inspector, screenshot capture, and
-visible host fallback. Release packaging cleanup remains.
+visible host fallback. Final release packaging now emits two user-facing
+artifacts: the extension zip and the Windows host executable.
+
+Pairing follow-up: initial source implementation replaced manual extension-ID
+entry with a clean key-based flow. The extension stores/generates/shows the key
+near host status, the companion Pairing tab accepts the key and configures the
+WebSocket port, and successful auth stores the extension runtime ID internally
+as the trusted fingerprint. Final manual acceptance and any shorter PIN polish
+remain.
 
 Implementation phases:
 
@@ -152,6 +160,9 @@ Implementation phases:
 3. Workflow repository service. **Implemented.**
 4. Native PySide6 companion shell with Status, Workflow Storage, Pairing,
    Diagnostics, and tray behavior. **Initial implementation complete.**
+   **Pairing UX source pass implemented: extension-side key controls,
+   companion key/port controls, internal trusted extension fingerprinting, and
+   auth gating before host commands.**
 5. User-selectable workflow directory with use-new, copy, and move migration
    choices. **Implemented.**
 6. Approved directory registry and alias-based file/data access. **Partially
@@ -165,11 +176,33 @@ Implementation phases:
    in; opt-in browser-runtime fallback integration for click, double-click, and
    type is in with refreshed host-served manual acceptance workflow coverage
    passing; initial opt-in PyAutoGUI visual-match recovery is implemented
-   after coordinate/debugger recovery.** Manual acceptance for the visual-match
-   tier remains next. This visual fallback remains opt-in, foreground-window
+   after coordinate/debugger recovery and has passed manual acceptance with
+   Chrome side UI open, though that path is currently slower than desired.**
+   This visual fallback remains opt-in, foreground-window
    gated, confidence-thresholded, and verified by extension-side post-action
    checks before the step counts as successful.
-8. Packaging and release cleanup.
+8. Packaging and release cleanup. **Implemented for the current release shape:
+   PyInstaller hidden imports/excludes are centralized, runtime/development
+   outputs are ignored for release hygiene, `release_builder.py` emits exactly
+   `BRunner-extension.zip` and `BRunnerHost.exe`, and the packaged host service
+   smoke passes from the final release directory.**
+
+Pre-shipping blocker status before packaging/install acceptance:
+
+- Implemented in code: Sequential Studio display/view options scale the broader
+  shell, command bar, panels, canvas spacing, cards, and form controls.
+- Implemented in code: Sequential Studio action and workflow-details panels are
+  independently collapsible, with restored space going back to the workflow
+  surface and state persisted in shared Studio preferences.
+- Implemented in code: Sequential Studio has clearer panel headers, hierarchy,
+  and spacing for the action browser, sequence surface, and workflow details.
+- Implemented in code: Chrome extension panel workflow failures show concise
+  run status while node/workflow details remain in diagnostics/logs.
+- Implemented in code: Graph Studio display/view settings now scale command
+  controls, panels, nodes, inspector forms, canvas tools, and execution logs
+  through shared density-derived Graph tokens.
+- Remaining gate: final manual install/load acceptance with the two release
+  artifacts and companion GUI start/stop path.
 
 **Gate:** the packaged app opens as a Windows companion, no production browser
 manager page is needed, workflows are saved atomically beside the executable by

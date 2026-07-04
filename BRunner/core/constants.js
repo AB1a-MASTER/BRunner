@@ -34,6 +34,9 @@ export const Messages = Object.freeze({
   StopWorkflow: "STOP_WORKFLOW",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   BridgeStatus: "BRIDGE_STATUS",
+  GetNativePairing: "GET_NATIVE_PAIRING",
+  SaveNativePairing: "SAVE_NATIVE_PAIRING",
+  GenerateNativePairingKey: "GENERATE_NATIVE_PAIRING_KEY",
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
@@ -162,10 +165,8 @@ export const NativeCommands = Object.freeze({
 
 export const Defaults = Object.freeze({
   NativeHostUrl: "ws://127.0.0.1:8999",
-
-  // Keep this in source only for local dev.
-  // Later this should move into chrome.storage or a pairing flow.
   PairingKey: "ac1890957e38af28cd5d0961e6d0d530",
+  NativePairingStorageKey: "brunner.nativePairing.v1",
 
   WorkflowFileExtension: ".json",
   DefaultWorkflowName: "Untitled",

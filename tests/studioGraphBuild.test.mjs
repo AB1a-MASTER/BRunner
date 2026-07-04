@@ -85,6 +85,10 @@ test("palette and properties panels have bounded scrolling", async () => {
   assert.match(css, /var\(--studio-density-scale\)/);
   assert.match(css, /var\(--studio-panel-width-scale\)/);
   assert.match(css, /var\(--studio-control-height\)/);
+  assert.match(css, /--graph-font-sm:\s*calc\(10px \* var\(--studio-font-scale\)\)/);
+  assert.match(css, /--graph-control-square-md:\s*calc\(30px \* var\(--studio-density-scale\)\)/);
+  assert.match(css, /\.graph-node \{[\s\S]*width:\s*var\(--graph-node-width\)/);
+  assert.match(css, /\.execution-log-entry \{[\s\S]*grid-template-columns:\s*calc\(70px \* var\(--studio-panel-width-scale\)\)/);
   assert.match(css, /\.node-guidance/);
   assert.match(css, /\.palette-scroll, \.properties-scroll[^}]*overflow-y:\s*auto/);
   assert.match(css, /\.graph-canvas\.tool-hand \.react-flow__node[\s\S]*pointer-events:\s*none/);

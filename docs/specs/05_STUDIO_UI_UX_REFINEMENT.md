@@ -279,6 +279,18 @@ same:
 Sequential editing remains functionally sequential. Do not back-port graph
 branching or graph-only controls into it.
 
+Pre-shipping Sequential Studio fixes:
+
+- The display/view option must apply to the entire Sequential Studio UI,
+  including command bars, workflow cards, node/action lists, property panels,
+  logs, and form controls. It must not only resize sidebars.
+- The node/action panel and property panel must be collapsible. Collapsed panel
+  state must visibly restore working space to the main sequence surface and
+  remain keyboard accessible.
+- The layout must be reorganized so the sequence surface, node/action browser,
+  properties, and logs have clear hierarchy and spacing. Avoid stacked,
+  competing controls that make the UI feel jumbled.
+
 ## Display size / density
 
 Both Studios expose the same globally persisted display setting. Presets:
@@ -290,6 +302,10 @@ Both Studios expose the same globally persisted display setting. Presets:
 The implementation should use shared CSS custom properties/tokens rather than
 browser zoom. Canvas zoom remains independent of UI density. All presets must
 meet minimum hit-target, focus visibility, clipping, and contrast requirements.
+Graph Studio additionally normalizes command controls, panel widths/rails,
+node cards, inspector forms, canvas tools, and execution logs through local
+Graph density tokens derived from the shared preferences so text and dimensions
+change consistently across Compact, Comfortable, and Large.
 
 ## Responsive behavior
 
@@ -376,6 +392,26 @@ live acceptance pass.
 - Live-check both Studios in every density and representative panel state.
 - Verify workflow round trips, runtime locking, recording, host reconnect,
   logs, Data Inspector, v1 safety, and responsive/accessibility behavior.
+
+Pre-shipping blocker status: implemented in code for full-UI density scaling in
+both Studios, Graph Studio density-token normalization, collapsible Sequential
+action/details panels, restored canvas workspace, and clearer panel hierarchy.
+Live Chrome visual acceptance remains before packaging/install acceptance.
+
+### Slice 7 - Error Channel Cleanup
+
+- Keep the Chrome extension panel's error list reserved for extension-level
+  issues such as connection failures, permission failures, unavailable host
+  service, and extension runtime faults.
+- Route node/workflow execution errors to workflow run diagnostics, Studio
+  runtime state, and saved execution logs instead of the extension-level error
+  list.
+- A failed workflow node may still surface a concise run status in Studio, but
+  must not pollute the extension panel's global error list.
+
+Status: implemented in the sidebar by treating workflow execution failures as
+neutral run status that points to Studio diagnostics/logs; extension/control
+request failures remain extension-level errors.
 
 ## Acceptance checklist
 

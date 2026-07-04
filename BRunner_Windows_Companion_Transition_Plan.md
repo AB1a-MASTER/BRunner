@@ -645,8 +645,12 @@ The existing modules can be migrated progressively rather than rewritten wholesa
 
 - Update PyInstaller entry point and hidden imports.
 - Ensure no app data is read from PyInstaller temporary extraction paths.
+  **Path helpers and frozen-path tests are in.**
 - Exclude development caches, prior builds, sample logs, test recordings, and obsolete source copies from release archives.
+  **Started: shared packaging exclude patterns and host `.gitignore` rules cover
+  runtime/development outputs.**
 - Add README setup instructions, first-run instructions, and troubleshooting notes.
+  **Started: `BRunner_Host/README.md` added.**
 - Verify installation and workflow persistence from a folder different from the source checkout.
 
 **Exit criteria:** The packaged executable behaves like the source build and keeps its default workflows next to the executable.
@@ -738,4 +742,3 @@ This slice solves the two immediate product problems - an inappropriate web UI a
 | Workflow storage integrity | Universal atomic writes; simple backup/revision behavior |
 | Host input | Visible foreground-window fallback only, after browser-first attempt |
 | Extension protocol | Preserve v1 while introducing versioned v2 capabilities |
-

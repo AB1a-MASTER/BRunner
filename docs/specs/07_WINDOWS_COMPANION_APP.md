@@ -58,6 +58,9 @@ structured result.
 - Every user-visible local write uses shared atomic persistence.
 - Host input is visible foreground fallback only, after browser-first attempt
   and before extension-side verification.
+- Pairing must move away from manual extension-ID entry. The product goal is a
+  clean key/PIN pairing flow so one host trusts one selected extension instance
+  even when several browser profiles or browsers have BRunner installed.
 
 ## Target Desktop Experience
 
@@ -75,7 +78,9 @@ Required main-window sections:
   add/edit/remove.
 - Host Fallback: enabled state, coordinate confidence threshold, diagnostics
   screenshot setting, supported action status.
-- Pairing: pairing key, copy/regenerate, paired extension identifier.
+- Pairing: current pairing state, generated key/PIN acceptance, verification,
+  unpair/regenerate controls, paired extension fingerprint where useful, and
+  WebSocket port configuration.
 - Diagnostics: host log view, recent capability requests, logs folder, export
   diagnostics.
 
@@ -124,8 +129,10 @@ changing workflow protocol behavior.
 
 ## Configuration Model
 
-Use a schema-versioned settings file. Preserve the current pairing key, paired
-extension ID, host port, and file-access state during migration.
+Use a schema-versioned settings file. Preserve the current pairing key,
+temporary paired extension ID where present, host port, and file-access state
+during migration. The extension ID should be treated as an implementation
+detail, not as the long-term user-facing pairing mechanism.
 
 ```json
 {
@@ -161,12 +168,58 @@ extension ID, host port, and file-access state during migration.
 Migration from the current config:
 
 1. Load `brunner_config.json` if present.
-2. Preserve pairing, paired extension ID, port, and file-access enabled state.
+2. Preserve pairing, paired extension ID if present, port, and file-access
+   enabled state.
 3. Convert `local_file_access.allowed_roots` into provisional approved
    directory aliases.
 4. Set workflow storage mode to `default`.
 5. Preserve a one-time v1 backup before replacing the older config.
 6. Write the migrated config atomically.
+
+## Pairing UX and Trust Model
+
+Pairing exists to bind the local companion host to one intended BRunner
+extension instance. If multiple Chrome/Edge profiles, browser instances, or
+compatible browsers have the extension installed, only the paired instance may
+authenticate and use host capabilities.
+
+Manual extension-ID entry is too fragile for normal users and should be
+replaced by a key/PIN procedure. Initial source implementation uses a copyable
+pairing key; later UX can shorten this into a numeric PIN if desired:
+
+1. The extension shows host status and a clear pairing action near that status.
+2. The extension generates a short-lived pairing PIN or key and displays it in
+   the extension UI.
+3. The host Pairing tab accepts the PIN/key, verifies it against the extension
+   over the loopback WebSocket channel, and stores the resulting trust record.
+4. After pairing, host commands require both the host pairing secret and the
+   verified extension trust record. Other installed BRunner extension instances
+   must be refused with a clear "not paired with this host" diagnostic.
+5. The Pairing tab exposes Pair, Verify, Unpair, Regenerate, and Copy controls,
+   plus the active WebSocket port and port-edit validation.
+6. The extension status area shows whether it is paired, unpaired, or rejected
+   by the current host, and shows the current PIN/key only during pairing.
+
+The exact token shape can be a human-entered PIN or a longer copyable key. The
+procedure should prefer the easiest UX that still prevents accidental
+cross-profile/cross-browser host access. Tokens must be short-lived, generated
+fresh for pairing, and never require users to find or paste browser extension
+IDs.
+
+Initial implementation status:
+
+- Extension stores the host pairing key in `chrome.storage.local` instead of
+  relying on a source-embedded default.
+- Extension commands wait for `AUTH` to succeed before sending workflow or
+  host-capability requests.
+- Sidebar exposes host auth status plus pairing-key Save, Generate, and Copy
+  controls.
+- Companion Pairing tab exposes pairing key, WebSocket port, Save, Generate,
+  Copy, and Unpair controls.
+- On successful auth, the host records the extension runtime ID internally as
+  the trusted extension fingerprint. This ID is no longer a manual user input.
+- A different extension instance with the right port but the wrong trust record
+  is refused with a clear not-paired diagnostic.
 
 ## Atomic Persistence
 
@@ -386,7 +439,8 @@ breaks current extension behavior.
   resolution, data parsing, execution-log save, and protocol behavior.
   **Implemented for current host services.**
 - Remove or isolate obsolete production-build files such as copied host source.
-  **Pending release cleanup.**
+  **Isolated from final release packaging; ask the user before removing source
+  copies.**
 
 Exit: existing operations are testable without launching the UI.
 
@@ -417,7 +471,8 @@ Exit: WebSocket handlers no longer write workflow files directly.
 
 - Add PySide6 app entry point and service lifecycle controller. **Implemented.**
 - Implement Status, Workflow Storage, Pairing, and Diagnostics first.
-  **Initial implementation complete.**
+  **Initial implementation complete; Pairing tab now has key, port, save,
+  regenerate, copy, and unpair controls.**
 - Add tray behavior and clean shutdown. **Initial implementation complete.**
 - Remove HTTP manager UI from production packaging. **Packaging now targets
   `app.py`; old `host_ui.py` remains as a transitional artifact.**
@@ -454,6 +509,9 @@ Exit: normal file operations no longer require arbitrary raw filesystem paths.
 
 - Add `host.hello` and v2 capability reporting. **Initial implementation
   complete; legacy command compatibility preserved.**
+- Add clean pairing/auth flow. **Initial source implementation complete:
+  extension-side key storage, auth gating before host commands, and host-side
+  trusted extension fingerprinting after key verification.**
 - Implement `host.window` and `host.action`. **Initial service and extension
   bridge foundations implemented.**
 - Add foreground-window validation and coordinate conversion. **Initial
@@ -472,7 +530,9 @@ Exit: normal file operations no longer require arbitrary raw filesystem paths.
   captures the resolved component image, companion matches it on the foreground
   browser window, clicks the matched center, and reports match confidence and
   bounded diagnostics. **Initial opt-in implementation complete; manual
-  visual-match acceptance remains next.**
+  visual-match acceptance passed with Chrome side UI open. Matching is
+  functional but slow in side-UI cases, so crop/search performance remains a
+  follow-up.**
 - Keep v1 `OS_KEYSTROKE` until migration is complete.
 
 Exit: browser-first nodes can request validated visible fallback and report the
@@ -480,11 +540,26 @@ result clearly.
 
 ### Phase 7 - Packaging and Release Cleanup
 
+- Complete pre-shipping Sequential Studio UI and error-channel fixes before
+  packaging/install acceptance:
+  - display/view options scale the whole Sequential Studio UI, not only sidebar
+    widths;
+  - node/action and property panels collapse and restore main workspace room;
+  - Sequential Studio layout is cleaned up so the UI is not visually jumbled;
+  - extension panel errors are extension-level only, while node/workflow errors
+    stay in run diagnostics/logs.
 - Update PyInstaller entry point and hidden imports.
+  **Implemented: entry point remains `app.py`; hidden imports and packaging
+  excludes are centralized in `packaging_config.py`.**
 - Exclude caches, prior builds, sample logs, test recordings, and obsolete
-  copies from release archives.
-- Add setup, first-run, and troubleshooting docs.
-- Verify install behavior outside the source checkout.
+  copies from release archives. **Implemented for final release artifacts:
+  `release_builder.py` emits only `BRunner-extension.zip` and `BRunnerHost.exe`
+  at the top level. Extension dev/old files are excluded from the zip.**
+- Add setup, first-run, and troubleshooting docs. **Implemented for current
+  packaging flow.**
+- Verify install behavior outside the source checkout. **Packaged host service
+  smoke passed from `release/BRunnerHost.exe`; final manual GUI/extension
+  install acceptance remains.**
 
 Exit: packaged app behaves like source build and stores default workflows next
 to the executable.

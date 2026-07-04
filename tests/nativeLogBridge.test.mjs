@@ -73,6 +73,29 @@ test("approved-directory services expose canonical native commands", async () =>
   assert.match(bridge, /NativeCommands\.ListApprovedDirectories/);
 });
 
+test("native host pairing is storage-backed and commands wait for authentication", async () => {
+  const [constants, background, bridge, host] = await Promise.all([
+    readFile(new URL("BRunner/core/constants.js", root), "utf8"),
+    readFile(new URL("BRunner/background.js", root), "utf8"),
+    readFile(new URL("BRunner/core/nativeBridge.js", root), "utf8"),
+    readFile(new URL("BRunner_Host/brunner_host.py", root), "utf8"),
+  ]);
+  assert.match(constants, /GetNativePairing/);
+  assert.match(constants, /SaveNativePairing/);
+  assert.match(constants, /GenerateNativePairingKey/);
+  assert.match(constants, /NativePairingStorageKey/);
+  assert.match(background, /case Messages\.GetNativePairing/);
+  assert.match(background, /case Messages\.SaveNativePairing/);
+  assert.match(background, /case Messages\.GenerateNativePairingKey/);
+  assert.match(bridge, /loadNativePairing/);
+  assert.match(bridge, /saveNativePairing/);
+  assert.match(bridge, /generateNativePairingKey/);
+  assert.match(bridge, /waitForAuthentication/);
+  assert.match(bridge, /extensionId: globalThis\.chrome\?\.runtime\?\.id/);
+  assert.match(host, /pairedExtensionId/);
+  assert.match(host, /not paired with this host/);
+});
+
 test("extension lists approved directories for graph authoring", async () => {
   const [background, studio] = await Promise.all([
     readFile(new URL("BRunner/background.js", root), "utf8"),
@@ -133,6 +156,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(registry, /NativeHostRequirementModes\.Fallback/);
   assert.match(background, /shouldAllowVisibleHostFallback/);
   assert.match(background, /shouldAllowVisualMatchFallback/);
+  assert.match(background, /shouldPreferVisualMatchFallback/);
   assert.match(background, /NativeBridge\.hostWindow/);
   assert.match(background, /NativeBridge\.hostAction/);
   assert.match(background, /NativeBridge\.hostVisualMatch/);
@@ -144,6 +168,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(mapper, /verifyHostFallback/);
   assert.match(mapper, /clientPointToScreen/);
   assert.match(mapper, /clientBounds/);
+  assert.match(mapper, /sideUiInset/);
   assert.match(mapper, /assertPostActionVerification/);
   assert.match(workflow, /Visible Host Fallback Acceptance/);
   assert.match(workflow, /allowVisibleHostFallback/);

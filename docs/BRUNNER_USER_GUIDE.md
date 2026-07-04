@@ -35,6 +35,12 @@ Optional fallback nodes still try browser-native execution first.
 5. Save valid changes, then Run.
 6. Follow live node states, Execution Logs, and Data outputs.
 
+The shared View setting changes the Studio UI density across command bars,
+panels, cards, node dimensions, canvas tools, logs, and form controls. In
+Sequential Studio, the Actions and Details panels can be hidden or restored
+from their panel headers or command-bar controls, and that panel state is
+remembered with the shared Studio preferences.
+
 ## Recording and targets
 
 Recording follows either tabs opened from the starting tab or the currently
@@ -86,6 +92,25 @@ The companion app replaces the old local browser management page. The initial
 native Windows desktop shell is implemented with tray behavior, service status,
 workflow storage, pairing, and diagnostics tabs. Dedicated approved-folder
 management and host-fallback settings remain next.
+
+Pairing chooses exactly which installed BRunner extension instance may use the
+local host. This matters when several browser profiles or browser instances
+have the extension installed. The UX is key/PIN based rather than manual
+extension-ID based: the extension shows host auth status plus a pairing key,
+and the companion Pairing tab accepts that key, verifies the extension when it
+authenticates, manages the active pairing, and exposes port configuration.
+Users should not need to look up or paste browser extension IDs.
+
+Current source flow:
+
+1. In the extension sidebar, use **Generate** or enter a pairing key.
+2. Copy that key.
+3. In the companion Pairing tab, paste the key, confirm the WebSocket port, and
+   save.
+4. Reload/reconnect the extension. The extension authenticates before sending
+   workflow requests.
+5. The host stores the successful extension instance internally. Other
+   extension instances are rejected until the host is unpaired or regenerated.
 
 Default workflow storage is the `Workflows` folder beside `BRunnerHost.exe`.
 Users can choose a different workflow folder from the companion app and can
@@ -150,7 +175,30 @@ fallback after target preparation, and finally visual matching only if
 post-action verification fails. Use `verificationSelector` and
 `verificationText` when a workflow needs to prove that the visible action
 changed page state. The refreshed host-served coordinate fallback workflows
-have passed manual testing; manual visual-match acceptance remains next.
+have passed manual testing. Visual-match fallback also passed manual testing
+with Chrome side UI open, but that path is currently slower than desired.
+
+## Companion setup and packaging
+
+The companion source lives in `BRunner_Host`. Install dependencies with
+`python -m pip install -r requirements.txt`, run from source with
+`python app.py`, and build a Windows executable with `python build_host_ui.py`.
+Packaging uses `app.py` as the PyInstaller entry point and shares hidden-import
+and exclude settings through `packaging_config.py`.
+
+Build the final release artifacts from the repository root with
+`python release_builder.py`. The output directory contains exactly two
+user-facing files: `release/BRunner-extension.zip` and
+`release/BRunnerHost.exe`.
+
+On first launch, the companion creates `brunner_config.json`, `Workflows`, and
+`Logs` beside the application directory. In a packaged build, that means beside
+`BRunnerHost.exe`.
+
+If the host reports that port 8999 is already in use, another BRunner host is
+already running on the configured port. Stop the existing host from the
+companion app, or change the port in the companion configuration before
+starting a second copy.
 
 ## Node reference format
 

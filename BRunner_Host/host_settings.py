@@ -41,7 +41,7 @@ def create_default_config(pairing_key=None):
 def load_or_create_config(config_file, base_dir):
     path = Path(config_file)
     if path.exists():
-        with open(path, "r", encoding="utf-8") as handle:
+        with open(path, "r", encoding="utf-8-sig") as handle:
             config = json.load(handle)
     else:
         config = create_default_config()

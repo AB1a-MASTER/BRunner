@@ -35,6 +35,7 @@ test("Studio preferences recover invalid values to shared defaults", () => {
     panels: {
       nodeLibraryExpanded: false,
       executionLogsExpanded: true,
+      workflowManagerExpanded: true,
     },
   });
 });
@@ -53,6 +54,7 @@ test("Studio preferences persist globally and merge panel updates", async () => 
   }, storage);
   assert.equal(updated.panels.nodeLibraryExpanded, false);
   assert.equal(updated.panels.executionLogsExpanded, true);
+  assert.equal(updated.panels.workflowManagerExpanded, true);
   assert.deepEqual(storage.values[STUDIO_PREFERENCES_KEY], updated);
 });
 

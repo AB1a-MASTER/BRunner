@@ -18,6 +18,9 @@ const Messages = Object.freeze({
   GetRecordingState: "GET_RECORDING_STATE",
   RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+  GetNativePairing: "GET_NATIVE_PAIRING",
+  SaveNativePairing: "SAVE_NATIVE_PAIRING",
+  GenerateNativePairingKey: "GENERATE_NATIVE_PAIRING_KEY",
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
 });
@@ -37,6 +40,11 @@ const selectedLabel = document.getElementById("selected-label");
 const playButton = document.getElementById("btn-play");
 const recordButton = document.getElementById("btn-toggle-record");
 const openStudioButton = document.getElementById("btn-open-studio");
+const hostPairingStatus = document.getElementById("host-pairing-status");
+const hostPairingKey = document.getElementById("host-pairing-key");
+const savePairingButton = document.getElementById("btn-save-pairing");
+const generatePairingButton = document.getElementById("btn-generate-pairing");
+const copyPairingButton = document.getElementById("btn-copy-pairing");
 const recordingTabPolicyInput = document.getElementById(
   "recording-tab-policy",
 );
@@ -50,6 +58,7 @@ function init() {
 
   syncRecordingState();
   syncRuntimeState();
+  syncPairingState();
   refreshWorkflowList();
   syncSidebarVisibilityForActiveTab();
 }
@@ -58,6 +67,9 @@ function wireControls() {
   openStudioButton?.addEventListener("click", openStudio);
   recordButton?.addEventListener("click", toggleRecording);
   playButton?.addEventListener("click", runSelectedWorkflow);
+  savePairingButton?.addEventListener("click", savePairingKey);
+  generatePairingButton?.addEventListener("click", generatePairingKey);
+  copyPairingButton?.addEventListener("click", copyPairingKey);
 
   searchInput?.addEventListener("input", () => {
     renderWorkflowList(filterWorkflows(searchInput.value));
@@ -194,6 +206,89 @@ async function syncRecordingState() {
   }
 }
 
+async function syncPairingState() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GetNativePairing,
+    });
+    applyPairingResponse(response);
+  } catch (error) {
+    setPairingStatus(`Host: pairing unavailable (${error.message || error})`, true);
+  }
+}
+
+async function savePairingKey() {
+  const key = hostPairingKey?.value?.trim() || "";
+  if (!key) {
+    setPairingStatus("Host: enter a pairing key first.", true);
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.SaveNativePairing,
+      key,
+    });
+    applyPairingResponse(response);
+    refreshWorkflowList();
+  } catch (error) {
+    setPairingStatus(`Host: pairing save failed (${error.message || error})`, true);
+  }
+}
+
+async function generatePairingKey() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.GenerateNativePairingKey,
+    });
+    applyPairingResponse(response);
+    await copyPairingKey();
+  } catch (error) {
+    setPairingStatus(`Host: key generation failed (${error.message || error})`, true);
+  }
+}
+
+async function copyPairingKey() {
+  const key = hostPairingKey?.value?.trim() || "";
+  if (!key) {
+    setPairingStatus("Host: no pairing key to copy.", true);
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(key);
+    setPairingStatus("Host: pairing key copied. Paste it into the companion Pairing tab.");
+  } catch {
+    hostPairingKey?.select();
+    setPairingStatus("Host: pairing key selected. Copy it manually.");
+  }
+}
+
+function applyPairingResponse(response) {
+  if (!response?.ok) {
+    setPairingStatus(`Host: ${response?.error || "pairing failed"}`, true);
+    return;
+  }
+
+  if (hostPairingKey) {
+    hostPairingKey.value = response.pairing?.key || "";
+  }
+
+  const bridge = response.bridge || {};
+  const paired = bridge.authenticated
+    ? "authenticated"
+    : bridge.connected
+      ? `connected, not authenticated${bridge.authError ? ` (${bridge.authError})` : ""}`
+      : "not connected";
+  setPairingStatus(`Host: ${paired}`);
+}
+
+function setPairingStatus(text, isError = false) {
+  if (!hostPairingStatus) return;
+  hostPairingStatus.textContent = text;
+  hostPairingStatus.style.color = isError ? "#f87171" : "#94a3b8";
+}
+
 async function syncRuntimeState() {
   try {
     const response = await chrome.runtime.sendMessage({
@@ -246,7 +341,7 @@ function applyRuntimeState(state) {
       `Running ${execution.workflowName || "workflow"} (${Number(execution.currentStepIndex || 0) + 1}/${execution.totalSteps || 0})...`,
     );
   } else if (execution.status === "failed" && execution.error) {
-    setSelectedLabel(`Failed: ${execution.error}`, true);
+    setSelectedLabel("Workflow failed. See Studio diagnostics/logs.");
   } else if (execution.status === "cancelled") {
     setSelectedLabel("Workflow stopped.");
   }
@@ -464,6 +559,14 @@ function isSuccess(response) {
   );
 }
 
+function isWorkflowExecutionFailure(response) {
+  return Boolean(
+    response?.diagnostics ||
+    response?.runtime?.execution?.status === "failed" ||
+    response?.state?.execution?.status === "failed"
+  );
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -509,8 +612,10 @@ async function runWorkflow(filename) {
           ? "Workflow stopped."
           : `Completed ${filename.replace(/\.json$/i, "")}`,
       );
+    } else if (isWorkflowExecutionFailure(response)) {
+      setSelectedLabel("Workflow failed. See Studio diagnostics/logs.");
     } else {
-      setSelectedLabel(`Failed: ${response?.error || "Unknown error"}`, true);
+      setSelectedLabel(`Run request failed: ${response?.error || "Unknown error"}`, true);
     }
   } catch (error) {
     setSelectedLabel(`Failed: ${error.message || error}`, true);

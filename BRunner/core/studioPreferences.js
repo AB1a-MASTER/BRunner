@@ -28,6 +28,7 @@ export const DEFAULT_STUDIO_PREFERENCES = Object.freeze({
   panels: Object.freeze({
     nodeLibraryExpanded: true,
     executionLogsExpanded: true,
+    workflowManagerExpanded: true,
   }),
 });
 
@@ -58,6 +59,7 @@ export function normalizeStudioPreferences(input = {}) {
     panels: {
       nodeLibraryExpanded: panels.nodeLibraryExpanded !== false,
       executionLogsExpanded: panels.executionLogsExpanded !== false,
+      workflowManagerExpanded: panels.workflowManagerExpanded !== false,
     },
   };
 }

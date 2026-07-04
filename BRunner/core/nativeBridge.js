@@ -9,6 +9,9 @@ class NativeBridgeClient {
   constructor() {
     this.socket = null;
     this.isConnected = false;
+    this.isAuthenticated = false;
+    this.authPromise = null;
+    this.lastAuthError = "";
     this.pendingRequests = new Map();
     this.nextRequestId = 1;
     this.lastHello = null;
@@ -27,21 +30,23 @@ class NativeBridgeClient {
 
     this.socket.onopen = () => {
       this.isConnected = true;
-      this.sendRaw({
-        command: NativeCommands.Auth,
-        key: Defaults.PairingKey,
-      });
+      this.isAuthenticated = false;
+      this.startAuthentication();
       console.log("[BRunner] Native host connected.");
     };
 
     this.socket.onclose = () => {
       this.isConnected = false;
+      this.isAuthenticated = false;
+      this.authPromise = null;
       this.lastHello = null;
       console.warn("[BRunner] Native host disconnected.");
     };
 
     this.socket.onerror = (error) => {
       this.isConnected = false;
+      this.isAuthenticated = false;
+      this.authPromise = null;
       this.lastHello = null;
       console.error("[BRunner] Native host socket error:", error);
     };
@@ -49,6 +54,21 @@ class NativeBridgeClient {
     this.socket.onmessage = (event) => {
       this.handleMessage(event.data);
     };
+  }
+
+  resetConnection() {
+    this.isAuthenticated = false;
+    this.authPromise = null;
+    this.lastHello = null;
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch {
+        // Socket may already be closing.
+      }
+    }
+    this.socket = null;
+    this.isConnected = false;
   }
 
   sendRaw(payload) {
@@ -59,8 +79,82 @@ class NativeBridgeClient {
     this.socket.send(JSON.stringify(payload));
   }
 
-  request(command, payload = {}) {
+  async authenticate() {
+    try {
+      const pairingKey = await this.getPairingKey();
+      if (!pairingKey) {
+        throw new Error("Native host pairing key is not configured.");
+      }
+
+      const response = await this.sendAuthenticatedRequest({
+        command: NativeCommands.Auth,
+        key: pairingKey,
+        extensionId: globalThis.chrome?.runtime?.id || "",
+      });
+      this.isAuthenticated = true;
+      this.lastAuthError = "";
+      return response;
+    } catch (error) {
+      this.isAuthenticated = false;
+      this.lastAuthError = error?.message || String(error);
+      throw error;
+    }
+  }
+
+  startAuthentication() {
+    this.authPromise = this.authenticate().catch((error) => {
+      console.warn("[BRunner] Native host authentication failed:", error);
+      return null;
+    });
+    return this.authPromise;
+  }
+
+  async getPairingKey() {
+    const pairing = await loadNativePairing();
+    return pairing.key || Defaults.PairingKey;
+  }
+
+  async waitForAuthentication() {
     this.connect();
+
+    const startedAt = Date.now();
+    while (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      if (Date.now() - startedAt > 5000) {
+        throw new Error("Timed out connecting to native host.");
+      }
+      await delay(100);
+    }
+
+    if (!this.authPromise) {
+      this.startAuthentication();
+    }
+
+    await this.authPromise;
+    if (!this.isAuthenticated) {
+      throw new Error(this.lastAuthError || "Native host authentication failed.");
+    }
+  }
+
+  sendAuthenticatedRequest(payload) {
+    return new Promise((resolve, reject) => {
+      const requestId = String(this.nextRequestId++);
+      this.pendingRequests.set(requestId, { resolve, reject });
+
+      try {
+        this.sendRaw({
+          id: requestId,
+          ...payload,
+        });
+      } catch (error) {
+        this.pendingRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
+  async request(command, payload = {}) {
+    this.connect();
+    await this.waitForAuthentication();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
@@ -112,8 +206,9 @@ class NativeBridgeClient {
     });
   }
 
-  requestCapability(capability, payload = {}) {
+  async requestCapability(capability, payload = {}) {
     this.connect();
+    await this.waitForAuthentication();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
@@ -333,6 +428,8 @@ class NativeBridgeClient {
     ];
     return {
       connected: this.isConnected,
+      authenticated: this.isAuthenticated,
+      authError: this.lastAuthError,
       protocolVersion: this.lastHello?.protocolVersion || null,
       host: this.lastHello?.host || null,
       capabilities: this.isConnected
@@ -340,6 +437,45 @@ class NativeBridgeClient {
         : [],
     };
   }
+}
+
+export async function loadNativePairing(storage = globalThis.chrome?.storage?.local) {
+  if (!storage) {
+    return { key: Defaults.PairingKey };
+  }
+  const result = await storage.get(Defaults.NativePairingStorageKey);
+  const value = result?.[Defaults.NativePairingStorageKey];
+  if (!value || typeof value !== "object") {
+    return { key: Defaults.PairingKey };
+  }
+  return {
+    key: String(value.key || "").trim() || Defaults.PairingKey,
+  };
+}
+
+export async function saveNativePairing(pairing = {}, storage = globalThis.chrome?.storage?.local) {
+  const key = String(pairing.key || "").trim();
+  if (!key) {
+    throw new Error("Pairing key is required.");
+  }
+  if (!storage) {
+    throw new Error("Extension storage is unavailable.");
+  }
+  await storage.set({
+    [Defaults.NativePairingStorageKey]: { key },
+  });
+  NativeBridge.resetConnection();
+  return { key };
+}
+
+export function generateNativePairingKey() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const NativeBridge = new NativeBridgeClient();

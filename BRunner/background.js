@@ -9,7 +9,12 @@ import {
   NavigationTargets,
   Defaults,
 } from "./core/constants.js";
-import { NativeBridge } from "./core/nativeBridge.js";
+import {
+  NativeBridge,
+  generateNativePairingKey,
+  loadNativePairing,
+  saveNativePairing,
+} from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
@@ -141,6 +146,39 @@ async function handleMessage(request, sender) {
         ok: true,
         ...NativeBridge.getStatus(),
       };
+
+    case Messages.GetNativePairing: {
+      const pairing = await loadNativePairing();
+      return {
+        ok: true,
+        pairing,
+        bridge: NativeBridge.getStatus(),
+        extensionId: chrome.runtime.id,
+      };
+    }
+
+    case Messages.SaveNativePairing: {
+      const pairing = await saveNativePairing({ key: request.key });
+      NativeBridge.connect();
+      return {
+        ok: true,
+        pairing,
+        bridge: NativeBridge.getStatus(),
+        extensionId: chrome.runtime.id,
+      };
+    }
+
+    case Messages.GenerateNativePairingKey: {
+      const key = generateNativePairingKey();
+      const pairing = await saveNativePairing({ key });
+      NativeBridge.connect();
+      return {
+        ok: true,
+        pairing,
+        bridge: NativeBridge.getStatus(),
+        extensionId: chrome.runtime.id,
+      };
+    }
 
     case Messages.OsListWorkflows:
       return await NativeBridge.listWorkflows();
@@ -1751,6 +1789,30 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
     expectedWindowTitle: prepared.window?.title || tab.title || "",
   });
 
+  let visualRecovery = null;
+  if (shouldPreferVisualMatchFallback(step, prepared)) {
+    visualRecovery = await recoverVisibleHostFallbackWithVisualMatch(
+      tab,
+      step,
+      prepared,
+      runId,
+      browserError,
+    );
+    if (visualRecovery?.ok) {
+      const visualVerified = await verifyVisibleHostFallback(tab, step, runId);
+      if (visualVerified?.ok) {
+        return {
+          ok: true,
+          usedStrategy: "visible_host_fallback",
+          hostAction: visualRecovery?.action || prepared.action,
+          browserFailure: browserError?.diagnostics || null,
+          verification: "visual_match_recovery",
+          visualRecovery: true,
+        };
+      }
+    }
+  }
+
   let hostResult = null;
   let hostActionError = null;
   try {
@@ -1786,7 +1848,6 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
       };
 
   let debuggerRecovery = null;
-  let visualRecovery = null;
   if (!verified?.ok && hostResult) {
     debuggerRecovery = await recoverVisibleHostFallbackWithDebugger(
       tab,
@@ -2076,6 +2137,15 @@ function shouldAllowVisualMatchFallback(step = {}) {
 
   const config = step.config || {};
   return [true, "true", "allow"].includes(config.allowVisualMatchFallback);
+}
+
+function shouldPreferVisualMatchFallback(step = {}, prepared = {}) {
+  if (!shouldAllowVisualMatchFallback(step)) {
+    return false;
+  }
+
+  const sideUiInset = Number(prepared?.point?.sideUiInset);
+  return Number.isFinite(sideUiInset) && sideUiInset >= 80;
 }
 
 async function executeTabSwitch(currentTab, step, tabsByRef) {

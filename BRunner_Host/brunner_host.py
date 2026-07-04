@@ -22,7 +22,7 @@ from fallback_input import execute_host_action
 from visual_match import execute_visual_match_action
 from workflow_repository import WorkflowRepository
 from execution_log_storage import save_execution_log
-from host_settings import load_or_create_config
+from host_settings import load_or_create_config, save_config
 from window_validation import HostFallbackError, host_window_status
 
 # --- Paths ---
@@ -196,21 +196,45 @@ def host_hello_payload():
 
 async def handle_auth(websocket, request_id, payload):
     client_key = payload.get("key") or payload.get("pairing_key")
+    client_extension_id = str(payload.get("extensionId") or payload.get("extension_id") or "").strip()
+    settings = current_config()
+    pairing_key = settings.get("pairingKey") or settings.get("pairing_key")
+    paired_extension_id = str(
+        settings.get("pairedExtensionId") or settings.get("paired_extension_id") or ""
+    ).strip()
 
-    if client_key == PAIRING_KEY:
+    if client_key != pairing_key:
+        await send_json(
+            websocket,
+            failure(request_id, "Invalid Pairing Key.")
+        )
+        logging.warning("[Auth] Blocked connection attempt with invalid key.")
+        return False
+
+    if paired_extension_id and client_extension_id and client_extension_id != paired_extension_id:
+        await send_json(
+            websocket,
+            failure(request_id, "This extension instance is not paired with this host.")
+        )
+        logging.warning(
+            "[Auth] Blocked unpaired extension instance: %s",
+            client_extension_id,
+        )
+        return False
+
+    if client_extension_id and not paired_extension_id:
+        settings["pairedExtensionId"] = client_extension_id
+        save_config(CONFIG_FILE, settings)
+        current_config()
+        logging.info("[Auth] Paired extension instance: %s", client_extension_id)
+
+    if client_key == pairing_key:
         await send_json(
             websocket,
             success(request_id, message="Authenticated successfully.")
         )
         logging.info("[Auth] Extension connected and authenticated securely.")
         return True
-
-    await send_json(
-        websocket,
-        failure(request_id, "Invalid Pairing Key.")
-    )
-    logging.warning("[Auth] Blocked connection attempt with invalid key.")
-    return False
 
 
 async def handle_os_keystroke(websocket, request_id, payload):

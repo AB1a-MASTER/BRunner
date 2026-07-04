@@ -9,6 +9,7 @@ HOST_DIR = Path(__file__).resolve().parents[1] / "BRunner_Host"
 sys.path.insert(0, str(HOST_DIR))
 
 from companion_service import HostServiceController
+from app import SERVE_HOST_ENV
 
 
 class FakeProcess:
@@ -75,6 +76,26 @@ class HostServiceControllerTests(unittest.TestCase):
 
     def test_source_command_uses_host_script(self):
         self.assertEqual(self.controller.command(), [sys.executable, str(self.host_script)])
+        self.assertNotIn(SERVE_HOST_ENV, self.controller.environment())
+
+    def test_frozen_command_uses_executable_and_serve_environment(self):
+        original_executable = sys.executable
+        had_frozen = hasattr(sys, "frozen")
+        original_frozen = getattr(sys, "frozen", None)
+        executable = self.base_dir / "dist" / "BRunnerHost.exe"
+
+        try:
+            sys.frozen = True
+            sys.executable = str(executable)
+
+            self.assertEqual(self.controller.command(), [str(executable), "--serve-host"])
+            self.assertEqual(self.controller.environment()[SERVE_HOST_ENV], "1")
+        finally:
+            sys.executable = original_executable
+            if had_frozen:
+                sys.frozen = original_frozen
+            else:
+                delattr(sys, "frozen")
 
     def test_start_stop_and_restart_manage_single_process(self):
         self.assertTrue(self.controller.start())
@@ -95,14 +116,35 @@ class HostServiceControllerTests(unittest.TestCase):
                 "host": {"port": 9001},
                 "pairedExtensionId": "extension",
             }),
-            {"running": False, "port": 9001, "pairedExtensionId": "extension"},
+            {"running": False, "external": False, "port": 9001, "pairedExtensionId": "extension"},
         )
         self.assertEqual(
             self.controller.status({
                 "port": 9002,
                 "paired_extension_id": "legacy",
             }),
-            {"running": False, "port": 9002, "pairedExtensionId": "legacy"},
+            {"running": False, "external": False, "port": 9002, "pairedExtensionId": "legacy"},
+        )
+
+    def test_start_refuses_when_configured_port_is_already_listening(self):
+        self.controller.is_port_listening = lambda port: port == 9010
+
+        self.assertFalse(self.controller.start({"host": {"port": 9010}}))
+
+        self.assertEqual(len(self.popen.calls), 0)
+        self.assertIn("port 9010 is already in use", self.controller.last_message)
+
+    def test_status_reports_external_listener(self):
+        self.controller.is_port_listening = lambda port: port == 9011
+
+        self.assertEqual(
+            self.controller.status({"host": {"port": 9011}}),
+            {
+                "running": True,
+                "external": True,
+                "port": 9011,
+                "pairedExtensionId": None,
+            },
         )
 
     def test_stop_kills_process_when_terminate_times_out(self):

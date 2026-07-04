@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
+SPEC_FILE = "BRunnerHost.spec"
 
 
 def main():
@@ -11,21 +12,7 @@ def main():
         sys.executable,
         "-m",
         "PyInstaller",
-        "--noconsole",
-        "--onefile",
-        "--name",
-        "BRunnerHost",
-        "--hidden-import",
-        "brunner_host",
-        "--hidden-import",
-        "pyautogui",
-        "--hidden-import",
-        "PySide6.QtCore",
-        "--hidden-import",
-        "PySide6.QtGui",
-        "--hidden-import",
-        "PySide6.QtWidgets",
-        "app.py",
+        SPEC_FILE,
     ]
     try:
         subprocess.run(command, cwd=BASE_DIR, check=True)

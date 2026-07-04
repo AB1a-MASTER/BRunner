@@ -146,6 +146,24 @@ class HostSettingsTests(unittest.TestCase):
         self.assertEqual(config["approvedDirectories"][0]["path"], "AllowedFiles")
         self.assertEqual(config["approvedDirectories"][0]["read"], True)
 
+    def test_load_accepts_utf8_bom_config_files(self):
+        self.config_file.write_text(
+            "\ufeff" + json.dumps({
+                "schemaVersion": 2,
+                "pairingKey": "bom-key",
+                "host": {"port": 9009},
+                "workflowStorage": {"mode": "default"},
+                "approvedDirectories": [],
+                "hostFallback": {},
+            }),
+            encoding="utf-8",
+        )
+
+        config = load_or_create_config(self.config_file, self.base_dir)
+
+        self.assertEqual(config["pairingKey"], "bom-key")
+        self.assertEqual(config["host"]["port"], 9009)
+
     def test_allowed_roots_text_round_trip(self):
         roots = parse_allowed_roots("AllowedFiles\n\nDatasets\n")
         self.assertEqual(roots, ["AllowedFiles", "Datasets"])
