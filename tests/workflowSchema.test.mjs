@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  GraphEdgeHandles,
   graphWorkflowToSequential,
+  MapperAttentionNodeType,
   upgradeWorkflowToV2,
   validateGraphWorkflow,
+  WorkflowSchemaVersion,
 } from "../BRunner/core/workflowSchema.js";
 import { getWorkflowSteps, isWorkflowLike, normalizeWorkflow } from "../BRunner/core/workflowUtils.js";
 
@@ -97,4 +100,57 @@ test("empty v2 graph remains a valid empty sequential workflow", () => {
   const graph = upgradeWorkflowToV2({ steps: [] });
   assert.equal(validateGraphWorkflow(graph).valid, true);
   assert.deepEqual(graphWorkflowToSequential(graph).steps, []);
+});
+
+test("v3 mapper DOM nodes require unresolved routing", () => {
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "mapper-flow",
+    name: "Mapper Flow",
+    entryNodeId: "click",
+    nodes: [
+      {
+        id: "click",
+        type: "element.click",
+        version: 1,
+        position: { x: 0, y: 0 },
+        config: {},
+        data: {
+          componentRef: {
+            mapperSchemaVersion: 1,
+            id: "component:save",
+            name: "Save",
+          },
+        },
+      },
+      {
+        id: "attention",
+        type: MapperAttentionNodeType,
+        version: 1,
+        position: { x: 240, y: 0 },
+        config: {},
+        data: {},
+      },
+    ],
+    edges: [],
+  };
+
+  let result = validateGraphWorkflow(graph);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /requires an unresolved edge/);
+
+  graph.edges.push({
+    id: "edge-click-unresolved-attention",
+    source: "click",
+    sourceHandle: GraphEdgeHandles.Unresolved,
+    target: "attention",
+    targetHandle: GraphEdgeHandles.Input,
+  });
+
+  result = validateGraphWorkflow(graph);
+  assert.equal(result.valid, true);
+  assert.throws(
+    () => graphWorkflowToSequential(graph),
+    /require graph traversal/,
+  );
 });

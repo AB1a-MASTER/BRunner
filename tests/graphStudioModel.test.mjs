@@ -3,11 +3,18 @@ import { test } from "node:test";
 
 import {
   canvasToGraphWorkflow,
+  createNewWorkflowMetadata,
   ensureWorkflowFilename,
   layoutCanvasNodes,
   workflowToCanvas,
 } from "../BRunner/studio-graph-src/src/graphStudioModel.js";
-import { upgradeWorkflowToV2 } from "../BRunner/core/workflowSchema.js";
+import {
+  GraphEdgeHandles,
+  MapperAttentionNodeType,
+  upgradeWorkflowToV2,
+  WorkflowSchemaVersion,
+} from "../BRunner/core/workflowSchema.js";
+import { createPlaceholderComponentRef } from "../BRunner/mapper/core.js";
 
 const definitions = [{
   type: "element.click",
@@ -140,4 +147,61 @@ test("disconnected canvas cannot be persisted as a linear graph", () => {
 test("workflow filenames are sanitized and normalized", () => {
   assert.equal(ensureWorkflowFilename("My: Flow.json"), "My_ Flow.json");
   assert.equal(ensureWorkflowFilename(""), "Untitled.json");
+});
+
+test("new graph metadata defaults to mapper-capable v3 settings", () => {
+  const metadata = createNewWorkflowMetadata({ id: "flow-1" });
+
+  assert.equal(metadata.schemaVersion, WorkflowSchemaVersion.MapperGraph);
+  assert.equal(metadata.settings.mapper.enabled, true);
+  assert.equal(metadata.settings.mapper.captureMode, "static_bounded");
+});
+
+test("v3 mapper component refs and unresolved edges survive round trip", () => {
+  const componentRef = createPlaceholderComponentRef("click-save", "element.click");
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "mapper-flow",
+    name: "Mapper Flow",
+    description: "",
+    boundDomain: "",
+    settings: { mapper: { queryAllowlist: ["tab"] } },
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    entryNodeId: "click",
+    nodes: [
+      {
+        id: "click",
+        type: "element.click",
+        version: 1,
+        position: { x: 10, y: 20 },
+        config: {},
+        data: { componentRef },
+      },
+      {
+        id: "attention",
+        type: MapperAttentionNodeType,
+        version: 1,
+        position: { x: 300, y: 20 },
+        config: {},
+        data: {},
+      },
+    ],
+    edges: [{
+      id: "edge-click-unresolved-attention",
+      source: "click",
+      sourceHandle: GraphEdgeHandles.Unresolved,
+      target: "attention",
+      targetHandle: GraphEdgeHandles.Input,
+    }],
+  };
+
+  const model = workflowToCanvas(graph, definitions);
+  const saved = canvasToGraphWorkflow(model.nodes, model.edges, model.metadata);
+
+  assert.equal(model.metadata.schemaVersion, WorkflowSchemaVersion.MapperGraph);
+  assert.deepEqual(saved.nodes[0].data.componentRef, componentRef);
+  assert.equal(saved.edges[0].sourceHandle, GraphEdgeHandles.Unresolved);
+  assert.deepEqual(saved.settings.mapper, graph.settings.mapper);
 });

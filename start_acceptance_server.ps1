@@ -8,6 +8,8 @@ Write-Host "  $root"
 Write-Host ""
 Write-Host "Open:"
 Write-Host "  http://127.0.0.1:8765/BRunner/test.html"
+Write-Host "  http://127.0.0.1:8765/BRunner_Host/mapper_test.html"
+Write-Host "  http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html"
 Write-Host ""
 Write-Host "Press Ctrl+C to stop the server."
 

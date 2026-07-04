@@ -17,16 +17,19 @@ import { RemovableEdge } from "./RemovableEdge.jsx";
 import studioIcon from "../../icons/icon2.png";
 import {
   canvasToGraphWorkflow,
+  createNewWorkflowMetadata,
   ensureWorkflowFilename,
   layoutCanvasNodes,
   workflowToCanvas,
 } from "./graphStudioModel.js";
+import { createPlaceholderComponentRef } from "../../mapper/core.js";
 import {
   filterExecutionLogs,
   projectRuntimeState,
   summarizeExecution,
   summarizeExecutionLogs,
 } from "./runtimeProjection.js";
+import { MapperAttentionNodeType } from "../../core/workflowSchema.js";
 import {
   CanvasTool,
   getCanvasInteraction,
@@ -58,6 +61,15 @@ import { summarizeValue } from "../../core/variableInspector.js";
 
 const NODE_TYPES = { brunner: GraphNode };
 const EDGE_TYPES = { removable: RemovableEdge };
+const MAPPER_ATTENTION_DEFINITION = Object.freeze({
+  type: MapperAttentionNodeType,
+  version: 1,
+  category: "Mapper",
+  label: "Needs attention",
+  description: "Handles unresolved mapper outcomes for recorded DOM nodes.",
+  targetRequired: false,
+  config: [],
+});
 const Messages = Object.freeze({
   GetNodeDefinitions: "GET_NODE_DEFINITIONS",
   ListWorkflows: "OS_LIST_WORKFLOWS",
@@ -94,7 +106,7 @@ function GraphStudioCanvas() {
   const [selectedFile, setSelectedFile] = useState("");
   const [loadedFilename, setLoadedFilename] = useState("");
   const [workflowName, setWorkflowName] = useState("Untitled");
-  const [metadata, setMetadata] = useState(() => createNewMetadata());
+  const [metadata, setMetadata] = useState(() => createNewWorkflowMetadata());
   const [sourceSchema, setSourceSchema] = useState(2);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -116,6 +128,7 @@ function GraphStudioCanvas() {
     currentNodeId: "",
     completedNodeIds: [],
     skippedNodeIds: [],
+    unresolvedNodeIds: [],
     totalSteps: 0,
     logs: [],
   });
@@ -363,6 +376,9 @@ function GraphStudioCanvas() {
         .filter((field) => field.default !== undefined)
         .map((field) => [field.key, structuredClone(field.default)]),
     );
+    const componentRef = definition.targetRequired
+      ? createPlaceholderComponentRef(id, definition.type)
+      : null;
     setNodes((current) => current.map((node) => ({ ...node, selected: false })).concat({
       id,
       type: "brunner",
@@ -375,6 +391,7 @@ function GraphStudioCanvas() {
         target: "",
         targetSource: "",
         targetEdited: false,
+        ...(componentRef ? { componentRef } : {}),
         executionMode: "enabled",
         skipWhen: "",
         collapsed: false,
@@ -422,12 +439,21 @@ function GraphStudioCanvas() {
           onMutate: () => setDirty(true),
         },
       };
-      const sourceIds = new Set(currentEdges.map((edge) => edge.source));
+      const sourceIds = new Set(currentEdges
+        .filter((edge) => (edge.sourceHandle || "success") === "success")
+        .map((edge) => edge.source));
       const terminal = [...currentNodes].reverse().find((candidate) => !sourceIds.has(candidate.id));
-      setNodes(currentNodes.map((candidate) => ({ ...candidate, selected: false })).concat(node));
+      const mapperAttention = node.data.componentRef
+        ? getOrCreateMapperAttentionNode(currentNodes, currentEdges, layoutDirection)
+        : null;
+      const nextNodes = currentNodes
+        .map((candidate) => ({ ...candidate, selected: false }))
+        .concat(node)
+        .concat(mapperAttention?.created ? [mapperAttention.node] : []);
+      const nextEdges = [...currentEdges];
       recordedStepKeysRef.current.add(key);
       if (terminal) {
-        setEdges(currentEdges.concat({
+        nextEdges.push({
           id: `edge-${terminal.id}-${id}`,
           source: terminal.id,
           sourceHandle: "success",
@@ -436,8 +462,22 @@ function GraphStudioCanvas() {
           type: "removable",
           animated: false,
           data: { readOnly: false, onMutate: () => setDirty(true) },
-        }));
+        });
       }
+      if (mapperAttention?.node) {
+        nextEdges.push({
+          id: `edge-${id}-unresolved-${mapperAttention.node.id}`,
+          source: id,
+          sourceHandle: "unresolved",
+          target: mapperAttention.node.id,
+          targetHandle: "input",
+          type: "removable",
+          animated: false,
+          data: { readOnly: false, onMutate: () => setDirty(true) },
+        });
+      }
+      setNodes(nextNodes);
+      setEdges(nextEdges);
       setSelectedNodeId(id);
       setDirty(true);
       window.setTimeout(() => fitView({ padding: 0.18, duration: 220 }), 0);
@@ -463,7 +503,7 @@ function GraphStudioCanvas() {
     if (!canvasInteraction.canEdit) return;
     setEdges((current) => addEdge({
       ...connection,
-      id: `edge-${connection.source}-${connection.target}`,
+      id: `edge-${connection.source}-${connection.sourceHandle || "success"}-${connection.target}`,
       type: "removable",
       animated: false,
       data: { readOnly: false, onMutate: () => setDirty(true) },
@@ -499,7 +539,7 @@ function GraphStudioCanvas() {
     setSelectedNodeId("");
     setLoadedFilename("");
     setWorkflowName("Untitled");
-    setMetadata(createNewMetadata());
+    setMetadata(createNewWorkflowMetadata());
     setSourceSchema(2);
     setDirty(false);
     setNotice({ kind: "neutral", text: "New v2 workflow" });
@@ -795,6 +835,7 @@ function GraphStudioCanvas() {
         currentNodeId: "",
         completedNodeIds: [],
         skippedNodeIds: [],
+        unresolvedNodeIds: [],
         totalSteps: nodes.length,
         logs: [],
       });
@@ -1544,7 +1585,36 @@ function parseSeedValue(input) {
     return raw;
   }
 }
-function createNewMetadata() { return { id: crypto.randomUUID(), name: "Untitled", description: "", boundDomain: "", settings: { reuseExistingTabs: false, graphLayoutDirection: "vertical" }, variables: {}, datasets: {}, dataSources: [] }; }
+function getOrCreateMapperAttentionNode(nodes = [], edges = [], layoutDirection = "vertical") {
+  const existing = nodes.find((node) => node.data?.type === MapperAttentionNodeType);
+  if (existing) return { node: existing, created: false };
+
+  const index = nodes.length + 1;
+  return {
+    created: true,
+    node: {
+      id: `mapper-attention-${crypto.randomUUID().slice(0, 8)}`,
+      type: "brunner",
+      position: layoutDirection === "horizontal"
+        ? { x: 90 + index * 340, y: 300 }
+        : { x: 430, y: 70 + Math.max(0, index - 1) * 180 },
+      selected: false,
+      data: {
+        type: MapperAttentionNodeType,
+        definition: MAPPER_ATTENTION_DEFINITION,
+        config: {},
+        target: "",
+        targetSource: "",
+        targetEdited: false,
+        executionMode: "enabled",
+        skipWhen: "",
+        collapsed: false,
+        layoutDirection,
+        readOnly: false,
+      },
+    },
+  };
+}
 function NodeGlyphSmall() { return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/><path d="M10 7h4a3 3 0 0 1 3 3v4"/></svg>; }
 function NodeGlyphLarge() { return <svg aria-hidden="true" viewBox="0 0 48 48"><rect x="7" y="7" width="13" height="13" rx="3"/><rect x="28" y="28" width="13" height="13" rx="3"/><path d="M20 13.5h8a7 7 0 0 1 7 7V28"/></svg>; }
 function RefreshIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 5M20 5v6h-6"/></svg>; }

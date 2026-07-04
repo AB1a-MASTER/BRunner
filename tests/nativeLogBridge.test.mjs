@@ -161,6 +161,8 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(background, /NativeBridge\.hostAction/);
   assert.match(background, /NativeBridge\.hostVisualMatch/);
   assert.match(background, /capturePreparedComponentImage/);
+  assert.match(background, /mapperCoordinator\.attachExecutionContext/);
+  assert.match(background, /if \(isMapperUnresolvedError\(error\)\)/);
   assert.match(background, /Messages\.PrepareHostFallback/);
   assert.match(background, /Messages\.VerifyHostFallback/);
   assert.match(mapper, /PrepareHostFallback/);
@@ -176,6 +178,22 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(workflow, /verificationText/);
   assert.match(fixture, /trusted-submit/);
   assert.match(fixture, /event\.isTrusted/);
+});
+
+test("mapper graph traversal routes unresolved outcomes explicitly", async () => {
+  const [background, runtimeProjection] = await Promise.all([
+    readFile(new URL("BRunner/background.js", root), "utf8"),
+    readFile(new URL("BRunner/studio-graph-src/src/runtimeProjection.js", root), "utf8"),
+  ]);
+
+  assert.match(background, /executeMapperGraphWorkflow/);
+  assert.match(background, /GraphEdgeHandles\.Unresolved/);
+  assert.match(background, /handleMapperUnresolvedNode/);
+  assert.match(background, /status:\s*"unresolved"/);
+  assert.match(background, /MapperAttentionNodeType/);
+  assert.match(background, /action === MapperAttentionNodeType/);
+  assert.match(runtimeProjection, /unresolvedNodeIds/);
+  assert.match(runtimeProjection, /runtimeStatus = "unresolved"/);
 });
 
 test("live acceptance workflows open the fixture harness explicitly", async () => {
@@ -261,4 +279,37 @@ test("host-served acceptance page has smoke and upload targets", async () => {
   assert.match(hostHarness, /uploaded-file-result/);
   assert.match(hostHarness, /tests\/fixtures\/download-acceptance\.txt/);
   assert.match(hostHarness, /event\.isTrusted/);
+});
+
+test("mapper acceptance page covers tracking and ambiguity fixtures", async () => {
+  const mapperHarness = await readFile(
+    new URL("BRunner_Host/mapper_test.html", root),
+    "utf8",
+  );
+
+  assert.match(mapperHarness, /BRunner Mapper Acceptance Harness/);
+  assert.match(mapperHarness, /data-testid="profile-save"/);
+  assert.match(mapperHarness, /data-testid="billing-save"/);
+  assert.match(mapperHarness, /Apply Drift/);
+  assert.match(mapperHarness, /customElements\.define\("shadow-mapper-card"/);
+  assert.match(mapperHarness, /attachShadow\(\{ mode: "open" \}\)/);
+  assert.match(mapperHarness, /mutation storm started/);
+  assert.match(mapperHarness, /materialMutationCount/);
+});
+
+test("mapper stress page covers static dynamic infinite and shadow fixtures", async () => {
+  const stressHarness = await readFile(
+    new URL("BRunner_Host/mapper_stress_test.html", root),
+    "utf8",
+  );
+
+  assert.match(stressHarness, /BRunner Mapper Stress Harness/);
+  assert.match(stressHarness, /data-testid="static-section"/);
+  assert.match(stressHarness, /data-testid="dynamic-section"/);
+  assert.match(stressHarness, /data-testid="mutation-heavy-section"/);
+  assert.match(stressHarness, /data-testid="infinite-scroll-section"/);
+  assert.match(stressHarness, /customElements\.define\("shadow-stress-card"/);
+  assert.match(stressHarness, /attachShadow\(\{ mode: "open" \}\)/);
+  assert.match(stressHarness, /materialMutationCount/);
+  assert.match(stressHarness, /appendFeedItems/);
 });

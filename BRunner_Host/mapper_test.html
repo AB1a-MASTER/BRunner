@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BRunner Mapper Acceptance Harness</title>
+    <style>
+        :root { color-scheme: light; }
+        body {
+            max-width: 980px;
+            margin: 32px auto;
+            padding: 0 20px 48px;
+            font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+            color: #182033;
+            background: #f7f8fb;
+        }
+        header, section {
+            margin-bottom: 18px;
+            padding: 18px;
+            border: 1px solid #d7dce8;
+            border-radius: 8px;
+            background: #fff;
+        }
+        h1, h2 { margin: 0 0 10px; line-height: 1.2; }
+        p { margin: 0 0 12px; }
+        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .card {
+            display: grid;
+            gap: 10px;
+            padding: 14px;
+            border: 1px solid #dfe4ee;
+            border-radius: 8px;
+            background: #fbfcff;
+        }
+        label { display: grid; gap: 5px; font-weight: 650; }
+        input, select, button, textarea {
+            min-height: 38px;
+            padding: 8px 10px;
+            border: 1px solid #b8c2d6;
+            border-radius: 6px;
+            font: inherit;
+            background: #fff;
+        }
+        button { cursor: pointer; font-weight: 700; }
+        button:hover { border-color: #4069b2; }
+        [data-region] { position: relative; }
+        #event-log {
+            min-height: 80px;
+            max-height: 180px;
+            overflow: auto;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font: 13px/1.4 Consolas, ui-monospace, monospace;
+            white-space: pre-wrap;
+        }
+        .feed-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .mutating { outline: 2px solid #f59e0b; }
+        @media (max-width: 720px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BRunner Mapper Acceptance Harness</h1>
+        <p>
+            Use this page to test mapping without relying only on recorder smoke:
+            stable component IDs, duplicate labels, drift recovery, open Shadow DOM,
+            and mutation-heavy safe decline.
+        </p>
+    </header>
+
+    <section aria-labelledby="static-heading" data-region="account-settings">
+        <h2 id="static-heading">Static Account Settings</h2>
+        <div class="grid">
+            <form class="card" id="profile-form" aria-label="Profile form" data-testid="profile-form">
+                <label for="profile-name">
+                    Profile name
+                    <input id="profile-name" name="profile_name" aria-label="Profile name" data-testid="profile-name" placeholder="Ada Lovelace">
+                </label>
+                <label for="profile-email">
+                    Profile email
+                    <input id="profile-email" name="profile_email" aria-label="Profile email" data-testid="profile-email" placeholder="ada@example.com">
+                </label>
+                <button id="profile-save" name="profile_save" data-testid="profile-save" type="button">Save</button>
+            </form>
+
+            <form class="card" id="billing-form" aria-label="Billing form" data-testid="billing-form">
+                <label for="billing-email">
+                    Billing email
+                    <input id="billing-email" name="billing_email" aria-label="Billing email" data-testid="billing-email" placeholder="billing@example.com">
+                </label>
+                <label for="billing-plan">
+                    Billing plan
+                    <select id="billing-plan" name="billing_plan" aria-label="Billing plan" data-testid="billing-plan">
+                        <option value="starter">Starter</option>
+                        <option value="pro">Pro</option>
+                        <option value="enterprise">Enterprise</option>
+                    </select>
+                </label>
+                <button id="billing-save" name="billing_save" data-testid="billing-save" type="button">Save</button>
+            </form>
+        </div>
+    </section>
+
+    <section aria-labelledby="drift-heading" data-region="drift-lab">
+        <h2 id="drift-heading">Drift And Reconciliation Lab</h2>
+        <div class="card">
+            <p>The target below changes ID, position, and visible text while keeping enough independent evidence to track.</p>
+            <button id="drift-target" name="drift_target" aria-label="Publish settings" data-testid="publish-settings" type="button">Publish Settings</button>
+            <button id="apply-drift" type="button">Apply Drift</button>
+            <button id="reset-drift" type="button">Reset Drift</button>
+        </div>
+    </section>
+
+    <section aria-labelledby="shadow-heading" data-region="shadow-lab">
+        <h2 id="shadow-heading">Open Shadow DOM</h2>
+        <shadow-mapper-card id="shadow-card"></shadow-mapper-card>
+    </section>
+
+    <section aria-labelledby="dynamic-heading" data-region="dynamic-feed">
+        <h2 id="dynamic-heading">Mutation Heavy Region</h2>
+        <p>This region can intentionally mutate past mapper policy limits.</p>
+        <button id="start-mutations" type="button">Start Mutation Storm</button>
+        <button id="stop-mutations" type="button">Stop Mutation Storm</button>
+        <div id="feed" aria-label="Live feed" data-testid="live-feed"></div>
+    </section>
+
+    <section aria-labelledby="result-heading">
+        <h2 id="result-heading">Event Log</h2>
+        <div id="event-log" role="status">Ready.</div>
+    </section>
+
+    <script>
+        const log = document.getElementById("event-log");
+        const feed = document.getElementById("feed");
+        let mutationTimer = 0;
+        let mutationCount = 0;
+
+        function writeLog(message) {
+            const stamp = new Date().toISOString().slice(11, 19);
+            log.textContent = `${stamp} ${message}\n${log.textContent}`;
+        }
+
+        document.getElementById("profile-save").addEventListener("click", () => {
+            writeLog("profile_save clicked");
+        });
+
+        document.getElementById("billing-save").addEventListener("click", () => {
+            writeLog("billing_save clicked");
+        });
+
+        document.getElementById("drift-target").addEventListener("click", () => {
+            writeLog("drift target clicked");
+        });
+
+        document.getElementById("apply-drift").addEventListener("click", () => {
+            const target = document.querySelector("[data-testid='publish-settings']");
+            target.id = "drift-target-renamed";
+            target.textContent = "Publish Changes";
+            target.closest(".card").append(target);
+            writeLog("drift applied: id/text/order changed");
+        });
+
+        document.getElementById("reset-drift").addEventListener("click", () => {
+            const target = document.querySelector("[data-testid='publish-settings']");
+            target.id = "drift-target";
+            target.textContent = "Publish Settings";
+            document.querySelector("#drift-heading + .card").prepend(target);
+            writeLog("drift reset");
+        });
+
+        document.getElementById("start-mutations").addEventListener("click", () => {
+            if (mutationTimer) return;
+            document.querySelector("[data-region='dynamic-feed']").classList.add("mutating");
+            mutationTimer = window.setInterval(() => {
+                mutationCount += 1;
+                const row = document.createElement("div");
+                row.className = "feed-row";
+                row.innerHTML = `<span>Feed item ${mutationCount}</span><button type="button" data-testid="feed-action-${mutationCount}">Act</button>`;
+                feed.prepend(row);
+                feed.dataset.materialMutationCount = String(mutationCount);
+                if (feed.children.length > 30) feed.lastElementChild.remove();
+            }, 80);
+            writeLog("mutation storm started");
+        });
+
+        document.getElementById("stop-mutations").addEventListener("click", () => {
+            window.clearInterval(mutationTimer);
+            mutationTimer = 0;
+            document.querySelector("[data-region='dynamic-feed']").classList.remove("mutating");
+            writeLog(`mutation storm stopped at ${mutationCount}`);
+        });
+
+        class ShadowMapperCard extends HTMLElement {
+            connectedCallback() {
+                const root = this.attachShadow({ mode: "open" });
+                root.innerHTML = `
+                    <style>
+                        .panel { display: grid; gap: 10px; padding: 14px; border: 1px solid #b8c2d6; border-radius: 8px; background: #f8fafc; }
+                        label { display: grid; gap: 5px; font-weight: 650; }
+                        input, button { min-height: 38px; padding: 8px 10px; border: 1px solid #94a3b8; border-radius: 6px; font: inherit; }
+                    </style>
+                    <div class="panel" aria-label="Shadow payment panel" data-testid="shadow-payment-panel">
+                        <label for="shadow-token">
+                            Shadow token
+                            <input id="shadow-token" name="shadow_token" aria-label="Shadow token" data-testid="shadow-token" placeholder="token">
+                        </label>
+                        <button id="shadow-save" name="shadow_save" aria-label="Save shadow token" data-testid="shadow-save" type="button">Save Shadow</button>
+                    </div>
+                `;
+                root.getElementById("shadow-save").addEventListener("click", () => {
+                    writeLog("shadow_save clicked");
+                });
+            }
+        }
+
+        customElements.define("shadow-mapper-card", ShadowMapperCard);
+    </script>
+</body>
+</html>

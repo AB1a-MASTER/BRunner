@@ -191,6 +191,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .react-flow__handle { width: 10px; height: 10px; border: 2px solid #bfdbfe; background: var(--accent); }
 .react-flow__handle-top { top: -6px; }
 .react-flow__handle-bottom { bottom: -6px; }
+.node-handle-unresolved { border-color: #fde68a; background: #d97706; }
 
 .graph-node { width: calc(252px * var(--studio-panel-width-scale)); padding: calc(12px * var(--studio-density-scale)); border: 1px solid #3a4c68; border-radius: 9px; background: #142138; box-shadow: 0 10px 26px rgba(0,0,0,0.26); transition: border-color 160ms, box-shadow 160ms, opacity 160ms; }
 .graph-node:hover { border-color: #577296; }
@@ -203,6 +204,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .graph-node.runtime-running { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(59,130,246,0.24), 0 0 24px rgba(37,99,235,0.22); }
 .graph-node.runtime-completed { border-color: #278553; }
 .graph-node.runtime-skipped { border-color: #64748b; border-style: dashed; opacity: 0.66; }
+.graph-node.runtime-unresolved { border-color: #f97316; box-shadow: 0 0 0 2px rgba(249,115,22,0.16); }
 .graph-node.runtime-failed { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.18); }
 .graph-node.runtime-cancelled { border-color: #d97706; }
 .graph-node-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -239,6 +241,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .node-runtime-completed { border-color: #166534; }
 .node-runtime-completed span::before { background: #4ade80; }
 .node-runtime-skipped span::before { background: #94a3b8; }
+.node-runtime-unresolved { border-color: #9a3412; }
+.node-runtime-unresolved span::before { background: #fb923c; }
 .node-runtime-failed { border-color: #991b1b; }
 .node-runtime-failed span::before { background: #f87171; }
 .node-runtime-cancelled { border-color: #854d0e; }
@@ -550,6 +554,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .react-flow__handle {
   width: calc(10px * var(--studio-density-scale));
   height: calc(10px * var(--studio-density-scale));
+}
+.node-handle-unresolved {
+  width: calc(11px * var(--studio-density-scale));
+  height: calc(11px * var(--studio-density-scale));
 }
 .graph-node {
   width: var(--graph-node-width);

@@ -225,20 +225,72 @@ Implementation phases:
 1. Mapper Core foundation, build outputs, `workflow.settings.mapper`, graph
    schema v3, placeholder `ComponentRef`, and Chrome-storage `MapStore`
    skeleton.
+   **Initial source foundation complete: pure Mapper Core, v3 schema validation,
+   placeholder `ComponentRef`, Graph Studio source defaults/handles, and
+   Chrome-storage `MapStore` skeleton are in. Build-output integration and live
+   Graph Studio acceptance remain.**
 2. Static page map, page normalization, workflow-local site/page overrides,
    canonical Component ID naming, fixed scoring, primary-first resolution,
    action validation, ambiguity handling, and `dynamic_deferred` safe decline.
+   **Initial pure Mapper Core slice complete: static page-map construction,
+   canonical duplicate naming, compact fingerprints, primary/fallback resolver
+   states, action compatibility, and dynamic-deferred safe decline are in.
+   Live DOM adapter and recorder/runtime wiring remain next.**
+   **Initial content-adapter source pass complete: recorder steps now include
+   `componentRef`/`mapperFact`, static candidate scanning includes reachable
+   open Shadow DOM roots, and Graph Studio auto-routes recorded mapper nodes to
+   a `Needs attention` unresolved endpoint. MapStore persistence and runtime
+   traversal remain next.**
+   **Initial coordinator persistence complete: recorded mapper facts are
+   reconciled through Chrome `MapStore`, locked Component IDs survive recorder
+   drift, and `BRunner_Host/mapper_test.html` provides the mapper acceptance
+   fixture for duplicate labels, drift, open Shadow DOM, and dynamic-deferred
+   checks.**
+   **Initial mapper-backed execution source pass complete: runtime execution now
+   attaches stored page-map context, content action execution resolves through
+   stored Component IDs before legacy targets, and browser/visible-host fallback
+   paths return handled mapper states before dispatch. Graph traversal for the
+   explicit `unresolved` route remains next.**
+   **Initial v3 unresolved traversal source pass complete: mapper graph
+   workflows now execute through a narrow `success`/`unresolved` traversal path,
+   route handled mapper unresolved outcomes to the `unresolved` edge, and show
+   unresolved runtime state in Graph Studio. This does not add general
+   conditions, loops, or merge-path control flow.**
+   **Mapper-aware wait/extraction source pass complete: wait-element conditions
+   now resolve through the same mapper context as actions and return handled
+   mapper diagnostics instead of timing out generically. Extraction nodes already
+   use the shared mapper-aware action path.**
 3. Open Shadow DOM traversal, shadow paths, bounded map history, stale-map
    reconciliation, stable Component IDs across drift, and structured resolver
    output/logging.
+   **Initial pre-Inspector source pass complete: open-shadow candidate scanning
+   exists, page-map history is bounded per workflow/page, reconciliation records
+   `same`/`changed`/`new`/`removed`/`ambiguous`, strong matches preserve locked
+   Component IDs, review-required states are marked, refreshed map versions are
+   produced on fingerprint drift, and `mapper_stress_test.html` plus
+   `MAPPER_MANUAL_ACCEPTANCE.md` cover manual acceptance. Shadow-path
+   persistence, full observer-driven stale invalidation, and Inspector-facing
+   attempt logs remain later.**
 4. Dedicated Mapper Inspector window with map browsing, live resolution checks,
    highlight, Review Queue, aliases, sensitive-site badges, and effective policy
-   view.
+   view. The Inspector must expose a saved-map website list plus Tree, Graph,
+   and simplified Website map views. When the Inspector and mapped site are open
+   together, selecting a component in any view should highlight the live page
+   element with color-coded resolver/review state overlays, similar to DevTools
+   element selection.
 5. Filesystem `MapStore` adapter through the existing companion/local-host
    bridge, with atomic writes, timeouts, bounded retention, and last-write-wins
    conflict records.
 6. Deferred dynamic, feed, and same-origin frame work only after static/open-
    shadow reliability tests are stable.
+
+After the mapper execution and Inspector basics are complete, add a dedicated
+manual mapper stress page with static, dynamic, mutation-heavy, infinite-scroll,
+and open Shadow DOM sections. Use it to verify locked Component IDs,
+reconciliation, honest `dynamic_deferred`/unsupported outcomes, saved-map
+listing, Tree/Graph/Website map views, and live website highlighting.
+The current pre-Inspector manual acceptance checklist is
+[MAPPER_MANUAL_ACCEPTANCE.md](MAPPER_MANUAL_ACCEPTANCE.md).
 
 **Gate:** every recorded DOM node uses a locked readable Component ID; resolver
 states are `resolved`, `resolved_with_fallback`, `ambiguous`, `not_found`,

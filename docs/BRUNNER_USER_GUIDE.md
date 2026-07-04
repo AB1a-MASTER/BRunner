@@ -137,15 +137,61 @@ extension still requires post-action verification before passing the step.
 ## Mapper Inspector
 
 The mapper phase adds a dedicated extension window for reviewing maps. It lets a
-user browse workflow, site, page, and map versions; search by Component ID,
-display name, role, or status; inspect primary/fallback locators, compact
-fingerprints, expected capabilities, and history; run a live resolution check;
-and highlight the element only after a unique live resolution succeeds.
+user open a saved-map browser, view maps grouped by website, select site/page
+profiles and versions, search by Component ID, display name, role, or status,
+inspect primary/fallback locators, compact fingerprints, expected capabilities,
+and history, run a live resolution check, and highlight the element only after
+a unique live resolution succeeds.
+
+The Inspector must provide three views for a selected map:
+
+- **Tree view:** an explorer-style hierarchy of website, page, region/container,
+  and component records.
+- **Graph view:** a hierarchy graph similar to Graph Studio, showing map
+  relationships and unresolved/review states.
+- **Website view:** a simplified reconstructed page view using the saved map's
+  component records and relative positioning. It uses BRunner's default HTML
+  visuals because the mapper does not store the original site's styling.
+
+When the Inspector and mapped website are open together, **Highlight on
+website** mode lets the user select a component in Tree, Graph, or Website view
+and see a color-coded overlay on the live page, similar to selecting an element
+in DevTools. Resolved, fallback-resolved, ambiguous, missing, review-required,
+dynamic-deferred, and unsupported components must be visually distinct.
+Highlighting is inspection-only; it must never click or type into an ambiguous
+or unresolved target.
 
 The Inspector also exposes workflow-scoped mapper settings under
 `workflow.settings.mapper`, including mapping mode, explicit or automatic
 mapping trigger, exhaustiveness tier, query-parameter allowlists, sensitivity,
 and site/page overrides. There are no extension-global mapper policies.
+
+Current source foundation: new graph workflows default to mapper-capable graph
+schema v3, target-element nodes can carry placeholder `ComponentRef` records,
+recorded DOM steps persist workflow-scoped page maps, and action execution can
+resolve stored Component IDs before falling back to legacy target packages.
+Mapper-bound DOM nodes require an explicit `unresolved` route. Mapper graph
+workflows now have an initial source traversal path for `success` and
+`unresolved` handles. Existing v2 workflows remain compatible with the current
+linear runtime. General graph control flow such as conditions, loops, and merge
+paths remains deferred.
+
+Element wait conditions and extraction actions use the same mapper-aware target
+resolution as interaction actions. If a mapped wait/extraction target is
+ambiguous, missing, or safely deferred, the workflow receives a handled mapper
+diagnostic instead of silently choosing a candidate.
+
+Mapper acceptance pages are served from the repo root. The current fixtures are
+`http://127.0.0.1:8765/BRunner_Host/mapper_test.html` and
+`http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html`. They exercise
+duplicate Save buttons, Component ID drift, static controls, controlled dynamic
+drift, mutation-heavy safe decline, infinite-scroll boundaries, open Shadow DOM
+controls, and visible counters/logs. The manual test should map each section,
+mutate the page, verify honest unresolved/deferred outcomes, and later, after
+the Inspector exists, switch through Tree/Graph/Website views and verify live
+page highlighting from selected map elements.
+The source manual checklist is in
+[`MAPPER_MANUAL_ACCEPTANCE.md`](MAPPER_MANUAL_ACCEPTANCE.md).
 
 Ambiguous components go to a Review Queue. The Inspector must not offer a
 "choose first candidate" action. A reviewer can explicitly link a historical

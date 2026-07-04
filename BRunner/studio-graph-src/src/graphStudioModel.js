@@ -1,13 +1,16 @@
 import {
+  CurrentGraphWorkflowSchemaVersion,
   detectWorkflowSchema,
+  isGraphWorkflowSchemaVersion,
   upgradeWorkflowToV2,
   validateGraphWorkflow,
   WorkflowSchemaVersion,
 } from "../../core/workflowSchema.js";
+import { createDefaultMapperSettings } from "../../mapper/core.js";
 
 export function workflowToCanvas(input, definitions) {
   const sourceSchema = detectWorkflowSchema(input);
-  const graph = sourceSchema === WorkflowSchemaVersion.Graph
+  const graph = isGraphWorkflowSchemaVersion(sourceSchema)
     ? structuredClone(input)
     : upgradeWorkflowToV2(input);
   const validation = validateGraphWorkflow(graph);
@@ -66,6 +69,7 @@ export function workflowToCanvas(input, definitions) {
       name: graph.name || input?.name || "Untitled",
       description: graph.description || input?.description || "",
       boundDomain: graph.boundDomain || "",
+      schemaVersion: graph.schemaVersion || WorkflowSchemaVersion.Graph,
       settings: cloneObject(graph.settings),
       variables: cloneObject(graph.variables),
       datasets: cloneObject(graph.datasets),
@@ -97,7 +101,7 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
   const entries = graphNodes.filter((node) => !incoming.has(node.id));
 
   const graph = {
-    schemaVersion: WorkflowSchemaVersion.Graph,
+    schemaVersion: metadata.schemaVersion || CurrentGraphWorkflowSchemaVersion,
     id: String(metadata.id || "workflow-v2"),
     name: String(metadata.name || "Untitled"),
     description: String(metadata.description || ""),
@@ -173,8 +177,28 @@ function sanitizeNodeData(source = {}) {
   data.target = source.targetEdited
     ? source.target
     : structuredClone(source.targetSource ?? source.target ?? "");
+  if (source.componentRef) data.componentRef = structuredClone(source.componentRef);
   delete data.disabled;
   return data;
+}
+
+export function createNewWorkflowMetadata(overrides = {}) {
+  return {
+    id: crypto.randomUUID(),
+    name: "Untitled",
+    description: "",
+    boundDomain: "",
+    schemaVersion: CurrentGraphWorkflowSchemaVersion,
+    settings: {
+      reuseExistingTabs: false,
+      graphLayoutDirection: "vertical",
+      mapper: createDefaultMapperSettings(),
+    },
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    ...overrides,
+  };
 }
 
 function normalizeLayoutDirection(value) {

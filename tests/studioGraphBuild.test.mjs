@@ -52,6 +52,9 @@ test("graph Studio wires persistence and execution controls", async () => {
   assert.match(source, /saveStudioSession/);
   assert.match(source, /getRecordedStepKey/);
   assert.match(source, /recording\.recordedSteps\.forEach/);
+  assert.match(source, /MapperAttentionNodeType/);
+  assert.match(source, /getOrCreateMapperAttentionNode/);
+  assert.match(source, /sourceHandle:\s*"unresolved"/);
   assert.match(source, /CLEAR_EXECUTION_LOGS/);
   assert.match(source, /OS_SAVE_EXECUTION_LOG/);
   assert.match(source, /Clear &amp; save after run/);

@@ -41,6 +41,12 @@ export const Messages = Object.freeze({
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
   GetNodeDefinitions: "GET_NODE_DEFINITIONS",
+  GetWorkflowMapperState: "GET_WORKFLOW_MAPPER_STATE",
+  SaveWorkflowMapperState: "SAVE_WORKFLOW_MAPPER_STATE",
+  DeleteWorkflowMapperState: "DELETE_WORKFLOW_MAPPER_STATE",
+  MapCurrentPage: "MAP_CURRENT_PAGE",
+  ResolveMapperComponent: "RESOLVE_MAPPER_COMPONENT",
+  HighlightMapperComponent: "HIGHLIGHT_MAPPER_COMPONENT",
 
   // Content script execution
   ExecuteStep: "EXECUTE_STEP",
@@ -140,6 +146,24 @@ export const NavigationTargets = Object.freeze({
   NewTab: "newTab",
 });
 
+export const MapperActions = Object.freeze({
+  MapCurrentPage: "mapper.map_current_page",
+  ResolveComponent: "mapper.resolve_component",
+  HighlightComponent: "mapper.highlight_component",
+  ReconcileMap: "mapper.reconcile_map",
+});
+
+export const MapperResolverStates = Object.freeze({
+  Resolved: "resolved",
+  ResolvedWithFallback: "resolved_with_fallback",
+  Ambiguous: "ambiguous",
+  NotFound: "not_found",
+  MapStale: "map_stale",
+  Changed: "changed",
+  ProtectedUnsupported: "protected_unsupported",
+  DynamicDeferred: "dynamic_deferred",
+});
+
 export const NativeCommands = Object.freeze({
   Auth: "AUTH",
   HostHello: "HOST_HELLO",
@@ -167,6 +191,7 @@ export const Defaults = Object.freeze({
   NativeHostUrl: "ws://127.0.0.1:8999",
   PairingKey: "ac1890957e38af28cd5d0961e6d0d530",
   NativePairingStorageKey: "brunner.nativePairing.v1",
+  MapperStorageKey: "brunner.mapper.v1",
 
   WorkflowFileExtension: ".json",
   DefaultWorkflowName: "Untitled",

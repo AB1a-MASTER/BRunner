@@ -5,11 +5,12 @@ import { Defaults } from "./constants.js";
 import {
   detectWorkflowSchema,
   graphWorkflowToSequential,
-  WorkflowSchemaVersion,
+  isGraphWorkflowSchemaVersion,
 } from "./workflowSchema.js";
+import { createDefaultMapperSettings, normalizeMapperSettings } from "../mapper/core.js";
 
 export function normalizeWorkflow(input = {}) {
-  if (detectWorkflowSchema(input) === WorkflowSchemaVersion.Graph) {
+  if (isGraphWorkflowSchemaVersion(detectWorkflowSchema(input))) {
     input = graphWorkflowToSequential(input);
   }
   if (Array.isArray(input)) {
@@ -58,12 +59,14 @@ export function createEmptyWorkflow(boundDomain = "") {
 export function createDefaultWorkflowSettings() {
   return {
     reuseExistingTabs: false,
+    mapper: createDefaultMapperSettings(),
   };
 }
 
 export function normalizeWorkflowSettings(settings = {}) {
   return {
     reuseExistingTabs: settings?.reuseExistingTabs === true,
+    mapper: normalizeMapperSettings(settings?.mapper),
   };
 }
 
@@ -71,7 +74,7 @@ export function isWorkflowLike(input) {
   if (Array.isArray(input)) return true;
   if (!input || typeof input !== "object") return false;
   return Array.isArray(input.steps) || (
-    detectWorkflowSchema(input) === WorkflowSchemaVersion.Graph &&
+    isGraphWorkflowSchemaVersion(detectWorkflowSchema(input)) &&
     Array.isArray(input.nodes) &&
     Array.isArray(input.edges)
   );

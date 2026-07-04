@@ -648,6 +648,15 @@ traversal that chooses the outgoing edge from node outcome. This is a
 prerequisite for the new mapper. Do not fake unresolved branching by swallowing
 errors inside `executeContentStep`.
 
+**Initial source pass complete:** mapper schema v3 workflows now run through a
+narrow graph traversal path in `background.js` that follows `success` or
+`unresolved` handles. Mapper unresolved content outcomes are logged as handled
+`unresolved` node results, update shared runtime state, and route to the
+`unresolved` edge without dispatching browser or visible-host fallback actions.
+The generated **Needs attention** node is treated as a safe no-op terminal node.
+This is not general graph control flow; conditions, loops, merges, and broader
+branching remain deferred.
+
 ## Persistence and Privacy
 
 ### Chrome Storage First
@@ -719,16 +728,37 @@ Create an extension-owned dedicated window, for example
 
 Required features:
 
+- open from a clear mapper/maps button in the extension or Studio;
+- list saved maps grouped as a website list, then site profile, page profile,
+  and map version;
 - select workflow, site profile, page profile, and map version;
 - search by Component ID, display name, role, and status;
 - visual tree/list of mapped components with semantic and structural context;
 - badges for `same`, `changed`, `new`, `removed`, `ambiguous`,
   `dynamic_deferred`, and `unsupported`;
+- three map views:
+  - **Tree view:** explorer-style hierarchy grouped by website, page,
+    containers, forms/regions, and components;
+  - **Graph view:** hierarchy graph similar to Graph Studio, showing site,
+    page, region/container, component, and relationship edges;
+  - **Website view:** reconstruct a simplified page-like map from stored
+    component records and relative bounds. Do not attempt to preserve original
+    site styling because raw CSS is not stored; render with default BRunner HTML
+    visuals, stable labels, role badges, and approximate positioning.
 - show primary locator, fallback hierarchy, compact fingerprint, expected
   capabilities, and historical links;
 - run live resolution before showing a highlight;
 - highlight only after successful unique live resolution;
 - scroll the resolved element into view before highlighting;
+- when the Inspector and the mapped website are open at the same time, support
+  a **Highlight on website** mode. Selecting a component in Tree, Graph, or
+  Website view sends a safe highlight request to the content mapper session,
+  scrolls the resolved live element into view, and overlays a color-coded box
+  on the real page, similar to the DevTools Elements panel. Color codes must
+  distinguish resolved, resolved-with-fallback, ambiguous, not-found,
+  changed/review-required, dynamic-deferred, and unsupported states. Ambiguous
+  and not-found items may show candidate/area hints but must not dispatch page
+  actions.
 - Review Queue for changed and ambiguous components;
 - workflow-local page/site override editing for mapping trigger, query
   allowlist, sensitivity, and allowed static/dynamic-deferred override;
@@ -738,6 +768,42 @@ Required features:
 The Inspector must never offer a "choose first candidate" action for ambiguous
 results. A reviewer may explicitly link a historical component to a selected
 candidate, recording the decision in the next map version.
+
+## Mapper Stress Test Page
+
+After core mapper execution and Inspector basics are complete, add a dedicated
+manual mapper stress page served with the existing acceptance fixtures. The page
+must contain:
+
+- a static section with stable controls, duplicate labels in separate
+  containers, form fields, links, and extractable content;
+- a dynamic section whose IDs, text, order, and container structure can change
+  through explicit buttons while preserving enough independent evidence for
+  valid reconciliation;
+- a mutation-heavy dynamic section that should be classified honestly as
+  `dynamic_deferred` when policy limits are exceeded;
+- an infinite-scroll section that appends repeated cards/items under strict
+  test controls. Initial mapper support must not claim full infinite-feed
+  support; it should classify or scope the loaded portion honestly until the
+  deferred dynamic/feed milestone exists;
+- open Shadow DOM controls for capture, resolution, and highlighting;
+- visible counters/logs proving whether clicks, typing, selection, and
+  unresolved states did or did not execute.
+
+The manual acceptance instructions must explain exactly how to:
+
+1. serve the page from the repo root;
+2. map the static section and verify locked Component IDs;
+3. mutate the dynamic section and verify reconciliation or handled
+   unresolved outcomes;
+4. trigger mutation-heavy and infinite-scroll scenarios and verify honest
+   `dynamic_deferred` or unsupported behavior;
+5. open the Mapper Inspector, select the saved website map, switch among Tree,
+   Graph, and Website views, and use highlight-on-website mode to verify live
+   element overlays.
+
+The current manual source checklist lives in
+[`../MAPPER_MANUAL_ACCEPTANCE.md`](../MAPPER_MANUAL_ACCEPTANCE.md).
 
 ## Concrete Code Migration
 
@@ -760,14 +826,26 @@ candidate, recording the decision in the next map version.
 
 - Add Mapper Core source, build step, policy types, schema version constants,
   and unit-test harness.
+  **Initial source foundation complete: pure `BRunner/mapper/core.js` exposes
+  mapper schema/version constants, workflow-scoped policy normalization,
+  page-profile normalization, placeholder `ComponentRef` creation, and
+  mapper-state serialization. Bundled build-output integration remains later.**
 - Add `workflow.settings.mapper` schema and validation.
+  **Implemented in source defaults and workflow setting normalization.**
 - Upgrade new workflows to graph schema v3 with `success` and `unresolved`
   routing.
+  **Implemented in source: v2 remains the current linear runtime graph; v3
+  accepts `success` and `unresolved` handles, rejects DOM-dependent mapper nodes
+  without unresolved routing, and refuses to run unresolved v3 graphs through the
+  linear executor.**
 - Define MapStore adapter and Chrome storage skeleton.
+  **Implemented as `ChromeMapStore` over `chrome.storage.local`.**
 - Remove requirement to support old test recordings.
 
 Exit: new blank workflow saves mapper settings, DOM node can carry placeholder
 `ComponentRef`, and graph validation requires unresolved routing.
+**Source exit covered by deterministic tests. Live/bundled Graph Studio
+acceptance remains because no build was requested for this source pass.**
 
 ### Milestone 1 - Static Page Map, Naming, and Safe Resolution
 
@@ -778,29 +856,76 @@ Exit: new blank workflow saves mapper settings, DOM node can carry placeholder
   fingerprints.
 - Implement canonical naming, two-ancestor disambiguation, numeric suffixes,
   name locking, and optional aliases.
+  **Initial Mapper Core source slice complete: deterministic static page maps,
+  page/site keys, canonical readable Component IDs with duplicate context,
+  compact serializable fingerprints, component caps, mutation-heavy
+  `dynamic_deferred` safe decline, and locked component records are covered by
+  unit tests. DOM adapter/build-output wiring remains next.**
 - Implement recorder capture into `ComponentRef`.
+  **Initial content-adapter source pass complete: the recorder now enumerates
+  static candidates through document plus reachable open Shadow DOM roots,
+  uses composed event paths, derives compact mapper facts from existing target
+  evidence, and emits `componentRef` plus `mapperFact` on recorded DOM steps.
+  Persistence through MapStore and full Core bundle reuse remain next.**
+  **Initial coordinator persistence complete: background reconciles recorded
+  mapper facts through Chrome `MapStore`, persists workflow-scoped page maps,
+  and returns Core-locked `ComponentRef` records before Studio receives the
+  recorded step.**
 - Implement primary-first resolution, ordered fallback hierarchy, full candidate
   enumeration, scoring, action validation, and `ambiguous` state.
+  **Initial pure resolver complete: unique primary locators resolve first,
+  duplicate primary locators return `ambiguous`, fallback scoring uses fixed
+  `mapper.scoring.v1` thresholds/margins, and incompatible actions are rejected
+  before resolution. Live DOM candidate enumeration remains next.**
+  **Initial execution integration complete: background attaches stored
+  workflow/page map context from `ChromeMapStore` before content execution, and
+  content action execution plus visible-host fallback preparation/verification
+  resolve through stored Component IDs before legacy target packages. The source
+  pass returns handled `resolved`, `resolved_with_fallback`, `ambiguous`,
+  `not_found`, and `dynamic_deferred` states before page actions fire.
+  Wait-condition routing now also uses the same mapper-aware resolver and
+  returns handled mapper diagnostics before falling back to generic timeouts.
+  Extraction actions already resolve through the shared execution path.**
 - Carry forward visibility, enablement, scroll, and occlusion safety checks.
 - Add static-only mutation sampling gate and `dynamic_deferred` safe decline.
 
 Exit: static-page components survive ID/class/CSS-path/layout-order drift only
 when enough independent evidence remains. Duplicate Save controls produce
 `ambiguous`, never a click.
+Dedicated manual fixture: `BRunner_Host/mapper_test.html` covers duplicate
+labels, drift, open Shadow DOM, and mutation-heavy regions for mapper acceptance.
 
 ### Milestone 2 - Open Shadow DOM, History, and Reconciliation
 
 - Add recursive open-shadow traversal, composed-path capture, shadow paths, and
   shadow-root mutation observation.
+  **Initial open-shadow capture/traversal source support is already present in
+  the content adapter for reachable open roots. Shadow-path persistence remains
+  future work.**
 - Add bounded map version history and reconciliation outcomes.
+  **Initial source pass complete: Chrome `MapStore` retains bounded page-map
+  history per workflow/page, and static map reconciliation now records
+  `same`, `changed`, `new`, `removed`, and `ambiguous` summaries.**
 - Preserve historical Component IDs on strong semantic/structural matches.
+  **Initial source pass complete: strong historical matches keep locked
+  Component IDs while changed/ambiguous records are flagged for review.**
 - Mark changed/ambiguous associations for review.
+  **Implemented in source for static map reconciliation.**
 - Implement stale/invalidation lifecycle and hybrid runtime refresh.
+  **Initial source pass complete: changed map fingerprints create `refreshed`
+  page-map versions and dynamic/mutation-heavy pages safely decline with
+  `dynamic_deferred`; full observer-driven invalidation remains later.**
 - Add structured resolver/reconciliation logs and node output.
+  **Partially complete: reconciliation summaries are stored on map versions and
+  mapper unresolved execution produces structured node diagnostics/output. Full
+  Inspector-facing resolver attempt logs remain later.**
 
 Exit: moved components retain Component IDs, labels may drift without ID
 regeneration, and close-score alternatives are not auto-linked or interacted
 with.
+**Initial source exit covered by deterministic tests for bounded history,
+changed/removed/ambiguous reconciliation, unresolved graph routing, and
+mapper-aware wait diagnostics. Live acceptance remains manual.**
 
 ### Milestone 3 - Dedicated Inspector and Workflow Configuration UX
 
@@ -939,4 +1064,3 @@ Do not add these until the deferred milestone:
 9. Use locked readable IDs in component names and resolver logs.
 10. Keep Mapper Core portable so future standalone implementations can use the
     same scoring, naming, result states, and serialized map schema.
-

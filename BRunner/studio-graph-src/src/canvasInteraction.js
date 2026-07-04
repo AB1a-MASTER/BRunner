@@ -33,6 +33,7 @@ export function getMiniMapNodeColor(node = {}) {
     running: "#60a5fa",
     completed: "#22c55e",
     skipped: "#94a3b8",
+    unresolved: "#f97316",
     failed: "#ef4444",
     cancelled: "#f59e0b",
   };

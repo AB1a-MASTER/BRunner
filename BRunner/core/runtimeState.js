@@ -32,6 +32,7 @@ export function createRuntimeStateStore() {
       skippedSteps: 0,
       completedNodeIds: [],
       skippedNodeIds: [],
+      unresolvedNodeIds: [],
       logs: [],
     },
   };

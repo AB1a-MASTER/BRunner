@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BRunner Mapper Stress Harness</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      color: #172033;
+    }
+    body { margin: 0; }
+    header, main { max-width: 1120px; margin: 0 auto; padding: 20px; }
+    header { border-bottom: 1px solid #d7deea; background: #fff; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    section { margin: 18px 0; padding: 16px; border: 1px solid #d7deea; border-radius: 8px; background: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .card { padding: 12px; border: 1px solid #cfd8e8; border-radius: 6px; background: #f9fbff; }
+    label { display: grid; gap: 5px; margin: 8px 0; font-size: 13px; font-weight: 700; }
+    input, select, textarea, button, a.button-link {
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid #b9c5d8;
+      border-radius: 5px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+    }
+    button, a.button-link { cursor: pointer; font-weight: 700; text-decoration: none; }
+    button:hover, a.button-link:hover { border-color: #2563eb; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .counter { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 999px; background: #eaf1ff; font-size: 12px; font-weight: 700; }
+    .feed { min-height: 360px; border: 1px dashed #9fb0c8; border-radius: 6px; padding: 10px; background: #fbfdff; }
+    .feed-card { margin: 8px 0; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+    #event-log { min-height: 120px; max-height: 240px; overflow: auto; white-space: pre-wrap; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #0f172a; color: #dbeafe; font-family: Consolas, monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BRunner Mapper Stress Harness</h1>
+    <p>Use this page to test static mapping, controlled drift, mutation-heavy safe decline, infinite-scroll boundaries, and open Shadow DOM capture.</p>
+  </header>
+  <main>
+    <section id="static-section" data-testid="static-section" aria-label="Static controls">
+      <h2>Static Section</h2>
+      <div class="grid">
+        <form class="card" aria-label="Profile form" data-testid="profile-form">
+          <label>Profile name <input id="profile-name" name="profile_name" placeholder="Ada Lovelace"></label>
+          <button id="profile-save" data-testid="profile-save" type="button">Save</button>
+        </form>
+        <form class="card" aria-label="Billing form" data-testid="billing-form">
+          <label>Billing code <input id="billing-code" name="billing_code" placeholder="INV-100"></label>
+          <button id="billing-save" data-testid="billing-save" type="button">Save</button>
+        </form>
+        <div class="card" aria-label="Static extraction area" data-testid="static-extraction">
+          <p id="static-copy">Stable extractable text for mapper extraction.</p>
+          <a class="button-link" id="static-link" href="#static-section" data-testid="static-link">Static Link</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="dynamic-section" data-testid="dynamic-section" aria-label="Controlled dynamic controls">
+      <h2>Dynamic Section</h2>
+      <div class="toolbar">
+        <button id="apply-drift" type="button">Apply Dynamic Drift</button>
+        <button id="reset-drift" type="button">Reset Dynamic Drift</button>
+        <span class="counter">Drift count <strong id="drift-count">0</strong></span>
+      </div>
+      <div id="dynamic-container" class="grid" data-testid="dynamic-container">
+        <div class="card" data-testid="dynamic-card-alpha" aria-label="Dynamic alpha panel">
+          <label>Dynamic email <input id="dynamic-email" name="dynamic_email" placeholder="alpha@example.com"></label>
+          <button id="dynamic-save" data-testid="dynamic-save" type="button">Update</button>
+        </div>
+        <div class="card" data-testid="dynamic-card-beta" aria-label="Dynamic beta panel">
+          <button id="dynamic-secondary" data-testid="dynamic-secondary" type="button">Update</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="mutation-heavy-section" data-testid="mutation-heavy-section" aria-label="Mutation heavy controls">
+      <h2>Mutation-heavy Section</h2>
+      <div class="toolbar">
+        <button id="start-mutations" type="button">Start Mutation Burst</button>
+        <button id="stop-mutations" type="button">Stop Mutation Burst</button>
+        <span class="counter">Material mutations <strong id="material-mutation-count">0</strong></span>
+      </div>
+      <div id="mutation-target" class="card" data-testid="mutation-target">
+        <button id="volatile-action" data-testid="volatile-action" type="button">Volatile Action</button>
+      </div>
+    </section>
+
+    <section id="infinite-scroll-section" data-testid="infinite-scroll-section" aria-label="Infinite scroll controls">
+      <h2>Infinite Scroll Section</h2>
+      <div class="toolbar">
+        <button id="append-feed" type="button">Append Feed Items</button>
+        <span class="counter">Feed items <strong id="feed-count">0</strong></span>
+      </div>
+      <div id="feed" class="feed" data-testid="infinite-feed" aria-label="Loaded feed items"></div>
+    </section>
+
+    <section id="shadow-section" data-testid="shadow-section" aria-label="Open Shadow DOM controls">
+      <h2>Open Shadow DOM Section</h2>
+      <shadow-stress-card id="shadow-stress" data-testid="shadow-stress"></shadow-stress-card>
+    </section>
+
+    <section id="results-section" aria-label="Mapper stress results">
+      <h2>Results</h2>
+      <div class="toolbar">
+        <button id="clear-log" type="button">Clear Log</button>
+        <span class="counter">Click count <strong id="click-count">0</strong></span>
+      </div>
+      <pre id="event-log" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      clickCount: 0,
+      driftCount: 0,
+      materialMutationCount: 0,
+      feedCount: 0,
+      mutationTimer: null,
+    };
+
+    const log = (message) => {
+      const entry = `[${new Date().toISOString()}] ${message}`;
+      const target = document.querySelector("#event-log");
+      target.textContent = `${entry}\n${target.textContent}`.slice(0, 6000);
+    };
+
+    const setText = (id, value) => {
+      document.querySelector(id).textContent = String(value);
+    };
+
+    const countClick = (label, event) => {
+      state.clickCount += 1;
+      setText("#click-count", state.clickCount);
+      log(`${label} clicked trusted=${Boolean(event && event.isTrusted)}`);
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target.closest("button, a");
+      if (!target || target.id === "clear-log") return;
+      countClick(target.id || target.textContent.trim(), event);
+    });
+
+    document.querySelector("#apply-drift").addEventListener("click", () => {
+      state.driftCount += 1;
+      setText("#drift-count", state.driftCount);
+      const container = document.querySelector("#dynamic-container");
+      container.classList.toggle("drifted");
+      const save = document.querySelector("#dynamic-save");
+      save.id = `dynamic-save-${state.driftCount}`;
+      save.dataset.testid = `dynamic-save-${state.driftCount}`;
+      save.textContent = state.driftCount % 2 ? "Apply update" : "Update";
+      container.append(...Array.from(container.children).reverse());
+      log(`dynamic drift applied count=${state.driftCount}`);
+    });
+
+    document.querySelector("#reset-drift").addEventListener("click", () => {
+      location.reload();
+    });
+
+    document.querySelector("#start-mutations").addEventListener("click", () => {
+      if (state.mutationTimer) return;
+      state.mutationTimer = setInterval(() => {
+        state.materialMutationCount += 1;
+        setText("#material-mutation-count", state.materialMutationCount);
+        const target = document.querySelector("#mutation-target");
+        const chip = document.createElement("span");
+        chip.textContent = ` mutation-${state.materialMutationCount}`;
+        chip.dataset.testid = `mutation-chip-${state.materialMutationCount}`;
+        target.append(chip);
+        target.dataset.materialMutationCount = String(state.materialMutationCount);
+        log(`mutation burst count=${state.materialMutationCount}`);
+      }, 80);
+      log("mutation burst started");
+    });
+
+    document.querySelector("#stop-mutations").addEventListener("click", () => {
+      clearInterval(state.mutationTimer);
+      state.mutationTimer = null;
+      log("mutation burst stopped");
+    });
+
+    function appendFeedItems(count = 12) {
+      const feed = document.querySelector("#feed");
+      for (let index = 0; index < count; index += 1) {
+        state.feedCount += 1;
+        const card = document.createElement("article");
+        card.className = "feed-card";
+        card.dataset.testid = `feed-card-${state.feedCount}`;
+        card.innerHTML = `
+          <strong>Feed item ${state.feedCount}</strong>
+          <p>Loaded item ${state.feedCount} for mapper infinite-scroll boundary checks.</p>
+          <button type="button" data-testid="feed-action-${state.feedCount}">Open item</button>
+        `;
+        feed.append(card);
+      }
+      setText("#feed-count", state.feedCount);
+      log(`feed appended total=${state.feedCount}`);
+    }
+
+    document.querySelector("#append-feed").addEventListener("click", () => appendFeedItems());
+    appendFeedItems(8);
+
+    document.querySelector("#clear-log").addEventListener("click", () => {
+      document.querySelector("#event-log").textContent = "";
+    });
+
+    customElements.define("shadow-stress-card", class extends HTMLElement {
+      connectedCallback() {
+        if (this.shadowRoot) return;
+        const root = this.attachShadow({ mode: "open" });
+        root.innerHTML = `
+          <style>
+            .box { display: grid; gap: 8px; padding: 12px; border: 1px solid #94a3b8; border-radius: 6px; background: #f8fafc; }
+            button, input { min-height: 32px; padding: 7px 10px; border: 1px solid #94a3b8; border-radius: 5px; background: #fff; font: inherit; }
+          </style>
+          <div class="box" aria-label="Shadow stress panel">
+            <label>Shadow note <input id="shadow-note" data-testid="shadow-note" placeholder="Shadow value"></label>
+            <button id="shadow-save" data-testid="shadow-save" type="button">Save Shadow</button>
+          </div>
+        `;
+        root.querySelector("#shadow-save").addEventListener("click", (event) => {
+          countClick("shadow-save", event);
+          log("open shadow button clicked");
+        });
+      }
+    });
+
+    log("mapper stress harness ready");
+  </script>
+</body>
+</html>

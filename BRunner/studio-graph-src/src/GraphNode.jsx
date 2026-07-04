@@ -22,6 +22,7 @@ export function GraphNode({ id, data, selected }) {
   const horizontal = data.layoutDirection === "horizontal";
   const targetPosition = horizontal ? Position.Left : Position.Top;
   const sourcePosition = horizontal ? Position.Right : Position.Bottom;
+  const hasMapperComponent = Boolean(data.componentRef);
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -137,6 +138,15 @@ export function GraphNode({ id, data, selected }) {
         <span>v{definition.version || 1}</span>
       </footer>}
       <Handle type="source" position={sourcePosition} id="success" />
+      {hasMapperComponent && (
+        <Handle
+          type="source"
+          position={sourcePosition}
+          id="unresolved"
+          className="node-handle-unresolved"
+          style={horizontal ? { top: "68%" } : { left: "68%" }}
+        />
+      )}
     </article>
   );
 }
@@ -201,6 +211,7 @@ function runtimeLabel(status) {
     running: "Running",
     completed: "Completed",
     skipped: "Bypassed",
+    unresolved: "Unresolved",
     failed: "Failed",
     cancelled: "Cancelled",
   }[status] || status;

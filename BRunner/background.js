@@ -16,6 +16,7 @@ import {
   saveNativePairing,
 } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
+import { createMapperCoordinator } from "./core/mapperCoordinator.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
 import { getNodeDefinition, getNodeDefinitions } from "./core/nodeRegistry.js";
@@ -44,6 +45,7 @@ import {
 } from "./core/variableInspector.js";
 import {
   normalizeWorkflow,
+  normalizeWorkflowSettings,
   extractDomainFromUrl,
   isBrowserInternalUrl,
   isStudioUrl,
@@ -51,6 +53,13 @@ import {
   pageContextsCompatible,
   resolveWaitDuration,
 } from "./core/workflowUtils.js";
+import {
+  GraphEdgeHandles,
+  MapperAttentionNodeType,
+  WorkflowSchemaVersion,
+  isMapperGraphWorkflow,
+  validateGraphWorkflow,
+} from "./core/workflowSchema.js";
 import {
   createTab,
   getActiveTab,
@@ -65,6 +74,7 @@ import {
 const runtimeState = createRuntimeStateStore();
 let activeRun = null;
 let offscreenClipboardCreation = null;
+const mapperCoordinator = createMapperCoordinator();
 
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
@@ -284,10 +294,16 @@ async function handleMessage(request, sender) {
       };
 
     case Messages.RecordedStep:
+      const recordedStep = await mapperCoordinator.reconcileRecordedStep(
+        request.step,
+        {
+          sessionId: recordingController.getState().sessionId,
+        },
+      );
       return {
         ok: true,
         recording: recordingController.addStep(
-          request.step,
+          recordedStep,
           sender?.tab || null,
         ),
       };
@@ -359,8 +375,13 @@ async function runWorkflow(rawWorkflow, options = {}) {
     };
   }
 
-  const workflow = normalizeWorkflow(rawWorkflow);
-  const steps = workflow.steps;
+  const mapperGraphWorkflow = isMapperGraphWorkflow(rawWorkflow)
+    ? normalizeMapperGraphWorkflowForRun(rawWorkflow)
+    : null;
+  const workflow = mapperGraphWorkflow || normalizeWorkflow(rawWorkflow);
+  const steps = mapperGraphWorkflow
+    ? mapperGraphWorkflow.nodes.map(graphNodeToStep)
+    : workflow.steps;
 
   if (!Array.isArray(steps) || steps.length === 0) {
     return {
@@ -387,6 +408,7 @@ async function runWorkflow(rawWorkflow, options = {}) {
     skippedSteps: 0,
     completedNodeIds: [],
     skippedNodeIds: [],
+    unresolvedNodeIds: [],
     logs: [],
   });
   const variableRegistry = new VariableRegistry(workflow.variables || {});
@@ -429,10 +451,6 @@ async function runWorkflow(rawWorkflow, options = {}) {
       variables: summarizeVariables(variableRegistry.snapshot(), variableOrigins),
     });
 
-    let executedCount = 0;
-    let skippedCount = 0;
-    const completedNodeIds = [];
-    const skippedNodeIds = [];
     let tab = await resolveStartingTab(workflow);
     const tabsByRef = new Map();
     const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
@@ -440,160 +458,38 @@ async function runWorkflow(rawWorkflow, options = {}) {
       tabsByRef.set(initialTabRef, tab);
     }
 
-    for (let index = 0; index < steps.length; index++) {
-      throwIfRunCancelled(runId);
-
-      const step = steps[index];
-      let resolvedStep;
-
-      runtimeState.updateExecution({
-        currentStepIndex: index,
-        currentNodeId: step?.id || "",
-        currentAction: step?.action || step?.type || "unknown",
-      });
-
-      let bypassDecision;
-      try {
-        bypassDecision = resolveStepBypass(step, variableRegistry);
-      } catch (error) {
-        error.diagnostics = {
-          action: step?.action || step?.type || "unknown",
-          stepIndex: index,
-          valuePath: `step.${step?.id || "unknown"}.skipWhen`,
-          finalReason: "bypass_condition_failed",
-        };
-        throw error;
-      }
-
-      if (bypassDecision.skip) {
-        skippedCount += 1;
-        if (step?.id) skippedNodeIds.push(step.id);
-        runtimeState.appendExecutionLog({
-          runId,
-          workflowName,
-          nodeId: step?.id || "",
-          stepIndex: index,
-          action: step?.action || step?.type || "unknown",
-          status: "skipped",
-          message: "Node bypassed.",
-        }, {
-          skippedSteps: skippedCount,
-          skippedNodeIds: [...skippedNodeIds],
-        });
-        console.log(
-          `[BRunner] Bypassing step ${index + 1}/${steps.length}:`,
-          {
-            id: step?.id || "",
-            action: step?.action || step?.type || "unknown",
-            mode: bypassDecision.mode,
-          },
-        );
-        continue;
-      }
-
-      try {
-        resolvedStep = resolveStepExpressions(step, variableRegistry);
-      } catch (error) {
-        error.diagnostics = {
-          action: step?.action || step?.type || "unknown",
-          stepIndex: index,
-          variableName: error.variableName || "",
-          valuePath: error.valuePath || "",
-          finalReason: "variable_resolution_failed",
-        };
-        throw error;
-      }
-
-      runtimeState.updateExecution({
-        currentStepIndex: index,
-        currentAction:
-          resolvedStep?.action || resolvedStep?.type || "unknown",
-      });
-
-      assertNativeHostRequirement(resolvedStep, index);
-
-      runtimeState.appendExecutionLog({
-        runId,
-        workflowName,
-        nodeId: resolvedStep?.id || "",
-        stepIndex: index,
-        action: resolvedStep?.action || resolvedStep?.type || "unknown",
-        status: "running",
-        message: "Node started.",
-      });
-
-      console.log(
-        `[BRunner] Executing step ${index + 1}/${steps.length}:`,
-        sanitizeStepForLog(resolvedStep),
-      );
-
-      if (resolvedStep?.tabRef && tabsByRef.has(resolvedStep.tabRef)) {
-        const referencedTab = tabsByRef.get(resolvedStep.tabRef);
-
-        try {
-          tab = await chrome.tabs.get(referencedTab.id);
-        } catch {
-          tabsByRef.delete(resolvedStep.tabRef);
-        }
-      }
-
-      tab = await executeStep(
+    const executionResult = mapperGraphWorkflow
+      ? await executeMapperGraphWorkflow({
+        workflow,
         tab,
-        resolvedStep,
         tabsByRef,
         variableRegistry,
-        runId,
-      );
-      executedCount += 1;
-      if (resolvedStep?.id) completedNodeIds.push(resolvedStep.id);
-      runtimeState.appendExecutionLog({
+        variableOrigins,
         runId,
         workflowName,
-        nodeId: resolvedStep?.id || "",
-        stepIndex: index,
-        action: resolvedStep?.action || resolvedStep?.type || "unknown",
-        status: "completed",
-        message: "Node completed.",
-      }, {
-        completedNodeIds: [...completedNodeIds],
+      })
+      : await executeLinearWorkflowSteps({
+        steps,
+        tab,
+        tabsByRef,
+        variableRegistry,
+        variableOrigins,
+        runId,
+        workflowName,
       });
 
-      const outputVariableName = inferOutputVariableName(resolvedStep);
-      if (outputVariableName) {
-        variableOrigins[outputVariableName] = {
-          source: "node",
-          nodeId: resolvedStep.id || "",
-          action: resolvedStep.action || resolvedStep.type || "unknown",
-        };
-      }
-      runtimeState.updateExecution({
-        variables: summarizeVariables(
-          variableRegistry.snapshot(),
-          variableOrigins,
-        ),
-      });
-
-      throwIfRunCancelled(runId);
-
-      if (
-        resolvedStep?.tabRef &&
-        tab?.id &&
-        ![
-          Actions.BrowserTabOpen,
-          Actions.BrowserTabClose,
-        ].includes(resolvedStep.action || resolvedStep.type)
-      ) {
-        tabsByRef.set(resolvedStep.tabRef, tab);
-      }
-      await delayWithRunCancellation(Defaults.StepDelayMs, runId);
-      throwIfRunCancelled(runId);
-    }
+    const {
+      executedCount,
+      skippedCount,
+      unresolvedCount,
+    } = executionResult;
+    tab = executionResult.tab;
 
     runtimeState.appendExecutionLog({
       runId,
       workflowName,
       status: "completed",
-      message: `Workflow completed: ${executedCount} executed, ${skippedCount} bypassed.`,
+      message: `Workflow completed: ${executedCount} executed, ${skippedCount} bypassed, ${unresolvedCount || 0} unresolved.`,
     }, {
       status: "completed",
       currentStepIndex: steps.length - 1,
@@ -665,6 +561,445 @@ async function runWorkflow(rawWorkflow, options = {}) {
       activeRun = null;
     }
   }
+}
+
+async function executeLinearWorkflowSteps({
+  steps = [],
+  tab,
+  tabsByRef,
+  variableRegistry,
+  variableOrigins,
+  runId,
+  workflowName,
+}) {
+  const progress = createExecutionProgress();
+  let currentTab = tab;
+
+  for (let index = 0; index < steps.length; index++) {
+    const result = await executeWorkflowNode({
+      step: steps[index],
+      index,
+      totalSteps: steps.length,
+      tab: currentTab,
+      tabsByRef,
+      variableRegistry,
+      variableOrigins,
+      runId,
+      workflowName,
+      progress,
+      allowUnresolvedRoute: false,
+    });
+    currentTab = result.tab;
+  }
+
+  return {
+    ...progress,
+    tab: currentTab,
+  };
+}
+
+async function executeMapperGraphWorkflow({
+  workflow,
+  tab,
+  tabsByRef,
+  variableRegistry,
+  variableOrigins,
+  runId,
+  workflowName,
+}) {
+  const progress = createExecutionProgress();
+  const nodeById = new Map(workflow.nodes.map((node) => [node.id, node]));
+  const outgoing = createGraphOutgoingIndex(workflow.edges);
+  const maxVisits = Math.max(1, workflow.nodes.length + workflow.edges.length + 1);
+  let currentNodeId = workflow.entryNodeId;
+  let currentTab = tab;
+  let visitCount = 0;
+
+  while (currentNodeId) {
+    throwIfRunCancelled(runId);
+    visitCount += 1;
+    if (visitCount > maxVisits) {
+      const error = new Error("Mapper graph traversal exceeded the safe node limit.");
+      error.diagnostics = {
+        action: "workflow.graph",
+        finalReason: "graph_traversal_limit_exceeded",
+      };
+      throw error;
+    }
+
+    const node = nodeById.get(currentNodeId);
+    if (!node) {
+      const error = new Error(`Mapper graph references missing node "${currentNodeId}".`);
+      error.diagnostics = {
+        action: "workflow.graph",
+        finalReason: "graph_missing_node",
+      };
+      throw error;
+    }
+
+    const result = await executeWorkflowNode({
+      step: graphNodeToStep(node),
+      index: visitCount - 1,
+      totalSteps: workflow.nodes.length,
+      tab: currentTab,
+      tabsByRef,
+      variableRegistry,
+      variableOrigins,
+      runId,
+      workflowName,
+      progress,
+      allowUnresolvedRoute: true,
+    });
+    currentTab = result.tab;
+
+    const route = result.route || GraphEdgeHandles.Success;
+    const nextEdge = outgoing.get(node.id)?.[route] || null;
+    if (!nextEdge) {
+      if (route === GraphEdgeHandles.Unresolved) {
+        const error = new Error(`Mapper unresolved node "${node.id}" has no unresolved route.`);
+        error.diagnostics = {
+          action: node.type || "unknown",
+          finalReason: "mapper_unresolved_route_missing",
+        };
+        throw error;
+      }
+      break;
+    }
+
+    currentNodeId = nextEdge.target || "";
+  }
+
+  return {
+    ...progress,
+    tab: currentTab,
+  };
+}
+
+async function executeWorkflowNode({
+  step,
+  index,
+  totalSteps,
+  tab,
+  tabsByRef,
+  variableRegistry,
+  variableOrigins,
+  runId,
+  workflowName,
+  progress,
+  allowUnresolvedRoute = false,
+}) {
+  throwIfRunCancelled(runId);
+
+  let resolvedStep;
+
+  runtimeState.updateExecution({
+    currentStepIndex: index,
+    currentNodeId: step?.id || "",
+    currentAction: step?.action || step?.type || "unknown",
+  });
+
+  let bypassDecision;
+  try {
+    bypassDecision = resolveStepBypass(step, variableRegistry);
+  } catch (error) {
+    error.diagnostics = {
+      action: step?.action || step?.type || "unknown",
+      stepIndex: index,
+      valuePath: `step.${step?.id || "unknown"}.skipWhen`,
+      finalReason: "bypass_condition_failed",
+    };
+    throw error;
+  }
+
+  if (bypassDecision.skip) {
+    progress.skippedCount += 1;
+    if (step?.id) progress.skippedNodeIds.push(step.id);
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      nodeId: step?.id || "",
+      stepIndex: index,
+      action: step?.action || step?.type || "unknown",
+      status: "skipped",
+      message: "Node bypassed.",
+    }, {
+      skippedSteps: progress.skippedCount,
+      skippedNodeIds: [...progress.skippedNodeIds],
+    });
+    console.log(
+      `[BRunner] Bypassing step ${index + 1}/${totalSteps}:`,
+      {
+        id: step?.id || "",
+        action: step?.action || step?.type || "unknown",
+        mode: bypassDecision.mode,
+      },
+    );
+    return { tab, route: GraphEdgeHandles.Success };
+  }
+
+  try {
+    resolvedStep = resolveStepExpressions(step, variableRegistry);
+  } catch (error) {
+    error.diagnostics = {
+      action: step?.action || step?.type || "unknown",
+      stepIndex: index,
+      variableName: error.variableName || "",
+      valuePath: error.valuePath || "",
+      finalReason: "variable_resolution_failed",
+    };
+    throw error;
+  }
+
+  runtimeState.updateExecution({
+    currentStepIndex: index,
+    currentAction:
+      resolvedStep?.action || resolvedStep?.type || "unknown",
+  });
+
+  assertNativeHostRequirement(resolvedStep, index);
+
+  runtimeState.appendExecutionLog({
+    runId,
+    workflowName,
+    nodeId: resolvedStep?.id || "",
+    stepIndex: index,
+    action: resolvedStep?.action || resolvedStep?.type || "unknown",
+    status: "running",
+    message: "Node started.",
+  });
+
+  console.log(
+    `[BRunner] Executing step ${index + 1}/${totalSteps}:`,
+    sanitizeStepForLog(resolvedStep),
+  );
+
+  let currentTab = tab;
+  if (resolvedStep?.tabRef && tabsByRef.has(resolvedStep.tabRef)) {
+    const referencedTab = tabsByRef.get(resolvedStep.tabRef);
+
+    try {
+      currentTab = await chrome.tabs.get(referencedTab.id);
+    } catch {
+      tabsByRef.delete(resolvedStep.tabRef);
+    }
+  }
+
+  try {
+    currentTab = await executeStep(
+      currentTab,
+      resolvedStep,
+      tabsByRef,
+      variableRegistry,
+      runId,
+    );
+  } catch (error) {
+    if (!allowUnresolvedRoute || !isMapperUnresolvedError(error)) {
+      throw error;
+    }
+    return handleMapperUnresolvedNode({
+      error,
+      step: resolvedStep,
+      index,
+      runId,
+      workflowName,
+      variableRegistry,
+      variableOrigins,
+      progress,
+      tab: currentTab,
+    });
+  }
+
+  progress.executedCount += 1;
+  if (resolvedStep?.id) progress.completedNodeIds.push(resolvedStep.id);
+  runtimeState.appendExecutionLog({
+    runId,
+    workflowName,
+    nodeId: resolvedStep?.id || "",
+    stepIndex: index,
+    action: resolvedStep?.action || resolvedStep?.type || "unknown",
+    status: "completed",
+    message: "Node completed.",
+  }, {
+    completedNodeIds: [...progress.completedNodeIds],
+  });
+
+  registerNodeOutputVariable(resolvedStep, variableOrigins);
+  runtimeState.updateExecution({
+    variables: summarizeVariables(
+      variableRegistry.snapshot(),
+      variableOrigins,
+    ),
+  });
+
+  throwIfRunCancelled(runId);
+
+  if (
+    resolvedStep?.tabRef &&
+    currentTab?.id &&
+    ![
+      Actions.BrowserTabOpen,
+      Actions.BrowserTabClose,
+    ].includes(resolvedStep.action || resolvedStep.type)
+  ) {
+    tabsByRef.set(resolvedStep.tabRef, currentTab);
+  }
+  await delayWithRunCancellation(Defaults.StepDelayMs, runId);
+  throwIfRunCancelled(runId);
+
+  return { tab: currentTab, route: GraphEdgeHandles.Success };
+}
+
+function handleMapperUnresolvedNode({
+  error,
+  step,
+  index,
+  runId,
+  workflowName,
+  variableRegistry,
+  variableOrigins,
+  progress,
+  tab,
+}) {
+  const diagnostics = createMapperUnresolvedDiagnostics(error, step, index);
+  const output = {
+    state: diagnostics.mapperState || "unresolved",
+    componentId: diagnostics.componentId || step?.componentRef?.componentId || "",
+    pageProfileKey: diagnostics.pageProfileKey || step?.componentRef?.pageProfileKey || "",
+    mapVersionId: diagnostics.mapVersionId || step?.componentRef?.capturedMapVersionId || "",
+    reason: diagnostics.mapperReason || diagnostics.finalReason || "",
+  };
+  const outputVariableName = inferOutputVariableName(step);
+  if (outputVariableName) {
+    variableRegistry?.set(outputVariableName, output);
+    registerNodeOutputVariable(step, variableOrigins);
+  }
+
+  progress.unresolvedCount += 1;
+  if (step?.id) progress.unresolvedNodeIds.push(step.id);
+  runtimeState.appendExecutionLog({
+    runId,
+    workflowName,
+    nodeId: step?.id || "",
+    stepIndex: index,
+    action: step?.action || step?.type || "unknown",
+    status: "unresolved",
+    message: `Mapper routed unresolved target: ${output.state}.`,
+    diagnostics,
+  }, {
+    unresolvedNodeIds: [...progress.unresolvedNodeIds],
+    variables: summarizeVariables(
+      variableRegistry.snapshot(),
+      variableOrigins,
+    ),
+  });
+
+  return {
+    tab,
+    route: GraphEdgeHandles.Unresolved,
+  };
+}
+
+function createExecutionProgress() {
+  return {
+    executedCount: 0,
+    skippedCount: 0,
+    unresolvedCount: 0,
+    completedNodeIds: [],
+    skippedNodeIds: [],
+    unresolvedNodeIds: [],
+  };
+}
+
+function registerNodeOutputVariable(step = {}, variableOrigins = {}) {
+  const outputVariableName = inferOutputVariableName(step);
+  if (!outputVariableName) return;
+  variableOrigins[outputVariableName] = {
+    source: "node",
+    nodeId: step.id || "",
+    action: step.action || step.type || "unknown",
+  };
+}
+
+function isMapperUnresolvedError(error) {
+  const state = String(error?.diagnostics?.mapperState || "").trim();
+  if (!state) return false;
+  return !["resolved", "resolved_with_fallback"].includes(state);
+}
+
+function createMapperUnresolvedDiagnostics(error, step = {}, stepIndex = -1) {
+  const diagnostics = error?.diagnostics && typeof error.diagnostics === "object"
+    ? error.diagnostics
+    : {};
+  const componentRef = step?.componentRef || {};
+  return {
+    action: diagnostics.action || step?.action || step?.type || "unknown",
+    stepIndex,
+    finalReason: diagnostics.finalReason || `mapper_${diagnostics.mapperState || "unresolved"}`,
+    mapperState: diagnostics.mapperState || "unresolved",
+    mapperReason: diagnostics.mapperReason || diagnostics.reason || "",
+    componentId: diagnostics.componentId || componentRef.componentId || "",
+    pageProfileKey: diagnostics.pageProfileKey || componentRef.pageProfileKey || "",
+    mapVersionId: diagnostics.mapVersionId || componentRef.capturedMapVersionId || "",
+    confidence: Number.isFinite(diagnostics.confidence) ? diagnostics.confidence : undefined,
+    runnerUpConfidence: Number.isFinite(diagnostics.runnerUpConfidence)
+      ? diagnostics.runnerUpConfidence
+      : undefined,
+  };
+}
+
+function normalizeMapperGraphWorkflowForRun(input = {}) {
+  const validation = validateGraphWorkflow(input);
+  if (!validation.valid) {
+    throw new Error(`Invalid mapper graph workflow: ${validation.errors.join(" ")}`);
+  }
+  return {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: String(input.id || "workflow-v3"),
+    name: String(input.name || "Untitled"),
+    description: typeof input.description === "string" ? input.description : "",
+    boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
+    variables:
+      input.variables && typeof input.variables === "object"
+        ? structuredClone(input.variables)
+        : {},
+    datasets:
+      input.datasets && typeof input.datasets === "object" && !Array.isArray(input.datasets)
+        ? structuredClone(input.datasets)
+        : {},
+    dataSources: Array.isArray(input.dataSources)
+      ? structuredClone(input.dataSources)
+      : [],
+    settings: normalizeWorkflowSettings(input.settings),
+    entryNodeId: String(input.entryNodeId || ""),
+    nodes: structuredClone(input.nodes || []),
+    edges: structuredClone(input.edges || []),
+  };
+}
+
+function graphNodeToStep(node = {}) {
+  return {
+    ...(node.data && typeof node.data === "object" ? structuredClone(node.data) : {}),
+    id: node.id || "",
+    action: node.type || "",
+    type: node.type || "",
+    version: Number(node.version) || 1,
+    config: node.config && typeof node.config === "object"
+      ? structuredClone(node.config)
+      : {},
+  };
+}
+
+function createGraphOutgoingIndex(edges = []) {
+  const outgoing = new Map();
+  for (const edge of edges) {
+    const source = String(edge?.source || "");
+    if (!source) continue;
+    const sourceHandle = edge.sourceHandle || GraphEdgeHandles.Success;
+    const entry = outgoing.get(source) || {};
+    entry[sourceHandle] = edge;
+    outgoing.set(source, entry);
+  }
+  return outgoing;
 }
 
 async function loadWorkflowDataSources({
@@ -886,6 +1221,10 @@ async function executeStep(
   runId = "",
 ) {
   const action = step.action || step.type;
+
+  if (action === MapperAttentionNodeType) {
+    return currentTab;
+  }
 
   if (action === Actions.BrowserTabSwitch) {
     return await executeTabSwitch(currentTab, step, tabsByRef);
@@ -1704,9 +2043,10 @@ async function executeContentStep(tab, step, runId = "") {
   }
 
   try {
+    const executableStep = await mapperCoordinator.attachExecutionContext(step);
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: Messages.ExecuteStep,
-      step,
+      step: executableStep,
       runId,
     });
 
@@ -1739,6 +2079,10 @@ async function executeContentStepWithVisibleHostFallback(tab, step, runId = "") 
   try {
     return await executeContentStep(tab, step, runId);
   } catch (error) {
+    if (isMapperUnresolvedError(error)) {
+      throw error;
+    }
+
     if (!shouldAllowVisibleHostFallback(step)) {
       throw error;
     }

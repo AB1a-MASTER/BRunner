@@ -10,6 +10,13 @@ const ALLOWED_DIAGNOSTIC_KEYS = new Set([
   "timeoutMs",
   "variableName",
   "valuePath",
+  "mapperState",
+  "mapperReason",
+  "componentId",
+  "pageProfileKey",
+  "mapVersionId",
+  "confidence",
+  "runnerUpConfidence",
 ]);
 
 export function sanitizeExecutionDiagnostics(diagnostics) {

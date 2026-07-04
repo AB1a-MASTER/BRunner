@@ -48,7 +48,7 @@ test("execution summaries include completed and bypassed counts", () => {
     status: "completed",
     completedNodeIds: ["one", "three"],
     skippedNodeIds: ["two"],
-  }), "Completed 2 · bypassed 1");
+  }), "Completed 2 · bypassed 1 · unresolved 0");
   assert.equal(summarizeExecution({ status: "failed", error: "Target missing" }), "Target missing");
 });
 
@@ -64,6 +64,7 @@ test("execution history supports node filtering and clear summaries", () => {
     events: 3,
     completed: 1,
     skipped: 1,
+    unresolved: 0,
     failed: 0,
   });
 });
