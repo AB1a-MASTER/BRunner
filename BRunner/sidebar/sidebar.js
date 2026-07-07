@@ -40,6 +40,9 @@ const selectedLabel = document.getElementById("selected-label");
 const playButton = document.getElementById("btn-play");
 const recordButton = document.getElementById("btn-toggle-record");
 const openStudioButton = document.getElementById("btn-open-studio");
+const openMapperInspectorButton = document.getElementById(
+  "btn-open-mapper-inspector",
+);
 const hostPairingStatus = document.getElementById("host-pairing-status");
 const hostPairingKey = document.getElementById("host-pairing-key");
 const savePairingButton = document.getElementById("btn-save-pairing");
@@ -65,6 +68,7 @@ function init() {
 
 function wireControls() {
   openStudioButton?.addEventListener("click", openStudio);
+  openMapperInspectorButton?.addEventListener("click", openMapperInspector);
   recordButton?.addEventListener("click", toggleRecording);
   playButton?.addEventListener("click", runSelectedWorkflow);
   savePairingButton?.addEventListener("click", savePairingKey);
@@ -204,6 +208,33 @@ async function syncRecordingState() {
     isRecording = false;
     updateRecordButton();
   }
+}
+
+async function openMapperInspector() {
+  const inspectorUrl = chrome.runtime.getURL("mapper-inspector/index.html");
+
+  const tabs = await chrome.tabs.query({
+    url: inspectorUrl,
+  });
+
+  if (tabs.length > 0) {
+    await chrome.tabs.update(tabs[0].id, {
+      active: true,
+    });
+
+    if (tabs[0].windowId) {
+      await chrome.windows.update(tabs[0].windowId, {
+        focused: true,
+      });
+    }
+
+    return;
+  }
+
+  await chrome.tabs.create({
+    url: inspectorUrl,
+    active: true,
+  });
 }
 
 async function syncPairingState() {

@@ -143,18 +143,20 @@ inspect primary/fallback locators, compact fingerprints, expected capabilities,
 and history, run a live resolution check, and highlight the element only after
 a unique live resolution succeeds.
 
-The Inspector must provide three views for a selected map:
+The Inspector must provide two views for a selected map:
 
 - **Tree view:** an explorer-style hierarchy of website, page, region/container,
-  and component records.
+  and component records, with type icons, indentation, lock affordances, compact
+  labels, and canonical Component IDs shown as secondary details. The Tree can
+  switch between captured page structure, region grouping, and component-type
+  grouping. Structure mode uses saved DOM-path facts so it follows the captured
+  page hierarchy as closely as the map data allows.
 - **Graph view:** a hierarchy graph similar to Graph Studio, showing map
-  relationships and unresolved/review states.
-- **Website view:** a simplified reconstructed page view using the saved map's
-  component records and relative positioning. It uses BRunner's default HTML
-  visuals because the mapper does not store the original site's styling.
+  relationships in a top-down canvas with connector ports, right-angle edges,
+  pan/zoom controls, selected-node state, and unresolved/review states.
 
 When the Inspector and mapped website are open together, **Highlight on
-website** mode lets the user select a component in Tree, Graph, or Website view
+website** mode lets the user select a component in Tree or Graph view
 and see a color-coded overlay on the live page, similar to selecting an element
 in DevTools. Resolved, fallback-resolved, ambiguous, missing, review-required,
 dynamic-deferred, and unsupported components must be visually distinct.
@@ -170,6 +172,19 @@ Current source foundation: new graph workflows default to mapper-capable graph
 schema v3, target-element nodes can carry placeholder `ComponentRef` records,
 recorded DOM steps persist workflow-scoped page maps, and action execution can
 resolve stored Component IDs before falling back to legacy target packages.
+The first Mapper Inspector source pass is available at
+`mapper-inspector/index.html`. It lists saved maps by website/page/version,
+shows Tree and Graph views, includes a Review Queue, can
+map the active page without the recorder, and can highlight a selected
+component on the live website through the mapper resolver. Highlighting scrolls
+the resolved live element into view before drawing the overlay.
+Website view has been removed from scope; live website highlighting remains.
+The Inspector can also save display aliases without changing Component IDs,
+accept a review-required current mapping, link a review-required component to a
+selected live resolver candidate while preserving the Component ID, show
+persisted live resolver attempts and structured resolver logs, edit basic
+workflow mapper policy values, and mark a site as sensitive so details are
+redacted in the Inspector.
 Mapper-bound DOM nodes require an explicit `unresolved` route. Mapper graph
 workflows now have an initial source traversal path for `success` and
 `unresolved` handles. Existing v2 workflows remain compatible with the current
@@ -188,7 +203,7 @@ duplicate Save buttons, Component ID drift, static controls, controlled dynamic
 drift, mutation-heavy safe decline, infinite-scroll boundaries, open Shadow DOM
 controls, and visible counters/logs. The manual test should map each section,
 mutate the page, verify honest unresolved/deferred outcomes, and later, after
-the Inspector exists, switch through Tree/Graph/Website views and verify live
+the Inspector exists, switch through Tree/Graph views and verify live
 page highlighting from selected map elements.
 The source manual checklist is in
 [`MAPPER_MANUAL_ACCEPTANCE.md`](MAPPER_MANUAL_ACCEPTANCE.md).
@@ -196,7 +211,9 @@ The source manual checklist is in
 Ambiguous components go to a Review Queue. The Inspector must not offer a
 "choose first candidate" action. A reviewer can explicitly link a historical
 component to a selected candidate, and that decision is recorded in the next map
-version.
+version. Review acceptance and live-candidate linking create a fresh review map
+version so the previous map remains inspectable. Graph Studio-grade graph
+canvas remains follow-up Inspector work.
 
 ## Companion capability states
 

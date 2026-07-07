@@ -20,6 +20,18 @@ export class ChromeMapStore {
     return deserializeWorkflowMapperState(allStates[id]);
   }
 
+  async getAllWorkflowMapperStates() {
+    const allStates = await this.loadAll();
+    return Object.fromEntries(
+      Object.entries(allStates)
+        .map(([workflowId, state]) => [
+          workflowId,
+          deserializeWorkflowMapperState(state),
+        ])
+        .filter(([, state]) => Boolean(state)),
+    );
+  }
+
   async saveWorkflowMapperState(workflowId, state = {}) {
     const id = normalizeWorkflowId(workflowId || state.workflowId);
     if (!id) throw new Error("MapStore requires a workflow id.");

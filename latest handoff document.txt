@@ -423,12 +423,48 @@ Completed companion foundation slices:
     Component IDs, changed/ambiguous records are marked review-required,
     fingerprint drift produces refreshed map versions, and mutation-heavy pages
     continue to decline honestly as `dynamic_deferred`.
+30. Added initial Mapper Inspector source pass: `BRunner/mapper-inspector/`
+    opens as an extension page, lists saved workflow map versions grouped by
+    website/page, provides Tree/Graph views, shows a Review Queue,
+    exposes component locators/fingerprints/capabilities/history, can map the
+    active page without the recorder, and can highlight selected components on
+    the live website through inspection-only mapper resolution.
+31. Fixed Inspector highlight behavior so resolved live elements scroll into
+    view before the overlay is drawn. Inspector
+    labels now use compact element-type/name labels such as `button_save`
+    while keeping canonical Component IDs as details.
+32. Added functional Inspector review/policy tools: display alias save without
+    changing Component IDs, current-mapping review acceptance, persisted live
+    resolver attempts in the detail panel, basic workflow mapper policy editing,
+    site sensitive badge, and redacted detail display for sensitive maps.
+33. Added richer live candidate attempts and Inspector candidate linking:
+    content resolver attempts now include candidate UID, locators, fingerprint,
+    capabilities, score, and evidence. The Inspector can link a review-required
+    component to a selected live candidate while preserving the canonical
+    Component ID and recording the decision/history in the current map version.
+34. Review acceptance and live-candidate linking now create fresh Inspector
+    review map versions (`map_review_*`) with `previousMapVersionId` and
+    `reviewSource`, preserving the prior map version for inspection.
+35. Added structured live resolver logs (`mapper.resolver.log.v1`) with
+    thresholds, state/reason, selected candidate, runner-up, margin, ranked
+    candidates, attempts, confidence, strategy, and value. Inspector displays
+    the log beside live resolution details.
+36. Removed Website view from Mapper Inspector scope. Tree view now uses a
+    reference-aligned dark explorer layout with type icons, indentation, lock
+    affordances, compact labels, stable Component IDs as details, and grouping
+    modes for captured page structure, regions, and component type. Structure
+    mode uses saved DOM-path facts to follow the captured page hierarchy as
+    closely as the map data allows. Graph view uses a functional top-down
+    hierarchy canvas with Site -> Page -> Region -> Component nodes, connector
+    ports, right-angle relationship edges, pan/zoom controls, selected-node
+    state, and live highlight selection wiring.
+37. Polished the Mapper Inspector right rail so Policy, Review Queue, and
+    Component sections have isolated scroll areas, stable section headers,
+    wider detail width, carded detail blocks, and bounded JSON panes.
 
 Next isolated implementation slice:
-1. Build the Mapper Inspector saved-map browser: website list, Tree view,
-   Graph view, simplified Website view, Review Queue, aliases/settings, and
-   DevTools-style color-coded highlight-on-website mode for selected map
-   elements.
+1. Continue Mapper Inspector feature depth with manual stress-page testing and
+   any UX polish found there.
 2. Ask the user before removing old source artifacts. Current cleanup
    candidates are `BRunner/New folder/`, `BRunner/todo`, `BRunner/test.html`,
    unused icon alternates `BRunner/icons/icon1.jfif`, `icon3.jfif`, `icon4.jfif`,

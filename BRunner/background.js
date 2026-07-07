@@ -16,6 +16,7 @@ import {
   saveNativePairing,
 } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
+import { createChromeMapStore } from "./core/mapStore.js";
 import { createMapperCoordinator } from "./core/mapperCoordinator.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
@@ -61,6 +62,11 @@ import {
   validateGraphWorkflow,
 } from "./core/workflowSchema.js";
 import {
+  buildStaticPageMap,
+  createDefaultMapperSettings,
+  deserializeWorkflowMapperState,
+} from "./mapper/core.js";
+import {
   createTab,
   getActiveTab,
   getBestAutomationTab,
@@ -74,7 +80,8 @@ import {
 const runtimeState = createRuntimeStateStore();
 let activeRun = null;
 let offscreenClipboardCreation = null;
-const mapperCoordinator = createMapperCoordinator();
+const mapperStore = createChromeMapStore();
+const mapperCoordinator = createMapperCoordinator({ mapStore: mapperStore });
 
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
@@ -287,6 +294,39 @@ async function handleMessage(request, sender) {
         definitions: getNodeDefinitions(),
       };
 
+    case Messages.ListWorkflowMapperStates:
+      return {
+        ok: true,
+        states: await mapperStore.getAllWorkflowMapperStates(),
+      };
+
+    case Messages.GetWorkflowMapperState:
+      return {
+        ok: true,
+        state: await mapperStore.getWorkflowMapperState(request.workflowId),
+      };
+
+    case Messages.SaveWorkflowMapperState:
+      return {
+        ok: true,
+        state: await mapperStore.saveWorkflowMapperState(
+          request.workflowId || request.state?.workflowId,
+          request.state,
+        ),
+      };
+
+    case Messages.DeleteWorkflowMapperState:
+      return {
+        ok: true,
+        deleted: await mapperStore.deleteWorkflowMapperState(request.workflowId),
+      };
+
+    case Messages.MapCurrentPage:
+      return await mapCurrentPageForInspector(request, sender);
+
+    case Messages.HighlightMapperComponent:
+      return await highlightMapperComponentForInspector(request, sender);
+
     case Messages.GetRecordingState:
       return {
         ok: true,
@@ -335,6 +375,210 @@ async function handleMessage(request, sender) {
         error: `Unknown message type: ${type || "undefined"}`,
       };
   }
+}
+
+async function mapCurrentPageForInspector(request = {}, sender = null) {
+  const tab = await getInspectorTargetTab(request.tabId, null, sender);
+  if (!tab?.id) {
+    return {
+      ok: false,
+      error: "No website tab found. Open the page you want to map, then try again.",
+    };
+  }
+
+  let controlsResponse;
+  try {
+    controlsResponse = await sendInspectorMapperMessage(tab, {
+      type: "GET_CONTROLS_TREE",
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`,
+    };
+  }
+
+  if (controlsResponse?.ok === false) {
+    return controlsResponse;
+  }
+
+  const mapperFacts = (controlsResponse?.controls || [])
+    .map((control) => control.mapperFact)
+    .filter(Boolean);
+  const settings = {
+    ...createDefaultMapperSettings(),
+    ...(request.settings || {}),
+  };
+  const temporaryMap = buildStaticPageMap({
+    page: {
+      url: tab.url || "",
+      title: tab.title || "",
+    },
+    componentFacts: mapperFacts,
+    settings,
+  });
+  const workflowId = String(
+    request.workflowId ||
+      temporaryMap.siteKey ||
+      "inspector",
+  ).trim();
+  const previousState = await mapperStore.getWorkflowMapperState(workflowId);
+  const previousMap = findLatestInspectorMap(
+    previousState,
+    temporaryMap.pageProfileKey,
+  );
+  const pageMap = buildStaticPageMap({
+    page: {
+      url: tab.url || "",
+      title: tab.title || "",
+    },
+    componentFacts: mapperFacts,
+    settings: previousState?.settings || settings,
+    previousMap,
+  });
+  const nextState = await mapperStore.saveWorkflowMapperState(workflowId, {
+    ...(previousState || {}),
+    workflowId,
+    settings: previousState?.settings || settings,
+    maps: replaceInspectorPageMap(
+      previousState?.maps || [],
+      pageMap,
+      previousState?.settings || settings,
+    ),
+  });
+
+  return {
+    ok: true,
+    workflowId,
+    tabId: tab.id,
+    pageMap,
+    state: deserializeWorkflowMapperState(nextState),
+  };
+}
+
+async function highlightMapperComponentForInspector(request = {}, sender = null) {
+  const tab = await getInspectorTargetTab(request.tabId, request.pageMap, sender);
+  if (!tab?.id) {
+    return {
+      ok: false,
+      error: "No matching website tab found. Open the mapped page, then try again.",
+    };
+  }
+
+  try {
+    return await sendInspectorMapperMessage(tab, {
+      type: Messages.HighlightMapperComponent,
+      component: request.component,
+      pageMap: request.pageMap,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`,
+    };
+  }
+}
+
+async function sendInspectorMapperMessage(tab = {}, payload = {}) {
+  try {
+    return await chrome.tabs.sendMessage(tab.id, payload);
+  } catch (error) {
+    if (!isMissingContentScriptError(error)) throw error;
+  }
+
+  await injectMapperContentScripts(tab.id);
+  return await chrome.tabs.sendMessage(tab.id, payload);
+}
+
+async function injectMapperContentScripts(tabId) {
+  await chrome.scripting.executeScript({
+    target: {
+      tabId,
+    },
+    files: [
+      "content/targetResolver.js",
+      "content/filePayload.js",
+      "content/mapper.js",
+    ],
+  });
+}
+
+function isMissingContentScriptError(error = null) {
+  const message = String(error?.message || error || "");
+  return message.includes("Receiving end does not exist") ||
+    message.includes("Could not establish connection");
+}
+
+async function getInspectorTargetTab(tabId, pageMap = null, sender = null) {
+  if (tabId) {
+    const explicitTab = await chrome.tabs.get(Number(tabId));
+    return isInspectableWebsiteTab(explicitTab, pageMap) ? explicitTab : null;
+  }
+
+  const senderWindowId = sender?.tab?.windowId;
+  if (senderWindowId) {
+    const currentWindowTabs = await chrome.tabs.query({
+      windowId: senderWindowId,
+    });
+    const currentWindowTarget = selectBestInspectorTargetTab(
+      currentWindowTabs,
+      pageMap,
+      sender?.tab?.id,
+    );
+    if (currentWindowTarget) return currentWindowTarget;
+  }
+
+  const allTabs = await chrome.tabs.query({});
+  return selectBestInspectorTargetTab(allTabs, pageMap, sender?.tab?.id);
+}
+
+function isInspectableWebsiteTab(tab = null, pageMap = null) {
+  if (!tab?.id || !tab.url || isStudioUrl(tab.url)) return false;
+  if (!/^https?:\/\//i.test(tab.url)) return false;
+  if (!pageMap?.origin && !pageMap?.path) return true;
+
+  try {
+    const parsed = new URL(tab.url);
+    return (!pageMap.origin || parsed.origin === pageMap.origin) &&
+      (!pageMap.path || parsed.pathname === pageMap.path);
+  } catch {
+    return false;
+  }
+}
+
+function selectBestInspectorTargetTab(tabs = [], pageMap = null, senderTabId = null) {
+  return tabs
+    .filter((tab) => tab.id !== senderTabId)
+    .filter((tab) => isInspectableWebsiteTab(tab, pageMap))
+    .sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0);
+    })[0] || null;
+}
+
+function findLatestInspectorMap(state = null, pageProfileKey = "") {
+  const maps = Array.isArray(state?.maps) ? state.maps : [];
+  const matching = maps.filter((map) => map.pageProfileKey === pageProfileKey);
+  return matching.at(-1) || null;
+}
+
+function replaceInspectorPageMap(maps = [], pageMap = {}, settings = {}) {
+  const maxVersions = Math.max(1, Number(settings.maxVersions) || 20);
+  const nextMaps = maps
+    .filter((map) => {
+      return map.pageProfileKey !== pageMap.pageProfileKey ||
+        map.mapVersionId !== pageMap.mapVersionId;
+    })
+    .concat(pageMap);
+  const retained = new Set(nextMaps
+    .filter((map) => map.pageProfileKey === pageMap.pageProfileKey)
+    .slice(-maxVersions)
+    .map((map) => map.mapVersionId));
+
+  return nextMaps.filter((map) => {
+    return map.pageProfileKey !== pageMap.pageProfileKey ||
+      retained.has(map.mapVersionId);
+  });
 }
 
 async function persistAndRefresh(operation) {

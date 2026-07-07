@@ -41,6 +41,7 @@ export const Messages = Object.freeze({
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
   GetNodeDefinitions: "GET_NODE_DEFINITIONS",
+  ListWorkflowMapperStates: "LIST_WORKFLOW_MAPPER_STATES",
   GetWorkflowMapperState: "GET_WORKFLOW_MAPPER_STATE",
   SaveWorkflowMapperState: "SAVE_WORKFLOW_MAPPER_STATE",
   DeleteWorkflowMapperState: "DELETE_WORKFLOW_MAPPER_STATE",

@@ -654,6 +654,9 @@ function normalizeFingerprint(fingerprint = {}) {
     },
     visual: {
       bounds: normalizeBounds(visual.bounds || fingerprint.bounds),
+      viewportBounds: normalizeBounds(visual.viewportBounds),
+      documentBounds: normalizeBounds(visual.documentBounds),
+      viewport: normalizeRecord(visual.viewport),
     },
   };
 }

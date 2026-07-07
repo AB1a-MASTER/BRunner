@@ -736,23 +736,29 @@ Required features:
 - visual tree/list of mapped components with semantic and structural context;
 - badges for `same`, `changed`, `new`, `removed`, `ambiguous`,
   `dynamic_deferred`, and `unsupported`;
-- three map views:
+- two map views:
   - **Tree view:** explorer-style hierarchy grouped by website, page,
-    containers, forms/regions, and components;
+    containers, forms/regions, and components, with per-type icons,
+    indentation, lock affordances, compact element labels, and canonical
+    Component IDs as secondary detail. It must support page-structure, region,
+    and component-type grouping modes. Structure mode should use saved DOM-path
+    facts to follow the captured page hierarchy as closely as the map data
+    allows;
   - **Graph view:** hierarchy graph similar to Graph Studio, showing site,
-    page, region/container, component, and relationship edges;
-  - **Website view:** reconstruct a simplified page-like map from stored
-    component records and relative bounds. Do not attempt to preserve original
-    site styling because raw CSS is not stored; render with default BRunner HTML
-    visuals, stable labels, role badges, and approximate positioning.
+    page, region/container, component, and relationship edges. It must use the
+    same interaction model as Graph Studio where possible: top-down pannable
+    canvas, zoom controls, connector ports, right-angle parent/child edges,
+    selected node state, and right-side details. Component nodes should be titled by compact
+    element-type/name labels such as `button_save`, `input_email`, or
+    `link_pricing`, with the canonical Component ID shown as secondary detail.
 - show primary locator, fallback hierarchy, compact fingerprint, expected
   capabilities, and historical links;
 - run live resolution before showing a highlight;
 - highlight only after successful unique live resolution;
 - scroll the resolved element into view before highlighting;
 - when the Inspector and the mapped website are open at the same time, support
-  a **Highlight on website** mode. Selecting a component in Tree, Graph, or
-  Website view sends a safe highlight request to the content mapper session,
+  a **Highlight on website** mode. Selecting a component in Tree or Graph view
+  sends a safe highlight request to the content mapper session,
   scrolls the resolved live element into view, and overlays a color-coded box
   on the real page, similar to the DevTools Elements panel. Color codes must
   distinguish resolved, resolved-with-fallback, ambiguous, not-found,
@@ -764,6 +770,25 @@ Required features:
   allowlist, sensitivity, and allowed static/dynamic-deferred override;
 - display-name alias editing without changing Component ID;
 - current effective mapper settings and profile-normalization rationale.
+
+Current source status: `BRunner/mapper-inspector/index.html` implements the
+first Inspector pass with saved-map listing, Tree/Graph views, a Review
+Queue, active-page mapping without the recorder, component detail inspection,
+and inspection-only live highlighting through the content mapper resolver.
+Live highlighting now scrolls the resolved page element into view before
+drawing the overlay. Alias save, current-mapping review acceptance, live-candidate
+linking while preserving Component ID, basic policy editing, sensitive
+badges/redaction, and persisted live resolver attempts are now present in
+source. Review acceptance and live-candidate linking now produce a fresh review
+map version, preserving the previous map for inspection. Live resolution now
+returns a structured `mapper.resolver.log.v1` record with thresholds, selected
+candidate, runner-up, margin, ranked candidates, and attempts. A Graph
+view hierarchy canvas now exists in source with top-down Site -> Page -> Region
+-> Component nodes, connector ports, right-angle edges, pan/zoom controls,
+selected-node state, and live-highlight selection wiring. Tree view now uses a
+reference-aligned dark explorer layout with type icons, lock affordances, and
+grouping modes for captured page structure, regions, and component type. Final
+graph/tree UX polish remains follow-up after manual stress-page testing.
 
 The Inspector must never offer a "choose first candidate" action for ambiguous
 results. A reviewer may explicitly link a historical component to a selected
@@ -798,8 +823,8 @@ The manual acceptance instructions must explain exactly how to:
    unresolved outcomes;
 4. trigger mutation-heavy and infinite-scroll scenarios and verify honest
    `dynamic_deferred` or unsupported behavior;
-5. open the Mapper Inspector, select the saved website map, switch among Tree,
-   Graph, and Website views, and use highlight-on-website mode to verify live
+5. open the Mapper Inspector, select the saved website map, switch between Tree
+   and Graph views, and use highlight-on-website mode to verify live
    element overlays.
 
 The current manual source checklist lives in

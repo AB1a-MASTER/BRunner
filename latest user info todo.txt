@@ -1,0 +1,3 @@
+ok now that we are on this step. here is what i want. 
+1. remove the webiste view entierly
+2. fix the tree and graph view forclarity i have added 3 examples of what those views actually look like each. so take refernce from the folder "user data from docs and ref" and understand what kind of view i am expecting. understand the layout only don't take the colors as reference keep our color scheme. althoug do take the icon from tree view 1 image example. i like those so find icons like those and use them. you can search the web for website that give free icons and download appropriate assets to use from there.

@@ -13,6 +13,7 @@
     SetRecordingState: "SET_RECORDING_STATE",
     RecordedStep: "RECORDED_STEP",
     CancelExecution: "CANCEL_EXECUTION",
+    HighlightMapperComponent: "HIGHLIGHT_MAPPER_COMPONENT",
   });
 
   const Actions = Object.freeze({
@@ -187,6 +188,12 @@
             isRecording: this.isRecording,
           };
 
+        case Messages.HighlightMapperComponent:
+          return this.highlightMapperComponent(
+            request.component,
+            request.pageMap,
+          );
+
         case "GET_CONTROLS_TREE":
           return {
             ok: true,
@@ -301,6 +308,42 @@
       document.documentElement.appendChild(this.highlightBox);
       document.documentElement.appendChild(this.highlightLabel);
 
+      this.mapperHighlightBox = document.createElement("div");
+      this.mapperHighlightBox.id = "brunner-mapper-inspector-highlight";
+      Object.assign(this.mapperHighlightBox.style, {
+        position: "fixed",
+        zIndex: "2147483646",
+        pointerEvents: "none",
+        border: "2px solid #22c55e",
+        background: "rgba(34, 197, 94, 0.14)",
+        borderRadius: "4px",
+        boxShadow: "0 0 0 2px rgba(34, 197, 94, 0.24)",
+        display: "none",
+      });
+
+      this.mapperHighlightLabel = document.createElement("div");
+      this.mapperHighlightLabel.id = "brunner-mapper-inspector-highlight-label";
+      Object.assign(this.mapperHighlightLabel.style, {
+        position: "fixed",
+        zIndex: "2147483646",
+        pointerEvents: "none",
+        background: "#166534",
+        color: "#ffffff",
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "11px",
+        fontWeight: "650",
+        padding: "4px 7px",
+        borderRadius: "4px",
+        display: "none",
+        maxWidth: "360px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      });
+
+      document.documentElement.appendChild(this.mapperHighlightBox);
+      document.documentElement.appendChild(this.mapperHighlightLabel);
+
       document.addEventListener(
         "mouseover",
         (event) => {
@@ -343,6 +386,9 @@
           if (this.highlightedElement && this.isRecording) {
             this.showRecorderHighlight(this.highlightedElement);
           }
+          if (this.mapperHighlightedElement) {
+            this.refreshMapperInspectorHighlight();
+          }
         },
         true,
       );
@@ -351,7 +397,176 @@
         if (this.highlightedElement && this.isRecording) {
           this.showRecorderHighlight(this.highlightedElement);
         }
+        if (this.mapperHighlightedElement) {
+          this.refreshMapperInspectorHighlight();
+        }
       });
+    }
+
+    async highlightMapperComponent(component = {}, pageMap = {}) {
+      if (!component?.componentId) {
+        this.hideMapperInspectorHighlight();
+        return {
+          ok: false,
+          error: "Missing mapper component.",
+        };
+      }
+
+      const result = this.resolveMapperComponentTarget({
+        mapperContext: {
+          state: "ready",
+          pageMap: {
+            classification: pageMap?.classification || "",
+          },
+          component,
+        },
+      }, component.action || "");
+
+      if (result.element) {
+        await this.showMapperInspectorHighlight(
+          result.element,
+          component,
+          result.mapperState || "resolved",
+        );
+      } else {
+        this.hideMapperInspectorHighlight();
+      }
+
+      return {
+        ok: true,
+        mapperState: result.mapperState || "not_found",
+        mapperReason: result.mapperReason || "",
+        confidence: result.confidence || 0,
+        attempts: result.attempts || [],
+        resolverLog: result.resolverLog || null,
+        highlighted: Boolean(result.element),
+      };
+    }
+
+    async showMapperInspectorHighlight(element, component = {}, state = "resolved") {
+      if (!element || !this.isVisibleElement(element)) {
+        this.hideMapperInspectorHighlight();
+        return;
+      }
+
+      element.scrollIntoView({
+        block: "center",
+        inline: "center",
+        behavior: "instant",
+      });
+      await this.afterNextPaint();
+
+      this.mapperHighlightedElement = element;
+      this.mapperHighlightedComponent = component;
+      this.mapperHighlightedState = state;
+
+      const rect = element.getBoundingClientRect();
+      this.drawMapperInspectorHighlight(rect, component, state);
+    }
+
+    refreshMapperInspectorHighlight() {
+      const element = this.mapperHighlightedElement;
+      if (!element || !this.isVisibleElement(element)) {
+        this.hideMapperInspectorHighlight();
+        return;
+      }
+
+      this.drawMapperInspectorHighlight(
+        element.getBoundingClientRect(),
+        this.mapperHighlightedComponent || {},
+        this.mapperHighlightedState || "resolved",
+      );
+    }
+
+    drawMapperInspectorHighlight(rect = {}, component = {}, state = "resolved") {
+      const color = this.mapperHighlightColor(state, component.status);
+      const labelTop = Math.max(0, Number(rect.top ?? rect.y) - 26);
+      const left = Math.max(0, Number(rect.left ?? rect.x) || 0);
+      const top = Math.max(0, Number(rect.top ?? rect.y) || 0);
+      const width = Math.max(4, Number(rect.width) || 4);
+      const height = Math.max(4, Number(rect.height) || 4);
+
+      Object.assign(this.mapperHighlightBox.style, {
+        display: "block",
+        left: `${Math.round(left)}px`,
+        top: `${Math.round(top)}px`,
+        width: `${Math.round(width)}px`,
+        height: `${Math.round(height)}px`,
+        borderColor: color.border,
+        background: color.background,
+        boxShadow: `0 0 0 2px ${color.shadow}`,
+      });
+
+      this.mapperHighlightLabel.textContent = `${component.componentId || "component"}: ${state}`;
+      Object.assign(this.mapperHighlightLabel.style, {
+        display: "block",
+        left: `${Math.round(left)}px`,
+        top: `${Math.round(labelTop)}px`,
+        background: color.label,
+      });
+    }
+
+    hideMapperInspectorHighlight() {
+      this.mapperHighlightedElement = null;
+      this.mapperHighlightedComponent = null;
+      this.mapperHighlightedState = "";
+
+      if (this.mapperHighlightBox) {
+        this.mapperHighlightBox.style.display = "none";
+      }
+      if (this.mapperHighlightLabel) {
+        this.mapperHighlightLabel.style.display = "none";
+      }
+    }
+
+    afterNextPaint() {
+      return new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+    }
+
+    mapperHighlightColor(state = "", status = "") {
+      const key = state || status || "";
+      if (key.includes("ambiguous")) {
+        return {
+          border: "#f59e0b",
+          background: "rgba(245, 158, 11, 0.16)",
+          shadow: "rgba(245, 158, 11, 0.28)",
+          label: "#92400e",
+        };
+      }
+      if (key.includes("not_found") || status === "removed") {
+        return {
+          border: "#ef4444",
+          background: "rgba(239, 68, 68, 0.14)",
+          shadow: "rgba(239, 68, 68, 0.26)",
+          label: "#991b1b",
+        };
+      }
+      if (key.includes("dynamic") || key.includes("unsupported")) {
+        return {
+          border: "#8b5cf6",
+          background: "rgba(139, 92, 246, 0.14)",
+          shadow: "rgba(139, 92, 246, 0.24)",
+          label: "#5b21b6",
+        };
+      }
+      if (key.includes("fallback") || status === "changed") {
+        return {
+          border: "#06b6d4",
+          background: "rgba(6, 182, 212, 0.14)",
+          shadow: "rgba(6, 182, 212, 0.24)",
+          label: "#155e75",
+        };
+      }
+      return {
+        border: "#22c55e",
+        background: "rgba(34, 197, 94, 0.14)",
+        shadow: "rgba(34, 197, 94, 0.24)",
+        label: "#166534",
+      };
     }
 
     showRecorderHighlight(element) {
@@ -552,7 +767,15 @@
       const technical = this.buildMapperTechnicalFacts(element, snapshot);
       const behavioral = this.buildMapperBehavioralFacts(element, action, snapshot);
       const visual = {
-        bounds: snapshot.bounds || null,
+        bounds: snapshot.bounds || this.getViewportBounds(element),
+        viewportBounds: snapshot.bounds || this.getViewportBounds(element),
+        documentBounds: this.getDocumentBounds(element),
+        viewport: {
+          width: Math.round(window.innerWidth || 0),
+          height: Math.round(window.innerHeight || 0),
+          scrollX: Math.round(window.scrollX || window.pageXOffset || 0),
+          scrollY: Math.round(window.scrollY || window.pageYOffset || 0),
+        },
       };
       const locatorCandidates = (targetInfo.candidates || [
         targetInfo.primary,
@@ -671,6 +894,34 @@
             element.getAttribute("aria-disabled") === "true",
           readonly: Boolean(element.readOnly),
         },
+      };
+    }
+
+    getViewportBounds(element) {
+      if (!element?.getBoundingClientRect) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+    }
+
+    getDocumentBounds(element) {
+      if (!element?.getBoundingClientRect) return null;
+      const rect = element.getBoundingClientRect();
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      return {
+        x: Math.round(rect.left + scrollX),
+        y: Math.round(rect.top + scrollY),
+        left: Math.round(rect.left + scrollX),
+        top: Math.round(rect.top + scrollY),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
       };
     }
 
@@ -1242,7 +1493,7 @@
       const classification = context.pageMap?.classification || "";
 
       if (context.state && context.state !== "ready") {
-        return {
+        return this.withMapperResolverLog({
           element: null,
           mode: "mapper",
           mapperState: context.state,
@@ -1251,11 +1502,11 @@
           value: null,
           confidence: 0,
           attempts: [],
-        };
+        }, component, action, []);
       }
 
       if (classification === "dynamic_deferred") {
-        return {
+        return this.withMapperResolverLog({
           element: null,
           mode: "mapper",
           mapperState: "dynamic_deferred",
@@ -1264,7 +1515,7 @@
           value: null,
           confidence: 0,
           attempts: [],
-        };
+        }, component, action, []);
       }
 
       const candidates = this.enumerateMapperCandidates(action);
@@ -1275,15 +1526,16 @@
       if (primaryMatches.length === 1) {
         return this.mapperResolutionFromCandidate(
           primaryMatches[0],
-          component.primaryLocator,
-          "resolved",
-          "primary_locator_unique",
-          100,
-        );
+        component.primaryLocator,
+        "resolved",
+        "primary_locator_unique",
+        100,
+        component,
+      );
       }
 
       if (primaryMatches.length > 1) {
-        return {
+        return this.withMapperResolverLog({
           element: null,
           mode: "mapper",
           mapperState: "ambiguous",
@@ -1292,20 +1544,24 @@
           value: component.primaryLocator?.value || null,
           confidence: 0,
           attempts: primaryMatches.map((candidate) => candidate.summary),
-        };
+        }, component, action, primaryMatches.map((candidate) => ({
+          candidate,
+          score: 100,
+          evidence: ["primary_locator"],
+        })));
       }
 
       const scored = candidates
         .map((candidate) => ({
           candidate,
-          score: this.scoreMapperCandidate(component, candidate),
+          ...this.scoreMapperCandidateWithEvidence(component, candidate),
         }))
         .sort((a, b) => b.score - a.score);
       const best = scored[0];
       const runnerUp = scored[1];
 
       if (!best || best.score < 75) {
-        return {
+        return this.withMapperResolverLog({
           element: null,
           mode: "mapper",
           mapperState: "not_found",
@@ -1316,12 +1572,13 @@
           attempts: scored.slice(0, 3).map((result) => ({
             ...result.candidate.summary,
             score: result.score,
+            evidence: result.evidence,
           })),
-        };
+        }, component, action, scored);
       }
 
       if (runnerUp && best.score - runnerUp.score < 15) {
-        return {
+        return this.withMapperResolverLog({
           element: null,
           mode: "mapper",
           mapperState: "ambiguous",
@@ -1332,8 +1589,9 @@
           attempts: scored.slice(0, 3).map((result) => ({
             ...result.candidate.summary,
             score: result.score,
+            evidence: result.evidence,
           })),
-        };
+        }, component, action, scored);
       }
 
       return this.mapperResolutionFromCandidate(
@@ -1342,6 +1600,8 @@
         "resolved_with_fallback",
         "fingerprint_unique",
         best.score,
+        component,
+        scored,
       );
     }
 
@@ -1358,9 +1618,24 @@
             locators: fact.locatorCandidates || [],
             bestLocator: targetInfo.primary || null,
             summary: {
+              source: "live_candidate",
               componentId: fact.componentId,
+              componentUid: fact.componentUid,
               displayName: fact.displayName,
+              action: fact.action,
               primary: targetInfo.primary || null,
+              locatorCandidates: fact.locatorCandidates || [],
+              fingerprint: fact.fingerprint || {},
+              expectedCapabilities: fact.expectedCapabilities || [],
+              mapperFact: {
+                componentId: fact.componentId,
+                componentUid: fact.componentUid,
+                displayName: fact.displayName,
+                action: fact.action,
+                locatorCandidates: fact.locatorCandidates || [],
+                fingerprint: fact.fingerprint || {},
+                expectedCapabilities: fact.expectedCapabilities || [],
+              },
             },
           };
         })
@@ -1369,8 +1644,8 @@
         });
     }
 
-    mapperResolutionFromCandidate(candidate, locator, state, reason, confidence) {
-      return {
+    mapperResolutionFromCandidate(candidate, locator, state, reason, confidence, component = null, scored = null) {
+      const result = {
         element: candidate.element,
         mode: "mapper",
         mapperState: state,
@@ -1379,6 +1654,53 @@
         value: locator?.value || candidate.fact.componentId,
         confidence,
         attempts: [candidate.summary],
+      };
+      return this.withMapperResolverLog(result, component, candidate.fact?.action || "", scored || [{
+        candidate,
+        score: confidence,
+        evidence: state === "resolved" ? ["primary_locator"] : [],
+      }]);
+    }
+
+    withMapperResolverLog(result = {}, component = null, action = "", scored = []) {
+      const attempts = Array.isArray(result.attempts) ? result.attempts : [];
+      const ranked = (Array.isArray(scored) ? scored : [])
+        .slice(0, 5)
+        .map((item, index) => ({
+          rank: index + 1,
+          score: Number(item.score) || 0,
+          evidence: Array.isArray(item.evidence) ? item.evidence : [],
+          componentId: item.candidate?.summary?.componentId || "",
+          componentUid: item.candidate?.summary?.componentUid || "",
+          displayName: item.candidate?.summary?.displayName || "",
+          primary: item.candidate?.summary?.primary || null,
+        }));
+      const best = ranked[0] || null;
+      const runnerUp = ranked[1] || null;
+      return {
+        ...result,
+        resolverLog: {
+          version: "mapper.resolver.log.v1",
+          createdAt: new Date().toISOString(),
+          action: String(action || component?.action || ""),
+          componentId: String(component?.componentId || ""),
+          componentUid: String(component?.componentUid || ""),
+          state: result.mapperState || "",
+          reason: result.mapperReason || "",
+          confidence: Number(result.confidence) || 0,
+          strategy: result.strategy || null,
+          value: result.value || null,
+          thresholds: {
+            minimumScore: 75,
+            minimumMargin: 15,
+          },
+          selected: best,
+          runnerUp,
+          margin: best && runnerUp ? best.score - runnerUp.score : null,
+          attemptCount: attempts.length,
+          attempts,
+          rankedCandidates: ranked,
+        },
       };
     }
 
@@ -1391,14 +1713,25 @@
     }
 
     scoreMapperCandidate(component = {}, candidate = {}) {
+      return this.scoreMapperCandidateWithEvidence(component, candidate).score;
+    }
+
+    scoreMapperCandidateWithEvidence(component = {}, candidate = {}) {
       const expected = component.fingerprint || {};
       const actual = candidate.fact?.fingerprint || {};
       let score = 0;
+      const evidence = [];
 
       const expectedSemantic = expected.semantic || {};
       const actualSemantic = actual.semantic || {};
-      if (expectedSemantic.role && expectedSemantic.role === actualSemantic.role) score += 10;
-      if (expectedSemantic.inputType && expectedSemantic.inputType === actualSemantic.inputType) score += 6;
+      if (expectedSemantic.role && expectedSemantic.role === actualSemantic.role) {
+        score += 10;
+        evidence.push("role");
+      }
+      if (expectedSemantic.inputType && expectedSemantic.inputType === actualSemantic.inputType) {
+        score += 6;
+        evidence.push("input_type");
+      }
 
       const expectedName = this.normalizeMapperText(
         expectedSemantic.accessibleName ||
@@ -1412,12 +1745,19 @@
           actualSemantic.stableText ||
           actualSemantic.placeholder,
       );
-      if (expectedName && expectedName === actualName) score += 29;
-      else if (expectedName && actualName && this.mapperTextOverlap(expectedName, actualName) >= 0.5) score += 12;
+      if (expectedName && expectedName === actualName) {
+        score += 29;
+        evidence.push("exact_name");
+      } else if (expectedName && actualName && this.mapperTextOverlap(expectedName, actualName) >= 0.5) {
+        score += 12;
+        evidence.push("partial_name");
+      }
 
       const expectedStructural = this.mapperStructuralTokens(expected.structural);
       const actualStructural = this.mapperStructuralTokens(actual.structural);
-      score += Math.round(this.mapperSetOverlap(expectedStructural, actualStructural) * 30);
+      const structuralScore = Math.round(this.mapperSetOverlap(expectedStructural, actualStructural) * 30);
+      score += structuralScore;
+      if (structuralScore) evidence.push("structural");
 
       const locatorMatches = [
         component.primaryLocator,
@@ -1425,13 +1765,21 @@
       ].filter(Boolean).filter((locator) => {
         return this.mapperCandidateHasLocator(candidate, locator);
       }).length;
-      if (locatorMatches) score += Math.min(15, locatorMatches * 8);
+      if (locatorMatches) {
+        score += Math.min(15, locatorMatches * 8);
+        evidence.push("locator");
+      }
 
       const expectedCapabilities = expected.behavioral?.capabilities || component.expectedCapabilities || [];
       const actualCapabilities = actual.behavioral?.capabilities || candidate.fact?.expectedCapabilities || [];
-      score += Math.round(this.mapperSetOverlap(expectedCapabilities, actualCapabilities) * 8);
+      const capabilityScore = Math.round(this.mapperSetOverlap(expectedCapabilities, actualCapabilities) * 8);
+      score += capabilityScore;
+      if (capabilityScore) evidence.push("capabilities");
 
-      return Math.min(Math.round(score), 100);
+      return {
+        score: Math.min(Math.round(score), 100),
+        evidence,
+      };
     }
 
     mapperActionCompatible(capabilities = [], action = "") {
@@ -1588,6 +1936,7 @@
           attempts: Array.isArray(resolved?.attempts)
             ? resolved.attempts
             : [],
+          resolverLog: resolved?.resolverLog || null,
           controlsTreeAttempted: Boolean(resolved?.controlsTreeAttempted),
           fuzzyAttempted: Boolean(resolved?.fuzzyAttempted),
         },

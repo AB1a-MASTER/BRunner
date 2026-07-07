@@ -75,6 +75,9 @@
         "studio/style.css",
         "studio-graph/index.html",
         "studio-graph/assets/*",
+        "mapper-inspector/index.html",
+        "mapper-inspector/app.js",
+        "mapper-inspector/style.css",
         "sidebar/sidebar.html",
         "sidebar/sidebar.js"
       ],

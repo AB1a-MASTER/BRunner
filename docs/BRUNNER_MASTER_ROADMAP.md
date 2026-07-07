@@ -273,11 +273,29 @@ Implementation phases:
    attempt logs remain later.**
 4. Dedicated Mapper Inspector window with map browsing, live resolution checks,
    highlight, Review Queue, aliases, sensitive-site badges, and effective policy
-   view. The Inspector must expose a saved-map website list plus Tree, Graph,
-   and simplified Website map views. When the Inspector and mapped site are open
+   view. The Inspector must expose a saved-map website list plus Tree and Graph
+   map views. When the Inspector and mapped site are open
    together, selecting a component in any view should highlight the live page
    element with color-coded resolver/review state overlays, similar to DevTools
    element selection.
+   **Initial Inspector source pass complete: `mapper-inspector/index.html`
+   lists saved map versions by website, provides Tree/Graph views,
+   Review Queue, active-page mapping without recorder, and inspection-only live
+   highlight through the mapper resolver. Live highlight scrolls resolved
+   elements into view. Alias save,
+   current-mapping review acceptance, live-candidate linking while preserving
+   Component IDs, basic effective policy editing, sensitive badges/redaction,
+   persisted live resolver attempts, and structured resolver logs are in
+   source. Review acceptance and link decisions create fresh review map
+   versions. Website view has been removed from scope. Tree view now uses a
+   reference-aligned dark explorer layout with type icons, indentation, lock
+   affordances, compact labels, stable Component IDs as details, and modes for
+   captured page structure, regions, and component type. Structure mode follows
+   saved DOM-path facts as closely as the map data allows. Graph view
+   now uses a functional top-down hierarchy canvas with Site -> Page -> Region
+   -> Component nodes, connector ports, right-angle relationship edges,
+   pan/zoom controls, selected-node state, and live-highlight selection wiring.
+   Final UX polish remains follow-up after manual stress-page testing.**
 5. Filesystem `MapStore` adapter through the existing companion/local-host
    bridge, with atomic writes, timeouts, bounded retention, and last-write-wins
    conflict records.
@@ -288,7 +306,7 @@ After the mapper execution and Inspector basics are complete, add a dedicated
 manual mapper stress page with static, dynamic, mutation-heavy, infinite-scroll,
 and open Shadow DOM sections. Use it to verify locked Component IDs,
 reconciliation, honest `dynamic_deferred`/unsupported outcomes, saved-map
-listing, Tree/Graph/Website map views, and live website highlighting.
+listing, Tree/Graph map views, and live website highlighting.
 The current pre-Inspector manual acceptance checklist is
 [MAPPER_MANUAL_ACCEPTANCE.md](MAPPER_MANUAL_ACCEPTANCE.md).
 

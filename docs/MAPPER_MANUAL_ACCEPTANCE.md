@@ -93,14 +93,44 @@ Expected result: loaded-content-only behavior until the deferred feed milestone.
 
 Expected result: open Shadow DOM controls can be captured and resolved.
 
-## Pre-Inspector Stop Point
+## Mapper Inspector Checks
 
-Before Mapper Inspector exists, verification is limited to workflow graph state,
-execution logs, page counters, and stored map data. Once the Inspector is added,
-repeat these tests while also checking:
+1. Open `mapper-inspector/index.html` from the extension or the sidebar button.
+2. Confirm saved maps are grouped as website/page/version entries.
+3. Select the stress-test map and switch through Tree and Graph views.
+4. In Tree view, confirm the map appears as a compact explorer hierarchy with
+   type icons, indentation, lock affordances, compact labels, and stable
+   Component IDs as secondary details.
+5. Switch Tree between **Structure**, **Regions**, and **Types**. Confirm
+   Structure follows the captured DOM path hierarchy, Regions groups by page
+   context, and Types groups components by element/role type.
+6. In Graph view, confirm Site -> Page -> Region -> Component nodes are visible
+   in a top-down hierarchy with connector ports, right-angle relationship edges,
+   compact labels, pan/zoom controls, and selected node state.
+7. Confirm Review Queue contains changed, removed, or ambiguous components.
+8. Select static, changed, removed, ambiguous, infinite-scroll, and shadow DOM
+   components and confirm details show locators, fingerprints, capabilities,
+   and history.
+9. Keep the mapped page open beside the Inspector.
+10. Enable **Highlight on website**.
+11. Select components in Tree and Graph views.
+12. Confirm the live page shows a color-coded inspection overlay after a unique
+   mapper resolution.
+13. Select a mapped element that is outside the current viewport. Confirm the
+    real page scrolls the resolved element into view before drawing the overlay.
+14. Confirm ambiguous or unresolved components are not clicked or typed into.
+15. Save a display alias and refresh the Inspector. Confirm the alias persists
+    and the canonical Component ID is unchanged.
+16. For a review-required component, choose **Accept current mapping** and
+    confirm it leaves the Review Queue.
+17. Trigger a live resolution that shows candidate attempts, then link a live
+    candidate. Confirm the canonical Component ID is unchanged, review is
+    cleared, history records the linked candidate, and a new map version appears
+    while the previous map version remains selectable.
+18. Mark the site sensitive in Policy and confirm locator/resolution details are
+    redacted while Component IDs and status remain visible.
+19. Confirm live resolution details include a structured resolver log with
+    thresholds, selected candidate, runner-up when present, margin, ranked
+    candidates, and attempts.
 
-- saved-map website list;
-- Tree view;
-- Graph view;
-- simplified Website view;
-- live highlight-on-website mode.
+Current follow-up gap: manual UX polish after stress-page testing.
