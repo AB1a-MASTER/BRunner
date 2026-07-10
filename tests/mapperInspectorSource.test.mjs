@@ -3,7 +3,11 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { Messages, Defaults } from "../BRunner/core/constants.js";
-import { createChromeMapStore } from "../BRunner/core/mapStore.js";
+import {
+  MapStoreUnavailableError,
+  createChromeMapStore,
+  createNativeMapStore,
+} from "../BRunner/core/mapStore.js";
 import { createEmptyWorkflowMapperState } from "../BRunner/mapper/core.js";
 
 const root = new URL("../", import.meta.url);
@@ -23,6 +27,7 @@ test("mapper inspector extension surface is wired", async () => {
 
   assert.equal(Messages.ListWorkflowMapperStates, "LIST_WORKFLOW_MAPPER_STATES");
   assert.equal(Messages.MapCurrentPage, "MAP_CURRENT_PAGE");
+  assert.equal(Messages.InspectCurrentPageMap, "INSPECT_CURRENT_PAGE_MAP");
   assert.equal(Messages.HighlightMapperComponent, "HIGHLIGHT_MAPPER_COMPONENT");
   assert.match(manifest, /mapper-inspector\/index\.html/);
   assert.match(manifest, /mapper-inspector\/app\.js/);
@@ -30,9 +35,27 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(sidebarJs, /openMapperInspector/);
   assert.match(background, /case Messages\.ListWorkflowMapperStates/);
   assert.match(background, /case Messages\.MapCurrentPage/);
+  assert.match(background, /case Messages\.InspectCurrentPageMap/);
   assert.match(background, /mapCurrentPageForInspector\(request, sender\)/);
+  assert.match(background, /inspectCurrentPageMapForInspector\(request, sender\)/);
+  assert.match(background, /getInspectorLiveMapperSnapshot/);
+  assert.match(background, /shouldKeepPreviousInspectorMap/);
+  assert.match(background, /isUsableInspectorPageMap/);
+  assert.match(background, /deferred: true/);
+  assert.match(background, /snapshotMode: "settled_current_dom"/);
+  assert.match(background, /snapshotMode: request\.snapshotMode \|\| ""/);
+  const mapCurrentPageSource = background.match(
+    /async function mapCurrentPageForInspector[\s\S]*?(?=async function inspectCurrentPageMapForInspector)/,
+  )?.[0] || "";
+  assert.match(mapCurrentPageSource, /tabId: snapshot\.tab\.id/);
+  assert.doesNotMatch(mapCurrentPageSource, /tabId: tab\.id/);
+  assert.match(background, /stale,/);
+  assert.match(background, /getInspectorTargetTab\(request\.tabId, request\.pageMap \|\| null, sender\)/);
+  assert.match(background, /Math\.min\(3, Math\.max\(1, Number\(settings\.maxVersions\) \|\| 3\)\)/);
+  assert.match(background, /materialMutationCount: Number\(snapshot\.page\.materialMutationCount\) \|\| 0/);
   assert.match(background, /case Messages\.HighlightMapperComponent/);
   assert.match(background, /highlightMapperComponentForInspector\(request, sender\)/);
+  assert.match(background, /highlightRequestId: request\.highlightRequestId/);
   assert.match(background, /selectBestInspectorTargetTab/);
   assert.match(background, /tab\.id !== senderTabId/);
   assert.match(background, /sendInspectorMapperMessage/);
@@ -45,12 +68,47 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(background, /No website tab found/);
   assert.match(content, /HighlightMapperComponent/);
   assert.match(content, /highlightMapperComponent/);
+  assert.match(content, /includeHidden: true/);
+  assert.match(content, /resolved_element_hidden/);
+  assert.match(content, /mapperState: hidden \? "hidden"/);
+  assert.match(content, /highlighted,/);
+  assert.match(content, /mapperMutationStats/);
+  assert.match(content, /recordMapperMutations/);
+  assert.match(content, /getMapperPageSnapshot/);
+  assert.match(content, /lifetimeMaterialMutationCount/);
+  assert.match(content, /settledCurrentDom/);
+  assert.match(content, /snapshotMode === "settled_current_dom"/);
+  assert.match(content, /compareElementsByVisualOrder/);
+  assert.match(content, /enumerateMapperCandidates\(action = "", options = {}\)/);
+  assert.match(content, /this\.resolveStoredMapperLocatorTarget\(\s*\n\s*component,\s*\n\s*action,\s*\n\s*\{ includeHidden \}/);
+  assert.match(content, /mapperCandidateFromElement\(element, action = "", preferredLocator = null/);
+  assert.match(content, /mergeMapperLocators\(fact\.locatorCandidates \|\| \[\], preferredLocator\)/);
+  assert.match(content, /findElementsByMapperLocator\(locator = {}, options = {}\)/);
+  assert.match(content, /stored_primary_locator_unique/);
+  assert.match(content, /stored_fallback_locator_unique/);
+  assert.match(content, /stored_primary_locator_ambiguous/);
+  assert.match(content, /queryAllMapperRoots\(`#\$\{this\.cssEscapeIdentifier\(value\)\}`\)/);
+  assert.match(content, /findMapperElementsByLabelText/);
+  assert.match(content, /findMapperElementsByDomPath/);
+  assert.match(content, /options\.includeHidden \|\| this\.isUsableControl\(element\)/);
+  assert.match(content, /elements\.sort\(\(a, b\) => this\.compareElementsByVisualOrder\(a, b\)\)/);
+  assert.match(content, /this\.hideRecorderHighlight\(\)/);
+  assert.match(content, /zIndex: "2147483647"/);
+  assert.match(content, /stale_highlight_request/);
+  assert.match(content, /this\.mapperHighlightRequestId = requestId/);
+  assert.match(content, /inspector_highlight_cleared/);
+  assert.match(content, /highlightRequestId !== this\.mapperHighlightRequestId/);
+  assert.match(content, /return true;/);
+  assert.match(content, /isPassiveTextCandidate/);
+  assert.match(content, /hasMappableText/);
+  assert.match(content, /hasMappableMediaSignal/);
+  assert.match(content, /capabilities\.add\("screenshot"\)/);
   assert.match(content, /element\.scrollIntoView/);
   assert.match(content, /afterNextPaint/);
   assert.match(content, /documentBounds: this\.getDocumentBounds/);
   assert.match(content, /viewportBounds/);
   assert.match(content, /scoreMapperCandidateWithEvidence/);
-  assert.match(content, /source: "live_candidate"/);
+  assert.match(content, /source = "live_candidate"/);
   assert.match(content, /mapperFact/);
   assert.match(content, /expectedCapabilities/);
   assert.match(content, /withMapperResolverLog/);
@@ -60,12 +118,101 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(content, /resolverLog: resolved\?\.resolverLog/);
   assert.match(inspectorHtml, /view-tree/);
   assert.match(inspectorHtml, /view-graph/);
+  assert.match(inspectorHtml, /Refresh Map/);
+  assert.match(inspectorHtml, /highlight-hover-enabled/);
+  assert.match(inspectorHtml, /component-search/);
+  assert.match(inspectorHtml, /map-live-status/);
+  assert.match(inspectorHtml, /btn-check-live-map/);
+  assert.match(inspectorHtml, /component-status-filter/);
+  assert.match(inspectorHtml, /map-version-tools/);
+  assert.match(inspectorHtml, /data-collapse-panel="sites"/);
+  assert.match(inspectorHtml, /data-collapse-panel="details"/);
+  assert.match(inspectorHtml, /data-collapse-section="policy"/);
+  assert.match(inspectorHtml, /data-resize-section="policy"/);
+  assert.match(inspectorHtml, /data-resize-section="review"/);
   assert.doesNotMatch(inspectorHtml, /view-website/);
   assert.match(inspectorHtml, /policy-panel/);
   assert.match(inspectorJs, /ListWorkflowMapperStates/);
   assert.match(inspectorJs, /SaveWorkflowMapperState/);
   assert.match(inspectorJs, /MapCurrentPage/);
+  assert.match(inspectorJs, /InspectCurrentPageMap/);
+  assert.match(inspectorJs, /refreshSelectedPageMap/);
+  assert.match(inspectorJs, /checkSelectedPageLiveStatus/);
+  assert.match(inspectorJs, /liveStatusFromResponse/);
+  assert.match(inspectorJs, /renderLiveStatus/);
+  assert.match(inspectorJs, /Refreshing selected page map/);
+  assert.match(inspectorJs, /pageMap: entry\.pageMap/);
   assert.match(inspectorJs, /HighlightMapperComponent/);
+  assert.match(inspectorJs, /highlightHoverEnabled/);
+  assert.match(inspectorJs, /previewComponentHighlight/);
+  assert.match(inspectorJs, /hoverHighlightRequestId/);
+  assert.match(inspectorJs, /highlightRequestId/);
+  assert.match(inspectorJs, /activeResolutionKey/);
+  assert.match(inspectorJs, /lastResolutionByTarget/);
+  assert.match(inspectorJs, /componentResolutionKey/);
+  assert.match(inspectorJs, /selectedResolutionKey/);
+  assert.match(inspectorJs, /resolutionForComponent/);
+  assert.match(inspectorJs, /pruneInspectorResolutionState/);
+  assert.match(inspectorJs, /clearWebsiteHighlight/);
+  assert.match(inspectorJs, /restoreSelection: true/);
+  assert.match(inspectorJs, /btn-check-live-resolution/);
+  assert.match(inspectorJs, /checkLiveResolution/);
+  assert.match(inspectorJs, /cancelHoverPreview/);
+  assert.match(inspectorJs, /silentStale/);
+  assert.match(inspectorJs, /componentQuery/);
+  assert.match(inspectorJs, /treeCollapsed/);
+  assert.match(inspectorJs, /wireTreeToggles/);
+  assert.match(inspectorJs, /treeChildrenHtml/);
+  assert.match(inspectorJs, /componentTypeColor/);
+  assert.match(inspectorJs, /isUsablePageMap/);
+  assert.match(inspectorJs, /kept last usable map/);
+  assert.match(inspectorJs, /filterComponents/);
+  assert.match(inspectorJs, /includeRemoved/);
+  assert.match(inspectorJs, /status === "removed"/);
+  assert.match(inspectorJs, /filterComponents\(entry, \{ includeRemoved: true \}\)/);
+  assert.match(inspectorJs, /component\.reviewRequired !== false/);
+  assert.match(inspectorJs, /acceptedReviewStatus/);
+  assert.match(inspectorJs, /previousStatus: current\.status \|\| ""/);
+  assert.match(inspectorJs, /sortComponentsByVisualOrder/);
+  assert.match(inspectorJs, /compareComponentsByVisualOrder/);
+  assert.match(inspectorJs, /visualOrderBounds/);
+  assert.match(inspectorJs, /compareStructureNodesByVisualOrder/);
+  assert.match(inspectorJs, /firstStructureComponent/);
+  assert.match(inspectorJs, /componentSearchText/);
+  assert.match(inspectorJs, /semantic\.title/);
+  assert.match(inspectorJs, /stableAttributes/);
+  assert.match(inspectorJs, /component\.primaryLocator\?\.value/);
+  assert.match(inspectorJs, /cancelHoverPreview\(\);\s*\n\s*state\.selectedComponentId = componentId/);
+  assert.match(inspectorJs, /querySelectorAll\("\.panning"\)/);
+  assert.match(inspectorJs, /componentFilterSummaryText/);
+  assert.match(inspectorJs, /componentIsHidden/);
+  assert.match(inspectorJs, /hidden-badge/);
+  assert.match(inspectorJs, /hidden-component/);
+  assert.match(inspectorJs, /mapSubtitle/);
+  assert.match(inspectorJs, /material mutation\(s\)/);
+  assert.match(inspectorJs, /siteGroups/);
+  assert.match(inspectorJs, /groupSiteEntries/);
+  assert.match(inspectorJs, /baseSiteName/);
+  assert.match(inspectorJs, /retainRecentPageMaps/);
+  assert.match(inspectorJs, /pruneWorkflowMapperState/);
+  assert.match(inspectorJs, /renderVersionTools/);
+  assert.match(inspectorJs, /map-page-select/);
+  assert.match(inspectorJs, /btn-delete-map-version/);
+  assert.match(inspectorJs, /deleteSelectedMapVersion/);
+  assert.match(inspectorJs, /btn-delete-site/);
+  assert.match(inspectorJs, /data-delete-site-key/);
+  assert.match(inspectorJs, /deleteSiteGroup/);
+  assert.match(inspectorJs, /Delete saved mapper site/);
+  assert.match(inspectorJs, /nextEntryIdAfterDelete/);
+  assert.match(inspectorJs, /Delete saved mapper version/);
+  assert.match(inspectorJs, /hasOwnProperty\.call\(selection, "nextComponentId"\)/);
+  assert.match(inspectorJs, /pageGroupsForSite/);
+  assert.match(inspectorJs, /pageEntryKey/);
+  assert.match(inspectorJs, /pageLabel/);
+  assert.match(inspectorJs, /renderPanelChrome/);
+  assert.match(inspectorJs, /detailSectionSizes/);
+  assert.match(inspectorJs, /startDetailResize/);
+  assert.match(inspectorJs, /renderDetailSectionSizes/);
   assert.match(inspectorJs, /reviewRequired/);
   assert.match(inspectorJs, /componentShortName/);
   assert.doesNotMatch(inspectorJs, /renderWebsite/);
@@ -89,6 +236,11 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /data-graph-viewport/);
   assert.match(inspectorJs, /graph-node-\$\{node\.kind\}/);
   assert.match(inspectorJs, /componentRegionName/);
+  assert.match(inspectorJs, /decorateStaticControls/);
+  assert.match(inspectorJs, /iconButtonHtml/);
+  assert.match(inspectorJs, /iconSvg/);
+  assert.match(inspectorJs, /renderMapLegend/);
+  assert.match(inspectorJs, /Map color legend/);
   assert.match(inspectorJs, /saveComponentAlias/);
   assert.match(inspectorJs, /acceptCurrentMapping/);
   assert.match(inspectorJs, /savePolicy/);
@@ -106,10 +258,38 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /reviewSource: "mapper_inspector"/);
   assert.match(inspectorJs, /Resolver Log/);
   assert.match(inspectorCss, /graph-shell/);
+  assert.match(inspectorCss, /component-filterbar/);
+  assert.match(inspectorCss, /map-live-status/);
+  assert.match(inspectorCss, /hidden-component/);
+  assert.match(inspectorCss, /status-hidden/);
+  assert.match(inspectorCss, /subtle-button/);
+  assert.match(inspectorCss, /@media \(max-width: 1180px\)/);
+  assert.match(inspectorCss, /@media \(max-width: 640px\)/);
+  assert.match(inspectorCss, /--muted: #cbd5e1/);
+  assert.match(inspectorCss, /height: 100vh/);
+  assert.match(inspectorCss, /flex: 1 1 auto/);
+  assert.match(inspectorCss, /site-panel-collapsed/);
+  assert.match(inspectorCss, /detail-panel-collapsed/);
+  assert.match(inspectorCss, /panel-collapse/);
+  assert.match(inspectorCss, /section-resizer/);
+  assert.match(inspectorCss, /page-picker/);
+  assert.match(inspectorCss, /version-picker/);
+  assert.match(inspectorCss, /danger-button/);
+  assert.match(inspectorCss, /header-actions input:not\(\[type="checkbox"\]\)/);
+  assert.match(inspectorCss, /tree-toggle/);
+  assert.match(inspectorCss, /tree-children\.collapsed/);
+  assert.match(inspectorCss, /--type-color/);
+  assert.match(inspectorCss, /tree-status-changed/);
   assert.match(inspectorCss, /tree-explorer/);
   assert.match(inspectorCss, /tree-controls/);
   assert.match(inspectorCss, /tree-mode-button/);
   assert.match(inspectorCss, /tree-icon-button/);
+  assert.match(inspectorCss, /icon-button/);
+  assert.match(inspectorCss, /data-tooltip/);
+  assert.match(inspectorCss, /map-legend/);
+  assert.match(inspectorCss, /legend-chip/);
+  assert.match(inspectorCss, /site-delete-button/);
+  assert.match(inspectorCss, /grid-template-columns: minmax\(0, 1fr\) 30px/);
   assert.match(inspectorCss, /detail-panel > section/);
   assert.match(inspectorCss, /grid-template-rows: auto minmax\(0, 1fr\)/);
   assert.match(inspectorCss, /policy-panel,\s*\n\.component-detail/);
@@ -135,6 +315,43 @@ test("map store lists deserialized workflow mapper states", async () => {
   assert.equal(states.workflowA.workflowId, "workflowA");
 });
 
+test("native map store persists workflow mapper states through host bridge", async () => {
+  const bridge = createMemoryNativeMapperBridge();
+  const store = createNativeMapStore(bridge);
+
+  await store.saveWorkflowMapperState("workflowA", createEmptyWorkflowMapperState("workflowA"));
+  const allStates = await store.getAllWorkflowMapperStates();
+  const state = await store.getWorkflowMapperState("workflowA");
+  const deleted = await store.deleteWorkflowMapperState("workflowA");
+
+  assert.deepEqual(Object.keys(allStates), ["workflowA"]);
+  assert.equal(state.workflowId, "workflowA");
+  assert.equal(state.storage.provider, "native");
+  assert.equal(deleted, true);
+});
+
+test("native map store reports timeout status without hanging callers", async () => {
+  const store = createNativeMapStore({
+    async listMapperStates() {
+      throw new Error("Timed out waiting for native host response (42).");
+    },
+  });
+
+  await assert.rejects(
+    () => store.getAllWorkflowMapperStates(),
+    (error) => {
+      assert.ok(error instanceof MapStoreUnavailableError);
+      assert.equal(error.code, "map_store_timeout");
+      return true;
+    },
+  );
+
+  const status = store.getStatus();
+  assert.equal(status.available, false);
+  assert.equal(status.state, "timeout");
+  assert.equal(status.operation, "list");
+});
+
 function createMemoryStorage(initial = {}) {
   const values = structuredClone(initial);
   return {
@@ -145,6 +362,27 @@ function createMemoryStorage(initial = {}) {
     },
     async set(next) {
       Object.assign(values, structuredClone(next));
+    },
+  };
+}
+
+function createMemoryNativeMapperBridge() {
+  const states = {};
+  return {
+    async listMapperStates() {
+      return { states: structuredClone(states) };
+    },
+    async getMapperState(workflowId) {
+      return { state: structuredClone(states[workflowId] || null) };
+    },
+    async saveMapperState(workflowId, state) {
+      states[workflowId] = structuredClone(state);
+      return { state: structuredClone(states[workflowId]) };
+    },
+    async deleteMapperState(workflowId) {
+      const deleted = Object.prototype.hasOwnProperty.call(states, workflowId);
+      delete states[workflowId];
+      return { deleted };
     },
   };
 }

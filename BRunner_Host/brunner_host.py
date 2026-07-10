@@ -21,6 +21,7 @@ from directory_registry import (
 from fallback_input import execute_host_action
 from visual_match import execute_visual_match_action
 from workflow_repository import WorkflowRepository
+from mapper_repository import MapperRepository
 from execution_log_storage import save_execution_log
 from host_settings import load_or_create_config, save_config
 from window_validation import HostFallbackError, host_window_status
@@ -35,6 +36,7 @@ config = load_or_create_config(CONFIG_FILE, BASE_DIR)
 PORT = config["port"]
 WORKFLOWS_DIR = active_workflows_directory(config, BASE_DIR)
 WORKFLOW_REPOSITORY = WorkflowRepository(WORKFLOWS_DIR)
+MAPPER_REPOSITORY = MapperRepository(WORKFLOWS_DIR)
 HOST_VERSION = "0.1.0"
 PROTOCOL_VERSION = 2
 SUPPORTED_CAPABILITIES = [
@@ -46,6 +48,10 @@ SUPPORTED_CAPABILITIES = [
     "workflow.duplicate",
     "workflow.rename",
     "workflow.upgrade",
+    "mapper.state.list",
+    "mapper.state.get",
+    "mapper.state.save",
+    "mapper.state.delete",
     "host.window",
     "host.action",
     "host.visual_match",
@@ -505,6 +511,39 @@ async def handle_rename_workflow(websocket, request_id, payload):
     )
 
 
+async def handle_list_mapper_states(websocket, request_id):
+    await send_json(
+        websocket,
+        success(request_id, states=MAPPER_REPOSITORY.list_states())
+    )
+
+
+async def handle_get_mapper_state(websocket, request_id, payload):
+    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
+    await send_json(
+        websocket,
+        success(request_id, state=MAPPER_REPOSITORY.get_state(workflow_id))
+    )
+
+
+async def handle_save_mapper_state(websocket, request_id, payload):
+    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
+    state = payload.get("state") or {}
+    saved = MAPPER_REPOSITORY.save_state(workflow_id or state.get("workflowId"), state)
+    await send_json(
+        websocket,
+        success(request_id, state=saved)
+    )
+
+
+async def handle_delete_mapper_state(websocket, request_id, payload):
+    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
+    await send_json(
+        websocket,
+        success(request_id, deleted=MAPPER_REPOSITORY.delete_state(workflow_id))
+    )
+
+
 # --- WebSocket Command Router ---
 
 
@@ -618,6 +657,18 @@ async def handle_connection(websocket):
 
                 elif command == "RENAME_WORKFLOW":
                     await handle_rename_workflow(websocket, request_id, payload)
+
+                elif command == "LIST_MAPPER_STATES":
+                    await handle_list_mapper_states(websocket, request_id)
+
+                elif command == "GET_MAPPER_STATE":
+                    await handle_get_mapper_state(websocket, request_id, payload)
+
+                elif command == "SAVE_MAPPER_STATE":
+                    await handle_save_mapper_state(websocket, request_id, payload)
+
+                elif command == "DELETE_MAPPER_STATE":
+                    await handle_delete_mapper_state(websocket, request_id, payload)
 
                 else:
                     await send_json(

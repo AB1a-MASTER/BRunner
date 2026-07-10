@@ -40,6 +40,7 @@ class NativeBridgeClient {
       this.isAuthenticated = false;
       this.authPromise = null;
       this.lastHello = null;
+      this.rejectPendingRequests("Native host disconnected.");
       console.warn("[BRunner] Native host disconnected.");
     };
 
@@ -48,6 +49,7 @@ class NativeBridgeClient {
       this.isAuthenticated = false;
       this.authPromise = null;
       this.lastHello = null;
+      this.rejectPendingRequests("Native host socket error.");
       console.error("[BRunner] Native host socket error:", error);
     };
 
@@ -69,6 +71,7 @@ class NativeBridgeClient {
     }
     this.socket = null;
     this.isConnected = false;
+    this.rejectPendingRequests("Native host connection reset.");
   }
 
   sendRaw(payload) {
@@ -138,7 +141,8 @@ class NativeBridgeClient {
   sendAuthenticatedRequest(payload) {
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
-      this.pendingRequests.set(requestId, { resolve, reject });
+      const timer = this.startRequestTimeout(requestId, reject);
+      this.pendingRequests.set(requestId, { resolve, reject, timer });
 
       try {
         this.sendRaw({
@@ -152,16 +156,19 @@ class NativeBridgeClient {
     });
   }
 
-  async request(command, payload = {}) {
+  async request(command, payload = {}, options = {}) {
     this.connect();
     await this.waitForAuthentication();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
+      const timeoutMs = normalizeTimeout(options.timeoutMs);
+      const timer = this.startRequestTimeout(requestId, reject, timeoutMs);
 
       this.pendingRequests.set(requestId, {
         resolve,
         reject,
+        timer,
       });
 
       const sendWhenReady = () => {
@@ -183,22 +190,22 @@ class NativeBridgeClient {
       }
 
       const startedAt = Date.now();
-      const timer = setInterval(() => {
+      const connectionTimer = setInterval(() => {
         if (!this.socket) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           this.pendingRequests.delete(requestId);
           reject(new Error("Native host socket was not created."));
           return;
         }
 
         if (this.socket.readyState === WebSocket.OPEN) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           sendWhenReady();
           return;
         }
 
         if (Date.now() - startedAt > 5000) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           this.pendingRequests.delete(requestId);
           reject(new Error("Timed out connecting to native host."));
         }
@@ -206,16 +213,19 @@ class NativeBridgeClient {
     });
   }
 
-  async requestCapability(capability, payload = {}) {
+  async requestCapability(capability, payload = {}, options = {}) {
     this.connect();
     await this.waitForAuthentication();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
+      const timeoutMs = normalizeTimeout(options.timeoutMs);
+      const timer = this.startRequestTimeout(requestId, reject, timeoutMs);
 
       this.pendingRequests.set(requestId, {
         resolve,
         reject,
+        timer,
       });
 
       const sendWhenReady = () => {
@@ -239,22 +249,22 @@ class NativeBridgeClient {
       }
 
       const startedAt = Date.now();
-      const timer = setInterval(() => {
+      const connectionTimer = setInterval(() => {
         if (!this.socket) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           this.pendingRequests.delete(requestId);
           reject(new Error("Native host socket was not created."));
           return;
         }
 
         if (this.socket.readyState === WebSocket.OPEN) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           sendWhenReady();
           return;
         }
 
         if (Date.now() - startedAt > 5000) {
-          clearInterval(timer);
+          clearInterval(connectionTimer);
           this.pendingRequests.delete(requestId);
           reject(new Error("Timed out connecting to native host."));
         }
@@ -281,6 +291,7 @@ class NativeBridgeClient {
     }
 
     this.pendingRequests.delete(requestId);
+    clearTimeout(pending.timer);
 
     if (message.error) {
       pending.reject(new Error(message.error));
@@ -288,6 +299,23 @@ class NativeBridgeClient {
     }
 
     pending.resolve(message);
+  }
+
+  startRequestTimeout(requestId, reject, timeoutMs = Defaults.NativeRequestTimeoutMs) {
+    return setTimeout(() => {
+      if (!this.pendingRequests.has(requestId)) return;
+      this.pendingRequests.delete(requestId);
+      reject(new Error(`Timed out waiting for native host response (${requestId}).`));
+    }, timeoutMs);
+  }
+
+  rejectPendingRequests(reason) {
+    const pending = Array.from(this.pendingRequests.entries());
+    this.pendingRequests.clear();
+    for (const [, request] of pending) {
+      clearTimeout(request.timer);
+      request.reject(new Error(reason));
+    }
   }
 
   async listWorkflows() {
@@ -361,6 +389,37 @@ class NativeBridgeClient {
     return this.request(NativeCommands.UpgradeWorkflow, {
       filename: ensureJsonFilename(filename),
       content,
+    });
+  }
+
+  async listMapperStates() {
+    return this.request(NativeCommands.ListMapperStates, {}, {
+      timeoutMs: Defaults.NativeMapperRequestTimeoutMs,
+    });
+  }
+
+  async getMapperState(workflowId) {
+    return this.request(NativeCommands.GetMapperState, {
+      workflowId: String(workflowId || ""),
+    }, {
+      timeoutMs: Defaults.NativeMapperRequestTimeoutMs,
+    });
+  }
+
+  async saveMapperState(workflowId, state) {
+    return this.request(NativeCommands.SaveMapperState, {
+      workflowId: String(workflowId || state?.workflowId || ""),
+      state: state && typeof state === "object" ? state : {},
+    }, {
+      timeoutMs: Defaults.NativeMapperRequestTimeoutMs,
+    });
+  }
+
+  async deleteMapperState(workflowId) {
+    return this.request(NativeCommands.DeleteMapperState, {
+      workflowId: String(workflowId || ""),
+    }, {
+      timeoutMs: Defaults.NativeMapperRequestTimeoutMs,
     });
   }
 
@@ -476,6 +535,13 @@ export function generateNativePairingKey() {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeTimeout(value) {
+  const timeout = Number(value);
+  return Number.isFinite(timeout) && timeout > 0
+    ? timeout
+    : Defaults.NativeRequestTimeoutMs;
 }
 
 export const NativeBridge = new NativeBridgeClient();

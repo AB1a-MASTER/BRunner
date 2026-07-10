@@ -144,6 +144,8 @@ function collectPageFacts(previousMap = null, mapperFact = {}) {
     })
     .map((component) => ({
       action: component.action || "",
+      componentId: component.componentId || "",
+      componentUid: component.componentUid || "",
       locatorCandidates: [
         component.primaryLocator,
         ...(component.fallbackLocators || []),
@@ -156,27 +158,8 @@ function collectPageFacts(previousMap = null, mapperFact = {}) {
 
 function findComponentForFact(pageMap = {}, mapperFact = {}) {
   if (!Array.isArray(pageMap.components)) return null;
-  if (mapperFact.componentUid) {
-    const byUid = pageMap.components.find((component) => {
-      return component.componentUid === mapperFact.componentUid;
-    });
-    if (byUid) return byUid;
-  }
-  if (mapperFact.componentUid) {
-    for (const component of pageMap.components) {
-      const matchedHistory = (component.historicalLinks || []).some((link) => {
-        return link.componentUid === mapperFact.componentUid;
-      });
-      if (matchedHistory) return component;
-    }
-  }
-  if (mapperFact.componentId) {
-    const byId = pageMap.components.find((component) => {
-      return component.componentId === mapperFact.componentId;
-    });
-    if (byId) return byId;
-  }
-  return pageMap.components.at(-1) || null;
+  const index = findIncomingComponentIndex(pageMap.components, mapperFact);
+  return index >= 0 ? pageMap.components[index] : null;
 }
 
 function preserveRecordedComponentLocks(pageMap = {}, previousMap = null, mapperFact = {}) {
@@ -202,7 +185,7 @@ function preserveRecordedComponentLocks(pageMap = {}, previousMap = null, mapper
         .find((uid) => previousByUid.has(uid));
       const incomingPrevious = previousByIncomingUid.get(mapperFact.componentUid);
       const previous = (
-        incomingPrevious && currentIndex === pageMap.components.length - 1
+        incomingPrevious && isIncomingComponent(component, mapperFact)
           ? incomingPrevious
           : null
       ) || previousByUid.get(component.componentUid) ||
@@ -225,11 +208,7 @@ function attachIncomingFactLink(pageMap = {}, mapperFact = {}) {
     return pageMap;
   }
 
-  const componentIndex = pageMap.components.findIndex((component) => {
-    return component.componentId === mapperFact.componentId ||
-      component.componentUid === mapperFact.componentUid;
-  });
-  const index = componentIndex >= 0 ? componentIndex : pageMap.components.length - 1;
+  const index = findIncomingComponentIndex(pageMap.components, mapperFact);
   if (index < 0) return pageMap;
 
   return {
@@ -252,8 +231,66 @@ function attachIncomingFactLink(pageMap = {}, mapperFact = {}) {
   };
 }
 
+function findIncomingComponentIndex(components = [], mapperFact = {}) {
+  const directIndex = components.findIndex((component) => isIncomingComponent(component, mapperFact));
+  if (directIndex >= 0) return directIndex;
+
+  const incomingLocatorValues = new Set((mapperFact.locatorCandidates || [])
+    .map((locator) => locator?.value)
+    .filter(Boolean));
+  if (incomingLocatorValues.size) {
+    const locatorIndex = components.findIndex((component) => {
+      return [
+        component.primaryLocator,
+        ...(component.fallbackLocators || []),
+      ].some((locator) => incomingLocatorValues.has(locator?.value));
+    });
+    if (locatorIndex >= 0) return locatorIndex;
+  }
+
+  const incomingBounds = visualBounds(mapperFact);
+  if (incomingBounds) {
+    let bestIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    components.forEach((component, index) => {
+      const bounds = visualBounds(component);
+      if (!bounds) return;
+      const distance = Math.abs(bounds.x - incomingBounds.x) + Math.abs(bounds.y - incomingBounds.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    if (bestIndex >= 0) return bestIndex;
+  }
+
+  return -1;
+}
+
+function isIncomingComponent(component = {}, mapperFact = {}) {
+  return Boolean(
+    (mapperFact.componentUid && component.componentUid === mapperFact.componentUid) ||
+      (mapperFact.componentId && component.componentId === mapperFact.componentId) ||
+      (mapperFact.componentUid && (component.historicalLinks || []).some((link) => {
+        return link.componentUid === mapperFact.componentUid;
+      })),
+  );
+}
+
+function visualBounds(record = {}) {
+  const bounds = record.fingerprint?.visual?.documentBounds ||
+    record.fingerprint?.visual?.bounds ||
+    record.fingerprint?.visual?.viewportBounds ||
+    null;
+  if (!bounds) return null;
+  const x = Number(bounds.x ?? bounds.left);
+  const y = Number(bounds.y ?? bounds.top);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
 function replacePageMap(maps = [], pageMap = {}, settings = {}) {
-  const maxVersions = Math.max(1, Number(settings.maxVersions) || 20);
+  const maxVersions = Math.min(3, Math.max(1, Number(settings.maxVersions) || 3));
   const filtered = maps.filter((map) => {
     return map.pageProfileKey !== pageMap.pageProfileKey ||
       map.mapVersionId !== pageMap.mapVersionId;

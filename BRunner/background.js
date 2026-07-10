@@ -65,6 +65,7 @@ import {
   buildStaticPageMap,
   createDefaultMapperSettings,
   deserializeWorkflowMapperState,
+  MapperMapStatuses,
 } from "./mapper/core.js";
 import {
   createTab,
@@ -324,6 +325,9 @@ async function handleMessage(request, sender) {
     case Messages.MapCurrentPage:
       return await mapCurrentPageForInspector(request, sender);
 
+    case Messages.InspectCurrentPageMap:
+      return await inspectCurrentPageMapForInspector(request, sender);
+
     case Messages.HighlightMapperComponent:
       return await highlightMapperComponentForInspector(request, sender);
 
@@ -378,43 +382,31 @@ async function handleMessage(request, sender) {
 }
 
 async function mapCurrentPageForInspector(request = {}, sender = null) {
-  const tab = await getInspectorTargetTab(request.tabId, null, sender);
-  if (!tab?.id) {
-    return {
-      ok: false,
-      error: "No website tab found. Open the page you want to map, then try again.",
-    };
-  }
-
-  let controlsResponse;
+  let snapshot;
   try {
-    controlsResponse = await sendInspectorMapperMessage(tab, {
-      type: "GET_CONTROLS_TREE",
-    });
+    snapshot = await getInspectorLiveMapperSnapshot({
+      ...request,
+      snapshotMode: "settled_current_dom",
+    }, sender);
   } catch (error) {
     return {
       ok: false,
-      error: `Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`,
+      error: error.message || String(error),
     };
   }
 
-  if (controlsResponse?.ok === false) {
-    return controlsResponse;
-  }
-
-  const mapperFacts = (controlsResponse?.controls || [])
-    .map((control) => control.mapperFact)
-    .filter(Boolean);
+  const pageSnapshot = {
+    url: snapshot.tab.url || snapshot.page.url || "",
+    title: snapshot.tab.title || snapshot.page.title || "",
+    materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
+  };
   const settings = {
     ...createDefaultMapperSettings(),
     ...(request.settings || {}),
   };
   const temporaryMap = buildStaticPageMap({
-    page: {
-      url: tab.url || "",
-      title: tab.title || "",
-    },
-    componentFacts: mapperFacts,
+    page: pageSnapshot,
+    componentFacts: snapshot.mapperFacts,
     settings,
   });
   const workflowId = String(
@@ -428,14 +420,23 @@ async function mapCurrentPageForInspector(request = {}, sender = null) {
     temporaryMap.pageProfileKey,
   );
   const pageMap = buildStaticPageMap({
-    page: {
-      url: tab.url || "",
-      title: tab.title || "",
-    },
-    componentFacts: mapperFacts,
+    page: pageSnapshot,
+    componentFacts: snapshot.mapperFacts,
     settings: previousState?.settings || settings,
     previousMap,
   });
+  if (shouldKeepPreviousInspectorMap(pageMap, previousMap)) {
+    return {
+      ok: true,
+      workflowId,
+      tabId: snapshot.tab.id,
+      pageMap: previousMap,
+      liveMap: pageMap,
+      deferred: true,
+      state: deserializeWorkflowMapperState(previousState),
+    };
+  }
+
   const nextState = await mapperStore.saveWorkflowMapperState(workflowId, {
     ...(previousState || {}),
     workflowId,
@@ -450,9 +451,124 @@ async function mapCurrentPageForInspector(request = {}, sender = null) {
   return {
     ok: true,
     workflowId,
-    tabId: tab.id,
+    tabId: snapshot.tab.id,
     pageMap,
     state: deserializeWorkflowMapperState(nextState),
+  };
+}
+
+function shouldKeepPreviousInspectorMap(pageMap = {}, previousMap = null) {
+  return Boolean(
+    previousMap?.mapVersionId &&
+      (previousMap.components || []).length &&
+      pageMap.status === MapperMapStatuses.Unsupported &&
+      !(pageMap.components || []).length,
+  );
+}
+
+async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
+  let snapshot;
+  try {
+    snapshot = await getInspectorLiveMapperSnapshot(request, sender);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
+  }
+
+  const settings = {
+    ...createDefaultMapperSettings(),
+    ...(request.settings || {}),
+  };
+  const liveMap = buildStaticPageMap({
+    page: {
+      url: snapshot.tab.url || snapshot.page.url || "",
+      title: snapshot.tab.title || snapshot.page.title || "",
+      materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
+    },
+    componentFacts: snapshot.mapperFacts,
+    settings,
+    previousMap: request.pageMap || null,
+  });
+  const savedMap = request.pageMap || {};
+  const liveComponentCount = liveMap.componentCount || 0;
+  const savedComponentCount = savedMap.componentCount || savedMap.components?.length || 0;
+  const fingerprintChanged = Boolean(
+    savedMap.fingerprintDigest &&
+      liveMap.fingerprintDigest &&
+      savedMap.fingerprintDigest !== liveMap.fingerprintDigest,
+  );
+  const pageMismatch = Boolean(
+    savedMap.pageProfileKey &&
+      liveMap.pageProfileKey &&
+      savedMap.pageProfileKey !== liveMap.pageProfileKey,
+  );
+  const classificationChanged = Boolean(
+    savedMap.classification &&
+      liveMap.classification &&
+      savedMap.classification !== liveMap.classification,
+  );
+  const stale = pageMismatch ||
+    fingerprintChanged ||
+    classificationChanged ||
+    liveComponentCount !== savedComponentCount ||
+    liveMap.status === "refreshed" ||
+    liveMap.classification === "dynamic_deferred";
+
+  return {
+    ok: true,
+    stale,
+    reason: liveMap.diagnostics?.reason ||
+      (pageMismatch ? "page_profile_mismatch" : "") ||
+      (classificationChanged ? "classification_changed" : "") ||
+      (fingerprintChanged ? "fingerprint_changed" : "") ||
+      (liveComponentCount !== savedComponentCount ? "component_count_changed" : "current"),
+    live: {
+      componentCount: liveComponentCount,
+      status: liveMap.status || "",
+      classification: liveMap.classification || "",
+      fingerprintDigest: liveMap.fingerprintDigest || "",
+      materialMutationCount: liveMap.diagnostics?.materialMutationCount || 0,
+      diagnostics: liveMap.diagnostics || {},
+      pageProfileKey: liveMap.pageProfileKey || "",
+    },
+    saved: {
+      componentCount: savedComponentCount,
+      status: savedMap.status || "",
+      classification: savedMap.classification || "",
+      fingerprintDigest: savedMap.fingerprintDigest || "",
+      pageProfileKey: savedMap.pageProfileKey || "",
+    },
+  };
+}
+
+async function getInspectorLiveMapperSnapshot(request = {}, sender = null) {
+  const tab = await getInspectorTargetTab(request.tabId, request.pageMap || null, sender);
+  if (!tab?.id) {
+    throw new Error("No website tab found. Open the page you want to map, then try again.");
+  }
+
+  let controlsResponse;
+  try {
+    controlsResponse = await sendInspectorMapperMessage(tab, {
+      type: "GET_CONTROLS_TREE",
+      snapshotMode: request.snapshotMode || "",
+    });
+  } catch (error) {
+    throw new Error(`Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`);
+  }
+
+  if (controlsResponse?.ok === false) {
+    throw new Error(controlsResponse.error || "Mapper content scan failed.");
+  }
+
+  return {
+    tab,
+    page: controlsResponse?.page || {},
+    mapperFacts: (controlsResponse?.controls || [])
+      .map((control) => control.mapperFact)
+      .filter(Boolean),
   };
 }
 
@@ -470,6 +586,7 @@ async function highlightMapperComponentForInspector(request = {}, sender = null)
       type: Messages.HighlightMapperComponent,
       component: request.component,
       pageMap: request.pageMap,
+      highlightRequestId: request.highlightRequestId,
     });
   } catch (error) {
     return {
@@ -559,19 +676,21 @@ function selectBestInspectorTargetTab(tabs = [], pageMap = null, senderTabId = n
 function findLatestInspectorMap(state = null, pageProfileKey = "") {
   const maps = Array.isArray(state?.maps) ? state.maps : [];
   const matching = maps.filter((map) => map.pageProfileKey === pageProfileKey);
-  return matching.at(-1) || null;
+  const usable = matching.filter(isUsableInspectorPageMap);
+  return usable.at(-1) || matching.at(-1) || null;
 }
 
 function replaceInspectorPageMap(maps = [], pageMap = {}, settings = {}) {
-  const maxVersions = Math.max(1, Number(settings.maxVersions) || 20);
+  const maxVersions = Math.min(3, Math.max(1, Number(settings.maxVersions) || 3));
   const nextMaps = maps
     .filter((map) => {
       return map.pageProfileKey !== pageMap.pageProfileKey ||
         map.mapVersionId !== pageMap.mapVersionId;
     })
     .concat(pageMap);
-  const retained = new Set(nextMaps
-    .filter((map) => map.pageProfileKey === pageMap.pageProfileKey)
+  const samePageCandidates = nextMaps.filter((map) => map.pageProfileKey === pageMap.pageProfileKey);
+  const usableSamePage = samePageCandidates.filter(isUsableInspectorPageMap);
+  const retained = new Set((usableSamePage.length ? usableSamePage : samePageCandidates)
     .slice(-maxVersions)
     .map((map) => map.mapVersionId));
 
@@ -579,6 +698,12 @@ function replaceInspectorPageMap(maps = [], pageMap = {}, settings = {}) {
     return map.pageProfileKey !== pageMap.pageProfileKey ||
       retained.has(map.mapVersionId);
   });
+}
+
+function isUsableInspectorPageMap(map = {}) {
+  return map.status !== MapperMapStatuses.Unsupported &&
+    map.classification !== "dynamic_deferred" &&
+    (map.components || []).length > 0;
 }
 
 async function persistAndRefresh(operation) {

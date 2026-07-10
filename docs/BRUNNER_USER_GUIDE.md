@@ -160,6 +160,8 @@ website** mode lets the user select a component in Tree or Graph view
 and see a color-coded overlay on the live page, similar to selecting an element
 in DevTools. Resolved, fallback-resolved, ambiguous, missing, review-required,
 dynamic-deferred, and unsupported components must be visually distinct.
+The optional **Highlight on hover** setting previews the same safe overlay when
+the user hovers or keyboard-focuses a mapped component row.
 Highlighting is inspection-only; it must never click or type into an ambiguous
 or unresolved target.
 
@@ -173,18 +175,39 @@ schema v3, target-element nodes can carry placeholder `ComponentRef` records,
 recorded DOM steps persist workflow-scoped page maps, and action execution can
 resolve stored Component IDs before falling back to legacy target packages.
 The first Mapper Inspector source pass is available at
-`mapper-inspector/index.html`. It lists saved maps by website/page/version,
-shows Tree and Graph views, includes a Review Queue, can
+`mapper-inspector/index.html`. It lists saved maps as one card per base
+website, keeps only the latest bounded retained versions, lets the selected
+site's saved pages be chosen from a toolbar Page selector, scopes the Version
+selector to the selected page, shows Tree and Graph views, includes a Review
+Queue, can
 map the active page without the recorder, and can highlight a selected
 component on the live website through the mapper resolver. Highlighting scrolls
 the resolved live element into view before drawing the overlay.
+**Refresh Map** rescans the selected saved page's currently open website tab,
+so component-only DOM changes such as appended feed cards, graph/tree updates,
+or controlled dynamic drift create a fresh retained version for that page
+without mutating other saved pages on the same site.
+The current mapper source also includes bounded image and visible leaf-text
+components so user-visible images and copyable text can be tracked for later
+click, extraction, or screenshot/crop workflows.
 Website view has been removed from scope; live website highlighting remains.
+Tree, Graph, and Review Queue share component search/status filters so large
+stress-page maps can be narrowed by Component ID, alias, display name,
+role/type, capability, status, or review state.
 The Inspector can also save display aliases without changing Component IDs,
 accept a review-required current mapping, link a review-required component to a
 selected live resolver candidate while preserving the Component ID, show
 persisted live resolver attempts and structured resolver logs, edit basic
 workflow mapper policy values, and mark a site as sensitive so details are
 redacted in the Inspector.
+The Component panel has an explicit **Check live resolution** action so review
+workflows can fetch resolver attempts before linking a live candidate, even when
+automatic selection highlighting is disabled.
+The Websites rail, full Details rail, and right-side Policy, Review Queue, and
+Component sections can be collapsed to recover working space. Policy and Review
+Queue heights can also be resized with their dividers when a review needs more
+vertical space, and the Inspector shell uses compact toolbars and aligned
+checkbox controls for repeated review work.
 Mapper-bound DOM nodes require an explicit `unresolved` route. Mapper graph
 workflows now have an initial source traversal path for `success` and
 `unresolved` handles. Existing v2 workflows remain compatible with the current
@@ -208,12 +231,18 @@ page highlighting from selected map elements.
 The source manual checklist is in
 [`MAPPER_MANUAL_ACCEPTANCE.md`](MAPPER_MANUAL_ACCEPTANCE.md).
 
+Mapper maps still default to extension Chrome storage. A hardened native
+filesystem adapter now exists behind the same store contract with request
+timeouts, unavailable/timeout status, payload caps, native revisions, and
+last-write-wins conflict metadata; switching it on as the default remains a
+separate acceptance step.
+
 Ambiguous components go to a Review Queue. The Inspector must not offer a
 "choose first candidate" action. A reviewer can explicitly link a historical
 component to a selected candidate, and that decision is recorded in the next map
 version. Review acceptance and live-candidate linking create a fresh review map
-version so the previous map remains inspectable. Graph Studio-grade graph
-canvas remains follow-up Inspector work.
+version so the previous map remains inspectable. Remaining Inspector work is
+manual stress-page polish.
 
 ## Companion capability states
 

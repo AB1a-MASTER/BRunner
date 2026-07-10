@@ -32,6 +32,8 @@ test("mapper settings normalize to bounded workflow-scoped defaults", () => {
   assert.equal(settings.maxVersions, 1);
   assert.deepEqual(settings.queryAllowlist, ["tab"]);
   assert.deepEqual(createDefaultMapperSettings().siteOverrides, {});
+  assert.equal(createDefaultMapperSettings().maxVersions, 3);
+  assert.equal(normalizeMapperSettings({ maxVersions: 99 }).maxVersions, 3);
 });
 
 test("page profiles ignore non-allowlisted query and hash", () => {
@@ -118,6 +120,44 @@ test("static page map creates locked readable component ids", () => {
   assert.equal(pageMap.components[0].primaryLocator.value, "#profile-save");
 });
 
+test("static page map stores components in visual reading order", () => {
+  const pageMap = buildStaticPageMap({
+    page: { url: "https://example.com/dashboard" },
+    componentFacts: [
+      componentFact({
+        accessibleName: "Bottom left",
+        role: "button",
+        locator: { strategy: "css_selector", value: "#bottom-left", reliability: 98 },
+        documentBounds: { x: 20, y: 400, width: 80, height: 30 },
+      }),
+      componentFact({
+        accessibleName: "Top right",
+        role: "button",
+        locator: { strategy: "css_selector", value: "#top-right", reliability: 98 },
+        documentBounds: { x: 400, y: 20, width: 80, height: 30 },
+      }),
+      componentFact({
+        accessibleName: "Top left",
+        role: "button",
+        locator: { strategy: "css_selector", value: "#top-left", reliability: 98 },
+        documentBounds: { x: 20, y: 20, width: 80, height: 30 },
+      }),
+    ],
+    now: "2026-07-04T00:00:00.000Z",
+  });
+
+  assert.deepEqual(pageMap.components.map((component) => component.displayName), [
+    "Top left",
+    "Top right",
+    "Bottom left",
+  ]);
+  assert.deepEqual(pageMap.components.map((component) => component.primaryLocator.value), [
+    "#top-left",
+    "#top-right",
+    "#bottom-left",
+  ]);
+});
+
 test("static page map safely declines mutation-heavy pages", () => {
   const pageMap = buildStaticPageMap({
     page: {
@@ -178,6 +218,135 @@ test("page map reconciliation marks changed and removed components", () => {
   assert.equal(refreshed.components[0].status, MapperComponentStatuses.Changed);
   assert.equal(refreshed.components[0].reviewRequired, true);
   assert.equal(refreshed.components.at(-1).status, MapperComponentStatuses.Removed);
+});
+
+test("page map reconciliation keeps appended feed items after existing items", () => {
+  const previous = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    componentFacts: [
+      componentFact({
+        stableText: "Loaded item 1 for mapper infinite-scroll boundary checks.",
+        role: "text",
+        tag: "p",
+        domPath: "main/section[4]/div/article[1]/p[1]",
+        documentBounds: { x: 40, y: 100, width: 280, height: 24 },
+        locator: { strategy: "text", value: "Loaded item 1 for mapper infinite-scroll boundary checks.", reliability: 88 },
+      }),
+      componentFact({
+        stableText: "Loaded item 2 for mapper infinite-scroll boundary checks.",
+        role: "text",
+        tag: "p",
+        domPath: "main/section[4]/div/article[2]/p[1]",
+        documentBounds: { x: 40, y: 160, width: 280, height: 24 },
+        locator: { strategy: "text", value: "Loaded item 2 for mapper infinite-scroll boundary checks.", reliability: 88 },
+      }),
+    ],
+    now: "2026-07-04T00:00:00.000Z",
+  });
+
+  const refreshed = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    previousMap: previous,
+    componentFacts: [
+      componentFact({
+        stableText: "Loaded item 1 for mapper infinite-scroll boundary checks.",
+        role: "text",
+        tag: "p",
+        domPath: "main/section[4]/div/article[1]/p[1]",
+        documentBounds: { x: 40, y: 100, width: 280, height: 24 },
+        locator: { strategy: "text", value: "Loaded item 1 for mapper infinite-scroll boundary checks.", reliability: 88 },
+      }),
+      componentFact({
+        stableText: "Loaded item 2 for mapper infinite-scroll boundary checks.",
+        role: "text",
+        tag: "p",
+        domPath: "main/section[4]/div/article[2]/p[1]",
+        documentBounds: { x: 40, y: 160, width: 280, height: 24 },
+        locator: { strategy: "text", value: "Loaded item 2 for mapper infinite-scroll boundary checks.", reliability: 88 },
+      }),
+      componentFact({
+        stableText: "Loaded item 3 for mapper infinite-scroll boundary checks.",
+        role: "text",
+        tag: "p",
+        domPath: "main/section[4]/div/article[3]/p[1]",
+        documentBounds: { x: 40, y: 220, width: 280, height: 24 },
+        locator: { strategy: "text", value: "Loaded item 3 for mapper infinite-scroll boundary checks.", reliability: 88 },
+      }),
+    ],
+    now: "2026-07-04T00:01:00.000Z",
+  });
+
+  assert.deepEqual(refreshed.components.map((component) => component.status), [
+    MapperComponentStatuses.Changed,
+    MapperComponentStatuses.Changed,
+    MapperComponentStatuses.New,
+  ]);
+  assert.deepEqual(refreshed.components.map((component) => component.displayName), [
+    "Loaded item 1 for mapper infinite-scroll boundary checks.",
+    "Loaded item 2 for mapper infinite-scroll boundary checks.",
+    "Loaded item 3 for mapper infinite-scroll boundary checks.",
+  ]);
+  assert.equal(refreshed.reconciliation.removed, 0);
+});
+
+test("page map reconciliation keeps removed history after live components", () => {
+  const previous = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    componentFacts: [
+      componentFact({
+        stableText: "Removed feed item",
+        role: "text",
+        tag: "p",
+        ancestorTokens: ["loaded feed items"],
+        domPath: "main/section[4]/div/article[1]/p[1]",
+        documentBounds: { x: 40, y: 100, width: 260, height: 24 },
+        locator: { strategy: "text", value: "Removed feed item", reliability: 88 },
+      }),
+      componentFact({
+        stableText: "Kept feed item",
+        role: "text",
+        tag: "p",
+        ancestorTokens: ["loaded feed items"],
+        domPath: "main/section[4]/div/article[2]/p[1]",
+        documentBounds: { x: 40, y: 160, width: 260, height: 24 },
+        locator: { strategy: "text", value: "Kept feed item", reliability: 88 },
+      }),
+    ],
+    now: "2026-07-04T00:00:00.000Z",
+  });
+
+  const refreshed = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    previousMap: previous,
+    componentFacts: [
+      componentFact({
+        stableText: "Kept feed item",
+        role: "text",
+        tag: "p",
+        ancestorTokens: ["loaded feed items"],
+        domPath: "main/section[4]/div/article[1]/p[1]",
+        documentBounds: { x: 40, y: 100, width: 260, height: 24 },
+        locator: { strategy: "text", value: "Kept feed item", reliability: 88 },
+      }),
+      componentFact({
+        stableText: "New feed item",
+        role: "text",
+        tag: "p",
+        ancestorTokens: ["loaded feed items"],
+        domPath: "main/section[4]/div/article[2]/p[1]",
+        documentBounds: { x: 40, y: 160, width: 260, height: 24 },
+        locator: { strategy: "text", value: "New feed item", reliability: 88 },
+      }),
+    ],
+    now: "2026-07-04T00:01:00.000Z",
+  });
+
+  assert.deepEqual(refreshed.components.map((component) => component.status), [
+    MapperComponentStatuses.Changed,
+    MapperComponentStatuses.New,
+    MapperComponentStatuses.Removed,
+  ]);
+  assert.equal(refreshed.components.at(-1).displayName, "Removed feed item");
 });
 
 test("page map reconciliation flags close historical matches as ambiguous", () => {
@@ -326,6 +495,8 @@ function componentFact({
   inputType = "",
   ancestorTokens = [],
   locator = { strategy: "css_selector", value: "#target", reliability: 90 },
+  documentBounds = null,
+  domPath = "",
 } = {}) {
   return {
     locatorCandidates: [locator],
@@ -342,6 +513,10 @@ function componentFact({
       },
       technical: {
         tag,
+        domPath,
+      },
+      visual: {
+        documentBounds,
       },
     },
   };

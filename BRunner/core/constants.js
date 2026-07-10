@@ -46,6 +46,7 @@ export const Messages = Object.freeze({
   SaveWorkflowMapperState: "SAVE_WORKFLOW_MAPPER_STATE",
   DeleteWorkflowMapperState: "DELETE_WORKFLOW_MAPPER_STATE",
   MapCurrentPage: "MAP_CURRENT_PAGE",
+  InspectCurrentPageMap: "INSPECT_CURRENT_PAGE_MAP",
   ResolveMapperComponent: "RESOLVE_MAPPER_COMPONENT",
   HighlightMapperComponent: "HIGHLIGHT_MAPPER_COMPONENT",
 
@@ -178,6 +179,10 @@ export const NativeCommands = Object.freeze({
   DuplicateWorkflow: "DUPLICATE_WORKFLOW",
   RenameWorkflow: "RENAME_WORKFLOW",
   UpgradeWorkflow: "UPGRADE_WORKFLOW",
+  ListMapperStates: "LIST_MAPPER_STATES",
+  GetMapperState: "GET_MAPPER_STATE",
+  SaveMapperState: "SAVE_MAPPER_STATE",
+  DeleteMapperState: "DELETE_MAPPER_STATE",
   SaveExecutionLog: "SAVE_EXECUTION_LOG",
   OsKeystroke: "OS_KEYSTROKE",
   ReadFile: "READ_FILE",
@@ -190,6 +195,8 @@ export const NativeCommands = Object.freeze({
 
 export const Defaults = Object.freeze({
   NativeHostUrl: "ws://127.0.0.1:8999",
+  NativeRequestTimeoutMs: 10000,
+  NativeMapperRequestTimeoutMs: 7000,
   PairingKey: "ac1890957e38af28cd5d0961e6d0d530",
   NativePairingStorageKey: "brunner.nativePairing.v1",
   MapperStorageKey: "brunner.mapper.v1",

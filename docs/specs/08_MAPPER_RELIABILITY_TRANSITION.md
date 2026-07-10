@@ -291,6 +291,11 @@ Allowed categories:
 - visual: landmark and relative bounds as a final tiebreaker only.
 
 Visual facts cannot establish identity by themselves.
+They may establish display order: saved component records, Inspector Structure,
+Regions, Types, Review Queue, and Graph views should use document bounds as a
+top-to-bottom then left-to-right ordering hint, with DOM path/capture index as
+fallbacks. Resolver identity and ambiguity decisions must still avoid choosing
+an action target solely by visual order.
 
 ### ComponentRef
 
@@ -702,10 +707,21 @@ When sensitive:
 - show a visible sensitivity badge in the Inspector;
 - do not lower safety thresholds because evidence is redacted.
 
-### Future Filesystem Store
+### Host Filesystem Store
 
 After Chrome storage is stable, add a filesystem `MapStore` adapter through the
 existing local-host bridge.
+
+**Initial source pass complete:** the Windows host now exposes a mapper
+repository and native `LIST_MAPPER_STATES`, `GET_MAPPER_STATE`,
+`SAVE_MAPPER_STATE`, and `DELETE_MAPPER_STATE` commands. The extension core has
+a `NativeMapStore` adapter behind the existing `MapStore` contract. Native
+mapper calls now have bounded timeouts, the adapter exposes
+unavailable/timeout status, host writes enforce a 1 MB normal payload cap
+instead of chunking, and host-saved states retain revision plus bounded
+last-write-wins conflict metadata. The background still defaults to Chrome
+storage until filesystem-backed persistence is explicitly accepted as the
+default.
 
 Required behavior:
 
@@ -714,7 +730,7 @@ Required behavior:
 - atomic write/rename;
 - bounded version retention;
 - request timeout and unreachable-host result states;
-- payload chunking for oversized data, while normal maps stay below cap;
+- a normal payload cap, with chunking deferred until real maps exceed it;
 - multi-tab conflict rule: last-write-wins plus retained diff record.
 
 Do not add a second native-messaging transport merely to match a tracking
@@ -734,6 +750,9 @@ Required features:
 - select workflow, site profile, page profile, and map version;
 - search by Component ID, display name, role, and status;
 - visual tree/list of mapped components with semantic and structural context;
+- bounded image and visible leaf-text components where they are user-visible and
+  have stable text, media, or structural signals. These components are tracked
+  for extraction, click where compatible, and later screenshot/crop workflows;
 - badges for `same`, `changed`, `new`, `removed`, `ambiguous`,
   `dynamic_deferred`, and `unsupported`;
 - two map views:
@@ -756,6 +775,8 @@ Required features:
 - run live resolution before showing a highlight;
 - highlight only after successful unique live resolution;
 - scroll the resolved element into view before highlighting;
+- optionally preview the same safe highlight on component-row hover or keyboard
+  focus without dispatching page actions;
 - when the Inspector and the mapped website are open at the same time, support
   a **Highlight on website** mode. Selecting a component in Tree or Graph view
   sends a safe highlight request to the content mapper session,
@@ -789,10 +810,85 @@ selected-node state, and live-highlight selection wiring. Tree view now uses a
 reference-aligned dark explorer layout with type icons, lock affordances, and
 grouping modes for captured page structure, regions, and component type. Final
 graph/tree UX polish remains follow-up after manual stress-page testing.
+The Inspector also exposes optional highlight-on-hover preview, and content
+mapping now includes bounded image plus visible leaf-text candidates for
+user-visible media/text tracking. Tree, Graph, and Review Queue now share
+component search/status filters for Component IDs, aliases, names, role/type,
+capabilities, status, and review state. The Component panel now has an explicit
+live-resolution check for review workflows, making resolver logs and candidate
+link attempts available without relying on automatic selection highlighting.
+The website browser now consolidates repeated maps to one card per base site,
+keeps only the latest three retained versions per page profile, exposes those
+pages from the selected site's toolbar Page picker, scopes the Version picker
+to the selected page, and uses compact collapsible side sections for repeated
+map review. The full right Details rail is also
+collapsible, and Policy/Review Queue section dividers are resizable. Same-site
+page profiles remain isolated by page key; the coordinator test suite covers a
+login/home scenario where login changes are tracked without mutating the home
+map. Inspector **Refresh Map** now targets the selected saved page, rescans the
+open website tab, and writes a fresh retained map version for component-only
+DOM changes such as appended tree/graph/feed items.
+Known stress-page UX issues to keep closing: hover and click highlights must
+not clash, Tree/Graph switching must avoid stale visual artifacts, component
+search must match visible text reliably, and the compact Inspector UI must pass
+manual acceptance across smaller desktop/tablet widths.
+Initial hardening now covers broader visible-text/locator search indexing,
+stale hover cancellation on selection/view switches, top-layer Inspector
+highlighting over recorder hover state, and stronger contrast/responsive
+breakpoints. A monotonic highlight request id now lets the content mapper ignore
+stale hover overlays, and the Inspector shell uses flex height to reduce
+sub-fullscreen layout artifacts. The Inspector UI now also uses compact
+icon/tooltip controls for common map, clear, graph, collapse, and destructive
+actions; Tree and Graph expose a visible map color legend; website rows include
+direct delete-site actions; and responsive rules wrap the header, Page/Version
+controls, filters, Tree, Graph, and side rails instead of assuming full-screen
+desktop width.
+Saved map records, Inspector Tree/Graph/Review Queue lists, and live content
+capture now use visual page reading order top-to-bottom then left-to-right while
+preserving resolver safety. Content-side mapper refresh responses now include
+bounded material mutation counts collected after mapper initialization.
+Inspector refresh passes those counts into static map creation, so
+mutation-heavy pages can honestly classify as `dynamic_deferred` under the
+configured policy instead of showing stale static component records.
+The Inspector also has a read-only live-status path that builds a temporary map
+for the selected saved page and compares component count, fingerprint,
+classification, and mutation state without saving. The badge can recommend
+refresh or show `dynamic_deferred`; only explicit **Refresh Map** writes a new
+retained version.
+Explicit Map/Refresh requests use a settled-current-DOM snapshot so a page does
+not remain permanently stuck in `dynamic_deferred` after a previous burst of
+mutations. The content script still reports lifetime mutation counts for
+read-only live checks, while saved maps can refresh once the DOM is settled.
+Retained page-map lists prefer usable versions over already-saved unsupported
+zero-component versions for the same page.
+The Page/Version toolbar includes a delete-version action that removes only the
+selected saved map version, preserves other saved pages and versions for the
+site, clears live overlays, and falls back to the nearest remaining version.
+Highlight/live-resolution now includes hidden candidates for diagnostic
+purposes. If a stored component resolves to an element that is present but not
+visible, the Inspector reports `hidden`, does not draw a misleading overlay, and
+marks the Tree, Graph, Review Queue, and Component detail rows with a hidden
+badge.
+Inspector live-resolution state is scoped to the exact workflow, retained map
+version, and Component ID. Page/version switches clear the old website overlay,
+hover exit restores the selected component overlay, and content-side highlight
+requests re-check freshness after scroll/paint so late responses cannot redraw
+stale highlights.
+Tree rows now use real expandable/collapsible branches for site, page,
+structure, region, and type groups. Component rows keep selection/highlight
+behavior while type coloring and status styling distinguish component category,
+selection, review-required, hidden, changed, ambiguous, and removed states.
+Current Tree and Graph views hide removed historical component records by
+default so appended feed/list items stay in live page order. Removed components
+remain available through the Review Queue and explicit Removed/Review filters,
+and core component ordering places removed history after live components.
 
 The Inspector must never offer a "choose first candidate" action for ambiguous
 results. A reviewer may explicitly link a historical component to a selected
 candidate, recording the decision in the next map version.
+Accepting the current mapping clears review state in the new review map version;
+changed and ambiguous accepted records normalize to `same`, while accepted
+removed records remain historical removals without staying in the Review Queue.
 
 ## Mapper Stress Test Page
 
@@ -969,8 +1065,14 @@ changing canonical name.
 
 - Add local-host MapStore adapter, commands, file format, schema checks, atomic
   writes, timeouts, and host-unavailable state.
+  **Initial source pass complete for host repository, native commands, atomic
+  writes, and extension `NativeMapStore` adapter. Hardening source pass
+  complete for bounded mapper request timeouts, native unavailable/timeout
+  status, 1 MB normal payload cap, native revision stamps, and retained
+  last-write-wins conflict metadata.**
 - Add optional periodic snapshot persistence for active tracking.
-- Implement bounded multi-tab last-write-wins merge with retained diff metadata.
+- Switch the default from Chrome storage only after live/manual acceptance of
+  the filesystem-backed adapter.
 
 Exit: Chrome storage and filesystem adapters produce identical map schema and
 equivalent resolution behavior.
@@ -1045,6 +1147,9 @@ Shadow DOM:
 - Component IDs follow locked naming and are searchable in Inspector/logs;
 - resolver uses primary-first, ordered fallback, then historical reconciliation;
 - direct/fuzzy locator never wins solely by first document order;
+- Inspector highlight/live resolution tries stored primary and fallback locators
+  as direct unique matches before fuzzy fingerprint scoring, while duplicate
+  stored-locator matches remain ambiguous;
 - inadequate winner margin returns ambiguity;
 - ambiguous/not-found targets never receive interaction events;
 - workflows follow explicit unresolved branches;

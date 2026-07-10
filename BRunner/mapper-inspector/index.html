@@ -20,10 +20,14 @@
     <div class="header-actions">
       <input id="map-workflow-id" type="text" placeholder="Workflow ID for active-page map">
       <button id="btn-map-active" type="button">Map Active Page</button>
-      <button id="btn-refresh" type="button">Refresh</button>
+      <button id="btn-refresh" type="button" title="Refresh selected page map">Refresh Map</button>
       <label class="toggle">
         <input id="highlight-enabled" type="checkbox" checked>
         Highlight on website
+      </label>
+      <label class="toggle">
+        <input id="highlight-hover-enabled" type="checkbox">
+        Highlight on hover
       </label>
     </div>
   </header>
@@ -32,7 +36,10 @@
     <aside class="site-panel" aria-label="Saved map websites">
       <div class="panel-heading">
         <span>Websites</span>
-        <input id="site-search" type="search" placeholder="Search maps">
+        <div class="panel-heading-actions">
+          <input id="site-search" type="search" placeholder="Search sites">
+          <button class="panel-collapse" data-collapse-panel="sites" type="button" aria-expanded="true" title="Collapse websites">-</button>
+        </div>
       </div>
       <div id="site-list" class="site-list"></div>
     </aside>
@@ -42,11 +49,35 @@
         <div>
           <h1 id="map-title">No map selected</h1>
           <p id="map-subtitle">Record or map a page to inspect components.</p>
+          <div class="map-live-row">
+            <span id="map-live-status" class="map-live-status idle">Live status not checked</span>
+            <button id="btn-check-live-map" class="subtle-button" type="button">Check live</button>
+          </div>
         </div>
-        <div class="view-tabs" role="tablist" aria-label="Map views">
-          <button class="view-tab active" data-view="tree" type="button">Tree</button>
-          <button class="view-tab" data-view="graph" type="button">Graph</button>
+        <div class="map-toolbar-actions">
+          <div id="map-version-tools" class="map-version-tools"></div>
+          <div class="view-tabs" role="tablist" aria-label="Map views">
+            <button class="view-tab active" data-view="tree" type="button">Tree</button>
+            <button class="view-tab" data-view="graph" type="button">Graph</button>
+          </div>
         </div>
+      </div>
+
+      <div class="component-filterbar" role="search" aria-label="Component filters">
+        <input id="component-search" type="search" placeholder="Search components by ID, name, role, status">
+        <select id="component-status-filter" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="review">Review required</option>
+          <option value="same">Same</option>
+          <option value="changed">Changed</option>
+          <option value="new">New</option>
+          <option value="ambiguous">Ambiguous</option>
+          <option value="removed">Removed</option>
+          <option value="dynamic_deferred">Dynamic deferred</option>
+          <option value="protected_unsupported">Unsupported</option>
+        </select>
+        <button id="btn-clear-component-filter" type="button">Clear</button>
+        <span id="component-filter-summary" class="filter-summary">0 components</span>
       </div>
 
       <div id="view-tree" class="map-view active"></div>
@@ -54,21 +85,30 @@
     </section>
 
     <aside class="detail-panel" aria-label="Component details">
-      <section>
+      <div class="detail-rail-heading panel-heading compact">
+        <span>Details</span>
+        <button class="panel-collapse" data-collapse-panel="details" type="button" aria-expanded="true" title="Collapse details">-</button>
+      </div>
+      <section data-detail-section="policy" class="policy-section">
         <div class="panel-heading compact">
           <span>Policy</span>
+          <button class="panel-collapse" data-collapse-section="policy" type="button" aria-expanded="true" title="Collapse policy">-</button>
         </div>
         <div id="policy-panel" class="policy-panel"></div>
       </section>
-      <section>
+      <div class="section-resizer" data-resize-section="policy" title="Resize policy panel" role="separator" aria-orientation="horizontal"></div>
+      <section data-detail-section="review" class="review-section">
         <div class="panel-heading compact">
           <span>Review Queue</span>
+          <button class="panel-collapse" data-collapse-section="review" type="button" aria-expanded="true" title="Collapse review queue">-</button>
         </div>
         <div id="review-list" class="review-list"></div>
       </section>
-      <section>
+      <div class="section-resizer" data-resize-section="review" title="Resize review queue" role="separator" aria-orientation="horizontal"></div>
+      <section data-detail-section="component" class="component-section">
         <div class="panel-heading compact">
           <span>Component</span>
+          <button class="panel-collapse" data-collapse-section="component" type="button" aria-expanded="true" title="Collapse component details">-</button>
         </div>
         <div id="component-detail" class="component-detail empty">
           Select a component.

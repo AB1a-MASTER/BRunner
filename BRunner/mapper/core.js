@@ -66,7 +66,7 @@ export function createDefaultMapperSettings(overrides = {}) {
     captureMode: MapperCaptureModes.StaticBounded,
     shadowDom: MapperShadowDomModes.OpenOnly,
     maxComponents: 500,
-    maxVersions: 20,
+    maxVersions: 3,
     materialMutationLimit: 50,
     queryAllowlist: [],
     siteOverrides: {},
@@ -85,7 +85,7 @@ export function normalizeMapperSettings(settings = {}) {
     captureMode: MapperCaptureModes.StaticBounded,
     shadowDom: MapperShadowDomModes.OpenOnly,
     maxComponents: clampInteger(settings?.maxComponents, 1, 2000, 500),
-    maxVersions: clampInteger(settings?.maxVersions, 1, 100, 20),
+    maxVersions: clampInteger(settings?.maxVersions, 1, 3, 3),
     materialMutationLimit: clampInteger(settings?.materialMutationLimit, 1, 500, 50),
     queryAllowlist: normalizeStringList(settings?.queryAllowlist),
     siteOverrides: normalizeRecord(settings?.siteOverrides),
@@ -160,6 +160,7 @@ export function createEmptyWorkflowMapperState(workflowId = "", settings = {}) {
     workflowId: String(workflowId || ""),
     settings: createDefaultMapperSettings(settings),
     maps: [],
+    storage: createMapperStorageMetadata({ provider: "unknown" }),
     updatedAt: "",
   };
 }
@@ -171,6 +172,7 @@ export function serializeWorkflowMapperState(state = {}) {
     workflowId: String(state.workflowId || ""),
     settings: normalizeMapperSettings(state.settings),
     maps: Array.isArray(state.maps) ? structuredClone(state.maps) : [],
+    storage: createMapperStorageMetadata(state.storage),
     updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : "",
   };
 }
@@ -179,6 +181,33 @@ export function deserializeWorkflowMapperState(state = {}) {
   if (!state || typeof state !== "object") return null;
   if (Number(state.mapperSchemaVersion) !== MapperSchemaVersion) return null;
   return serializeWorkflowMapperState(state);
+}
+
+export function createMapperStorageMetadata(metadata = {}) {
+  const conflicts = Array.isArray(metadata.conflicts)
+    ? metadata.conflicts
+        .map((entry) => ({
+          type: cleanToken(entry?.type || "last_write_wins"),
+          workflowId: cleanValue(entry?.workflowId),
+          previousRevision: cleanValue(entry?.previousRevision),
+          nextRevision: cleanValue(entry?.nextRevision),
+          detectedAt: cleanValue(entry?.detectedAt),
+          resolvedBy: cleanValue(entry?.resolvedBy),
+          detail: cleanValue(entry?.detail),
+        }))
+        .filter((entry) => entry.detectedAt || entry.previousRevision || entry.nextRevision)
+        .slice(-20)
+    : [];
+
+  return {
+    provider: cleanToken(metadata.provider || "unknown"),
+    revision: cleanValue(metadata.revision),
+    savedAt: cleanValue(metadata.savedAt),
+    loadedAt: cleanValue(metadata.loadedAt),
+    lastWriter: cleanValue(metadata.lastWriter),
+    conflictPolicy: cleanToken(metadata.conflictPolicy || "last_write_wins"),
+    conflicts,
+  };
 }
 
 export function buildStaticPageMap({
@@ -193,15 +222,16 @@ export function buildStaticPageMap({
   const usableFacts = componentFacts
     .map((fact, index) => normalizeComponentFact(fact, index))
     .filter(Boolean);
+  const orderedFacts = sortComponentFactsByVisualOrder(usableFacts);
   const materialMutationCount = Math.max(Number(page.materialMutationCount) || 0, 0);
   const dynamic = materialMutationCount > policy.materialMutationLimit;
-  const overLimit = usableFacts.length > policy.maxComponents;
+  const overLimit = orderedFacts.length > policy.maxComponents;
   const classification = dynamic || overLimit
     ? MapperPageClassifications.DynamicDeferred
     : MapperPageClassifications.Static;
   const componentResult = classification === MapperPageClassifications.Static
     ? createComponentRecords({
-        facts: usableFacts,
+        facts: orderedFacts,
         profile,
         previousMap,
         now,
@@ -210,14 +240,14 @@ export function buildStaticPageMap({
         components: [],
         reconciliation: createEmptyReconciliation(previousMap),
       };
-  const fingerprintDigest = digestSerializable(usableFacts.map((fact) => fact.fingerprint));
+  const fingerprintDigest = digestSerializable(orderedFacts.map((fact) => fact.fingerprint));
   const refreshed = Boolean(previousMap?.mapVersionId) &&
     previousMap.fingerprintDigest &&
     previousMap.fingerprintDigest !== fingerprintDigest;
 
   return {
     schemaVersion: MapperSchemaVersion,
-    mapVersionId: createMapVersionId(profile, now, usableFacts),
+    mapVersionId: createMapVersionId(profile, now, orderedFacts),
     siteKey: profile.siteKey,
     pageProfileKey: profile.pageKey,
     createdAt: now,
@@ -407,7 +437,7 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
   const mapVersionId = createMapVersionId(profile, now, facts);
 
   const components = facts.map((fact, index) => {
-    const componentUid = createComponentUid(profile, fact);
+    const componentUid = fact.componentUid || createComponentUid(profile, fact);
     const candidate = factToCandidate(componentUid, fact);
     const match = selectPreviousComponentMatch({
       componentUid,
@@ -432,6 +462,7 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
       siteKey: profile.siteKey,
       pageProfileKey: profile.pageKey,
       capturedMapVersionId: mapVersionId,
+      captureOrder: Number.isFinite(Number(fact.index)) ? Number(fact.index) : index,
       createdAt: previous?.createdAt || now,
       updatedAt: now,
       status,
@@ -471,12 +502,65 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
       ],
     }));
 
-  const allComponents = components.concat(removedComponents);
+  const allComponents = sortComponentsByVisualOrder(components.concat(removedComponents));
 
   return {
     components: allComponents,
     reconciliation: summarizeReconciliation(previousMap, allComponents),
   };
+}
+
+function sortComponentFactsByVisualOrder(facts = []) {
+  return facts.slice().sort(compareVisualRecords);
+}
+
+function sortComponentsByVisualOrder(components = []) {
+  return components.slice().sort(compareVisualRecords);
+}
+
+function compareVisualRecords(a = {}, b = {}) {
+  const aRemoved = a.status === MapperComponentStatuses.Removed;
+  const bRemoved = b.status === MapperComponentStatuses.Removed;
+  if (aRemoved !== bRemoved) return aRemoved ? 1 : -1;
+
+  const aBounds = visualOrderBounds(a);
+  const bBounds = visualOrderBounds(b);
+  if (aBounds.hasPosition && bBounds.hasPosition) {
+    const yDelta = aBounds.y - bBounds.y;
+    if (Math.abs(yDelta) > 4) return yDelta;
+    const xDelta = aBounds.x - bBounds.x;
+    if (Math.abs(xDelta) > 4) return xDelta;
+  } else if (aBounds.hasPosition !== bBounds.hasPosition) {
+    return aBounds.hasPosition ? -1 : 1;
+  }
+
+  const indexDelta = visualOrderIndex(a) - visualOrderIndex(b);
+  if (indexDelta) return indexDelta;
+
+  const aPath = visualOrderPath(a);
+  const bPath = visualOrderPath(b);
+  if (aPath !== bPath) return aPath.localeCompare(bPath);
+
+  return 0;
+}
+
+function visualOrderBounds(record = {}) {
+  const visual = record.fingerprint?.visual || {};
+  const bounds = visual.documentBounds || visual.bounds || visual.viewportBounds || {};
+  return {
+    x: Number.isFinite(Number(bounds.x ?? bounds.left)) ? Number(bounds.x ?? bounds.left) : Number.MAX_SAFE_INTEGER,
+    y: Number.isFinite(Number(bounds.y ?? bounds.top)) ? Number(bounds.y ?? bounds.top) : Number.MAX_SAFE_INTEGER,
+    hasPosition: Number.isFinite(Number(bounds.x ?? bounds.left)) && Number.isFinite(Number(bounds.y ?? bounds.top)),
+  };
+}
+
+function visualOrderPath(record = {}) {
+  return String(record.fingerprint?.technical?.domPath || record.componentId || record.componentUid || "");
+}
+
+function visualOrderIndex(record = {}) {
+  const index = Number(record.captureOrder ?? record.index);
+  return Number.isFinite(index) ? index : Number.MAX_SAFE_INTEGER;
 }
 
 function selectPreviousComponentMatch({
@@ -602,6 +686,8 @@ function normalizeComponentFact(fact = {}, index = 0) {
   return {
     index,
     action: String(fact.action || ""),
+    componentId: cleanValue(fact.componentId),
+    componentUid: cleanValue(fact.componentUid),
     locators,
     fingerprint: {
       ...fingerprint,
@@ -625,6 +711,7 @@ function normalizeFingerprint(fingerprint = {}) {
     semantic: {
       role: cleanToken(semantic.role || fingerprint.role),
       accessibleName: cleanValue(semantic.accessibleName || semantic.ariaLabel || fingerprint.ariaLabel),
+      altText: cleanValue(semantic.altText || fingerprint.altText),
       labelText: cleanValue(semantic.labelText || fingerprint.labelText),
       stableText: cleanValue(semantic.stableText || fingerprint.text),
       placeholder: cleanValue(semantic.placeholder || fingerprint.placeholder),
@@ -689,6 +776,9 @@ function inferCapabilities(fingerprint = {}) {
   ) {
     capabilities.push("click");
   }
+  if (["img", "picture", "svg", "canvas"].includes(tag) || role === "img") {
+    capabilities.push("click", "screenshot");
+  }
   if (
     ["textarea", "select"].includes(tag) ||
     (tag === "input" && !["button", "submit", "reset", "checkbox", "radio", "file"].includes(inputType)) ||
@@ -745,6 +835,7 @@ function componentSeed(fact) {
     attrs["data-test"],
     attrs["data-qa"],
     semantic.accessibleName && `${semantic.accessibleName}_${semantic.role || "control"}`,
+    semantic.altText && `${semantic.altText}_${semantic.role || "image"}`,
     semantic.labelText && `${semantic.labelText}_${semantic.role || semantic.inputType || "field"}`,
     semantic.stableText && `${semantic.stableText}_${semantic.role || "control"}`,
     semantic.name,
@@ -761,6 +852,7 @@ function createDisplayName(fact) {
   const semantic = fact.fingerprint.semantic || {};
   return cleanValue(
     semantic.accessibleName ||
+      semantic.altText ||
       semantic.labelText ||
       semantic.stableText ||
       semantic.placeholder ||
@@ -784,6 +876,7 @@ function scoreSemantic(expected = {}, actual = {}) {
 
   const expectedName = normalizedText(
     expected.accessibleName ||
+      expected.altText ||
       expected.labelText ||
       expected.stableText ||
       expected.placeholder ||
@@ -791,6 +884,7 @@ function scoreSemantic(expected = {}, actual = {}) {
   );
   const actualName = normalizedText(
     actual.accessibleName ||
+      actual.altText ||
       actual.labelText ||
       actual.stableText ||
       actual.placeholder ||
@@ -924,6 +1018,7 @@ function createResolutionResult(state, details = {}) {
 function hasMeaningfulFingerprint(fingerprint = {}) {
   return Boolean(
     fingerprint.semantic?.accessibleName ||
+      fingerprint.semantic?.altText ||
       fingerprint.semantic?.labelText ||
       fingerprint.semantic?.stableText ||
       fingerprint.semantic?.placeholder ||

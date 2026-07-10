@@ -570,7 +570,7 @@ When a phase or milestone is completed, accepted, or materially re-scoped, the
 implementing change must update this spec, the master roadmap, current handoff
 notes, and any affected user-facing guide before the next phase begins.
 
-### Future Mapper MapStore Adapter
+### Mapper MapStore Adapter
 
 After the mapper's initial Chrome-storage implementation is stable, the
 companion app may provide filesystem persistence for workflow-scoped page maps
@@ -580,6 +580,15 @@ behavior includes site-keyed JSON files, schema-version checks, atomic
 write/rename, bounded version retention, request timeouts, host-unavailable
 states, oversized-payload chunking where needed, and a multi-tab last-write-wins
 conflict rule with retained diff metadata.
+
+Initial source pass is present: the host has a workflow-root mapper repository
+and native mapper-state list/get/save/delete commands, and the extension has a
+`NativeMapStore` adapter. The hardening source pass is also present: mapper
+native requests use bounded timeouts, the native adapter exposes
+unavailable/timeout status, normal mapper state payloads are capped at 1 MB
+instead of chunked, and host-saved states carry revision plus bounded
+last-write-wins conflict metadata. Default persistence remains Chrome storage
+until switching to the filesystem-backed adapter is explicitly accepted.
 
 ## Acceptance Gates
 

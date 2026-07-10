@@ -32,6 +32,9 @@ test("recorder emits mapper component refs from live DOM facts", async () => {
   assert.match(source, /componentRef/);
   assert.match(source, /mapperFact/);
   assert.match(source, /capturedMapVersionId/);
+  assert.match(source, /"img"/);
+  assert.match(source, /isPassiveTextCandidate/);
+  assert.match(source, /hasMappableMediaSignal/);
 });
 
 test("content execution resolves mapper context before legacy targets", async () => {

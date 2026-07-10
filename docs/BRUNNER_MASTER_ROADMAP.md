@@ -295,10 +295,35 @@ Implementation phases:
    now uses a functional top-down hierarchy canvas with Site -> Page -> Region
    -> Component nodes, connector ports, right-angle relationship edges,
    pan/zoom controls, selected-node state, and live-highlight selection wiring.
+   Highlight-on-hover preview is available for component rows. Mapper scanning
+   now includes bounded user-visible image and leaf-text candidates for later
+   extraction, click, and screenshot/crop workflows.
+   Tree, Graph, and Review Queue now share component search/status filters for
+   Component IDs, aliases, names, role/type, capabilities, status, and review
+   state. The Component panel has an explicit live-resolution check for review
+   workflows, so candidate-link attempts can be fetched without relying on
+   automatic selection highlighting. The website list now consolidates saved
+   maps to one card per base site, exposes saved pages from a toolbar Page
+   picker, scopes retained versions to the selected page, caps retained
+   versions at three, and uses a more compact Inspector layout with collapsible
+   left/right rails and resizable right-side review sections. A mapper
+   coordinator regression test now covers
+   same-site login/home page isolation so a login-page change does not mutate
+   the home-page map. Inspector Refresh Map now remaps the selected saved page
+   against its open website tab, so component-only DOM changes such as appended
+   feed/tree/graph items can update Tree/Graph counts without changing other
+   saved pages.
    Final UX polish remains follow-up after manual stress-page testing.**
 5. Filesystem `MapStore` adapter through the existing companion/local-host
-   bridge, with atomic writes, timeouts, bounded retention, and last-write-wins
-   conflict records.
+   bridge.
+   **Initial source pass complete: the host now has a mapper repository,
+   native mapper-state list/get/save/delete commands, atomic JSON writes under
+   the workflow storage root, and a `NativeMapStore` adapter behind the same
+   extension contract. Native mapper calls now have bounded request timeouts,
+   unavailable/timeout status reporting, a 1 MB normal payload cap, native
+   revision stamps, and retained last-write-wins conflict metadata. Chrome
+   storage remains the default until the product switch to filesystem-backed
+   persistence is explicitly accepted.**
 6. Deferred dynamic, feed, and same-origin frame work only after static/open-
    shadow reliability tests are stable.
 

@@ -58,6 +58,10 @@
       this.isRecording = false;
       this.lastInputValueByElement = new WeakMap();
       this.cancelledRunIds = new Set();
+      this.mapperMutationStats = {
+        materialMutationCount: 0,
+        lastMutationAt: "",
+      };
 
       this.scanDom();
       this.installDomObserver();
@@ -107,7 +111,8 @@
     }
 
     installDomObserver() {
-      const observer = new MutationObserver(() => {
+      const observer = new MutationObserver((records = []) => {
+        this.recordMapperMutations(records);
         window.clearTimeout(this.scanTimer);
         this.scanTimer = window.setTimeout(() => this.scanDom(), 250);
       });
@@ -129,6 +134,72 @@
           "disabled",
         ],
       });
+    }
+
+    recordMapperMutations(records = []) {
+      let materialCount = 0;
+      records.forEach((record) => {
+        if (this.isBRunnerInternalNode(record.target)) return;
+        if (record.type === "childList") {
+          const added = Array.from(record.addedNodes || [])
+            .filter((node) => this.isMaterialMutationNode(node)).length;
+          const removed = Array.from(record.removedNodes || [])
+            .filter((node) => this.isMaterialMutationNode(node)).length;
+          materialCount += added + removed;
+          return;
+        }
+        if (record.type === "attributes" && this.isMaterialMutationNode(record.target)) {
+          materialCount += 1;
+        }
+      });
+
+      if (!materialCount) return;
+      this.mapperMutationStats.materialMutationCount = Math.min(
+        10000,
+        this.mapperMutationStats.materialMutationCount + materialCount,
+      );
+      this.mapperMutationStats.lastMutationAt = new Date().toISOString();
+    }
+
+    isMaterialMutationNode(node) {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+      if (this.isBRunnerInternalNode(node)) return false;
+      const element = node;
+      if (element.closest?.("#brunner-recorder-highlight, #brunner-mapper-inspector-highlight")) {
+        return false;
+      }
+      if (element.matches?.("script, style, link, meta, title")) return false;
+      const text = this.cleanMapperText(element.textContent || "");
+      return Boolean(
+        element.matches?.("button, a, input, textarea, select, img, svg, canvas, [role], [data-testid], [data-test], [data-qa]") ||
+          text.length >= 2,
+      );
+    }
+
+    isBRunnerInternalNode(node) {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+      const element = node;
+      return Boolean(
+        element.id === "brunner-recorder-highlight" ||
+          element.id === "brunner-recorder-highlight-label" ||
+          element.id === "brunner-mapper-inspector-highlight" ||
+          element.id === "brunner-mapper-inspector-highlight-label" ||
+          element.closest?.("#brunner-recorder-highlight, #brunner-mapper-inspector-highlight"),
+      );
+    }
+
+    getMapperPageSnapshot(options = {}) {
+      const context = this.getCurrentPageContext();
+      const lifetimeMaterialMutationCount = this.mapperMutationStats.materialMutationCount;
+      return {
+        url: context.url,
+        title: context.title,
+        materialMutationCount: options.settledCurrentDom
+          ? 0
+          : lifetimeMaterialMutationCount,
+        lifetimeMaterialMutationCount,
+        lastMutationAt: this.mapperMutationStats.lastMutationAt,
+      };
     }
 
     installMessageListener() {
@@ -192,12 +263,16 @@
           return this.highlightMapperComponent(
             request.component,
             request.pageMap,
+            request.highlightRequestId,
           );
 
         case "GET_CONTROLS_TREE":
           return {
             ok: true,
             controls: this.scanDom(),
+            page: this.getMapperPageSnapshot({
+              settledCurrentDom: request.snapshotMode === "settled_current_dom",
+            }),
           };
 
         default:
@@ -312,7 +387,7 @@
       this.mapperHighlightBox.id = "brunner-mapper-inspector-highlight";
       Object.assign(this.mapperHighlightBox.style, {
         position: "fixed",
-        zIndex: "2147483646",
+        zIndex: "2147483647",
         pointerEvents: "none",
         border: "2px solid #22c55e",
         background: "rgba(34, 197, 94, 0.14)",
@@ -325,7 +400,7 @@
       this.mapperHighlightLabel.id = "brunner-mapper-inspector-highlight-label";
       Object.assign(this.mapperHighlightLabel.style, {
         position: "fixed",
-        zIndex: "2147483646",
+        zIndex: "2147483647",
         pointerEvents: "none",
         background: "#166534",
         color: "#ffffff",
@@ -403,18 +478,38 @@
       });
     }
 
-    async highlightMapperComponent(component = {}, pageMap = {}) {
+    async highlightMapperComponent(component = {}, pageMap = {}, highlightRequestId = 0) {
+      const requestId = Number(highlightRequestId) || 0;
+      if (requestId && requestId < (this.mapperHighlightRequestId || 0)) {
+        return {
+          ok: true,
+          mapperState: "stale",
+          mapperReason: "stale_highlight_request",
+          confidence: 0,
+          attempts: [],
+          resolverLog: null,
+          highlighted: false,
+        };
+      }
+      if (requestId) this.mapperHighlightRequestId = requestId;
+
       if (!component?.componentId) {
         this.hideMapperInspectorHighlight();
         return {
-          ok: false,
-          error: "Missing mapper component.",
+          ok: true,
+          mapperState: "cleared",
+          mapperReason: "inspector_highlight_cleared",
+          confidence: 0,
+          attempts: [],
+          resolverLog: null,
+          highlighted: false,
         };
       }
 
       const result = this.resolveMapperComponentTarget({
         mapperContext: {
           state: "ready",
+          includeHidden: true,
           pageMap: {
             classification: pageMap?.classification || "",
           },
@@ -422,31 +517,55 @@
         },
       }, component.action || "");
 
-      if (result.element) {
-        await this.showMapperInspectorHighlight(
+      const hidden = Boolean(result.element && !this.isVisibleElement(result.element));
+      let highlighted = false;
+      if (result.element && !hidden) {
+        highlighted = await this.showMapperInspectorHighlight(
           result.element,
           component,
           result.mapperState || "resolved",
+          requestId,
         );
       } else {
         this.hideMapperInspectorHighlight();
       }
 
+      if (requestId && requestId !== this.mapperHighlightRequestId) {
+        return {
+          ok: true,
+          mapperState: "stale",
+          mapperReason: "stale_highlight_request",
+          confidence: 0,
+          attempts: [],
+          resolverLog: null,
+          highlighted: false,
+        };
+      }
+
+      const resolverLog = hidden && result.resolverLog
+        ? {
+            ...result.resolverLog,
+            state: "hidden",
+            reason: "resolved_element_hidden",
+          }
+        : result.resolverLog || null;
+
       return {
         ok: true,
-        mapperState: result.mapperState || "not_found",
-        mapperReason: result.mapperReason || "",
+        mapperState: hidden ? "hidden" : result.mapperState || "not_found",
+        mapperReason: hidden ? "resolved_element_hidden" : result.mapperReason || "",
         confidence: result.confidence || 0,
         attempts: result.attempts || [],
-        resolverLog: result.resolverLog || null,
-        highlighted: Boolean(result.element),
+        resolverLog,
+        highlighted,
+        hidden,
       };
     }
 
-    async showMapperInspectorHighlight(element, component = {}, state = "resolved") {
+    async showMapperInspectorHighlight(element, component = {}, state = "resolved", highlightRequestId = 0) {
       if (!element || !this.isVisibleElement(element)) {
         this.hideMapperInspectorHighlight();
-        return;
+        return false;
       }
 
       element.scrollIntoView({
@@ -455,13 +574,18 @@
         behavior: "instant",
       });
       await this.afterNextPaint();
+      if (highlightRequestId && highlightRequestId !== this.mapperHighlightRequestId) {
+        return false;
+      }
 
       this.mapperHighlightedElement = element;
       this.mapperHighlightedComponent = component;
       this.mapperHighlightedState = state;
+      this.hideRecorderHighlight();
 
       const rect = element.getBoundingClientRect();
       this.drawMapperInspectorHighlight(rect, component, state);
+      return true;
     }
 
     refreshMapperInspectorHighlight() {
@@ -707,9 +831,27 @@
         "input",
         "textarea",
         "select",
+        "img",
+        "picture",
+        "svg",
+        "canvas",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "label",
+        "li",
+        "td",
+        "th",
+        "span",
         "[role='button']",
         "[role='link']",
         "[role='textbox']",
+        "[role='img']",
+        "[role='heading']",
         "[contenteditable='true']",
       ].join(",");
       const roots = this.getOpenDomRoots();
@@ -724,7 +866,26 @@
         });
       });
 
-      return elements;
+      return elements.sort((a, b) => this.compareElementsByVisualOrder(a, b));
+    }
+
+    compareElementsByVisualOrder(a, b) {
+      const aRect = a.getBoundingClientRect();
+      const bRect = b.getBoundingClientRect();
+      const aTop = aRect.top + (window.scrollY || window.pageYOffset || 0);
+      const bTop = bRect.top + (window.scrollY || window.pageYOffset || 0);
+      const topDelta = aTop - bTop;
+      if (Math.abs(topDelta) > 4) return topDelta;
+
+      const aLeft = aRect.left + (window.scrollX || window.pageXOffset || 0);
+      const bLeft = bRect.left + (window.scrollX || window.pageXOffset || 0);
+      const leftDelta = aLeft - bLeft;
+      if (Math.abs(leftDelta) > 4) return leftDelta;
+
+      const position = a.compareDocumentPosition(b);
+      if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
     }
 
     getOpenDomRoots() {
@@ -845,9 +1006,11 @@
         ),
         accessibleName: this.cleanMapperText(
           element.getAttribute("aria-label") ||
+            element.getAttribute("alt") ||
             this.getAssociatedLabelText(element) ||
             resolver.getStableElementText(element),
         ),
+        altText: this.cleanMapperText(element.getAttribute("alt")),
         labelText: this.cleanMapperText(this.getAssociatedLabelText(element)),
         stableText: this.cleanMapperText(resolver.getStableElementText(element)),
         placeholder: this.cleanMapperText(element.getAttribute("placeholder")),
@@ -935,6 +1098,16 @@
         ["button", "a", "summary", "select"].includes(tag) ||
         ["button", "link", "menuitem", "tab", "checkbox", "radio"].includes(role)
       ) {
+        capabilities.add("click");
+      }
+      if (
+        ["img", "picture", "svg", "canvas"].includes(tag) ||
+        role === "img"
+      ) {
+        capabilities.add("click");
+        capabilities.add("screenshot");
+      }
+      if (this.isPointerClickableElement(element)) {
         capabilities.add("click");
       }
 
@@ -1029,6 +1202,9 @@
       if (tag === "button") return "button";
       if (["input", "textarea"].includes(tag)) return "textbox";
       if (tag === "select") return "listbox";
+      if (["img", "picture", "svg", "canvas"].includes(tag)) return "img";
+      if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) return "heading";
+      if (["p", "span", "label", "li", "td", "th"].includes(tag)) return "text";
       return tag;
     }
 
@@ -1038,6 +1214,7 @@
           semantic.stableAttributes?.["data-test"] ||
           semantic.stableAttributes?.["data-qa"] ||
           [semantic.accessibleName, semantic.role].filter(Boolean).join(" ") ||
+          [semantic.altText, semantic.role].filter(Boolean).join(" ") ||
           [semantic.labelText, semantic.role || semantic.inputType].filter(Boolean).join(" ") ||
           [semantic.stableText, semantic.role].filter(Boolean).join(" ") ||
           semantic.name ||
@@ -1053,6 +1230,7 @@
     mapperDisplayName(semantic = {}, technical = {}) {
       return this.cleanMapperText(
         semantic.accessibleName ||
+          semantic.altText ||
           semantic.labelText ||
           semantic.stableText ||
           semantic.placeholder ||
@@ -1491,6 +1669,7 @@
       const context = step.mapperContext || {};
       const component = context.component;
       const classification = context.pageMap?.classification || "";
+      const includeHidden = context.includeHidden === true;
 
       if (context.state && context.state !== "ready") {
         return this.withMapperResolverLog({
@@ -1518,7 +1697,14 @@
         }, component, action, []);
       }
 
-      const candidates = this.enumerateMapperCandidates(action);
+      const directResolution = this.resolveStoredMapperLocatorTarget(
+        component,
+        action,
+        { includeHidden },
+      );
+      if (directResolution) return directResolution;
+
+      const candidates = this.enumerateMapperCandidates(action, { includeHidden });
       const primaryMatches = candidates.filter((candidate) => {
         return this.mapperCandidateHasLocator(candidate, component.primaryLocator);
       });
@@ -1605,43 +1791,317 @@
       );
     }
 
-    enumerateMapperCandidates(action = "") {
+    enumerateMapperCandidates(action = "", options = {}) {
       return this.enumerateStaticCandidateElements()
-        .filter((element) => this.isUsableControl(element))
-        .map((element) => {
-          const ctrlHash = this.getOrCreateControlHash(element);
-          const targetInfo = resolver.buildElementTarget(element, ctrlHash);
-          const fact = this.buildMapperComponentFact(element, action, targetInfo);
-          return {
-            element,
-            fact,
-            locators: fact.locatorCandidates || [],
-            bestLocator: targetInfo.primary || null,
-            summary: {
-              source: "live_candidate",
-              componentId: fact.componentId,
-              componentUid: fact.componentUid,
-              displayName: fact.displayName,
-              action: fact.action,
-              primary: targetInfo.primary || null,
-              locatorCandidates: fact.locatorCandidates || [],
-              fingerprint: fact.fingerprint || {},
-              expectedCapabilities: fact.expectedCapabilities || [],
-              mapperFact: {
-                componentId: fact.componentId,
-                componentUid: fact.componentUid,
-                displayName: fact.displayName,
-                action: fact.action,
-                locatorCandidates: fact.locatorCandidates || [],
-                fingerprint: fact.fingerprint || {},
-                expectedCapabilities: fact.expectedCapabilities || [],
-              },
-            },
-          };
-        })
+        .filter((element) => options.includeHidden || this.isUsableControl(element))
+        .map((element) => this.mapperCandidateFromElement(element, action))
         .filter((candidate) => {
           return this.mapperActionCompatible(candidate.fact.expectedCapabilities, action);
         });
+    }
+
+    mapperCandidateFromElement(element, action = "", preferredLocator = null, source = "live_candidate") {
+      const ctrlHash = this.getOrCreateControlHash(element);
+      const targetInfo = resolver.buildElementTarget(element, ctrlHash);
+      const fact = this.buildMapperComponentFact(element, action, targetInfo);
+      const locators = this.mergeMapperLocators(fact.locatorCandidates || [], preferredLocator);
+      const visible = this.isVisibleElement(element);
+      return {
+        element,
+        visible,
+        fact: {
+          ...fact,
+          locatorCandidates: locators,
+        },
+        locators,
+        bestLocator: preferredLocator || targetInfo.primary || null,
+        summary: {
+          source,
+          componentId: fact.componentId,
+          componentUid: fact.componentUid,
+          displayName: fact.displayName,
+          action: fact.action,
+          primary: preferredLocator || targetInfo.primary || null,
+          locatorCandidates: locators,
+          fingerprint: fact.fingerprint || {},
+          expectedCapabilities: fact.expectedCapabilities || [],
+          mapperFact: {
+            componentId: fact.componentId,
+            componentUid: fact.componentUid,
+            displayName: fact.displayName,
+            action: fact.action,
+            locatorCandidates: locators,
+            fingerprint: fact.fingerprint || {},
+            expectedCapabilities: fact.expectedCapabilities || [],
+          },
+          visible,
+          hidden: !visible,
+        },
+      };
+    }
+
+    mergeMapperLocators(locators = [], preferredLocator = null) {
+      const merged = Array.isArray(locators) ? [...locators] : [];
+      if (!preferredLocator?.strategy || !preferredLocator?.value) return merged;
+
+      const hasPreferred = merged.some((locator) => {
+        return locator.strategy === preferredLocator.strategy &&
+          locator.value === preferredLocator.value;
+      });
+      if (hasPreferred) return merged;
+
+      return [{
+        strategy: preferredLocator.strategy,
+        value: preferredLocator.value,
+        reliability: Number(preferredLocator.score || preferredLocator.reliability || 100),
+        selectedAtCapture: true,
+      }, ...merged];
+    }
+
+    resolveStoredMapperLocatorTarget(component = {}, action = "", options = {}) {
+      const locators = [
+        component.primaryLocator,
+        ...(Array.isArray(component.fallbackLocators) ? component.fallbackLocators : []),
+      ].filter((locator) => locator?.strategy && locator?.value);
+      let firstAmbiguous = null;
+
+      locators.forEach((locator, index) => {
+        if (firstAmbiguous?.resolved) return;
+
+        const candidates = this.findElementsByMapperLocator(locator, options)
+          .map((element) => this.mapperCandidateFromElement(
+            element,
+            action,
+            locator,
+            "stored_locator_candidate",
+          ))
+          .filter((candidate) => {
+            return this.mapperActionCompatible(candidate.fact.expectedCapabilities, action);
+          });
+
+        if (candidates.length === 1) {
+          const isPrimary = index === 0;
+          firstAmbiguous = {
+            resolved: this.mapperResolutionFromCandidate(
+              candidates[0],
+              locator,
+              isPrimary ? "resolved" : "resolved_with_fallback",
+              isPrimary ? "stored_primary_locator_unique" : "stored_fallback_locator_unique",
+              100,
+              component,
+              [{
+                candidate: candidates[0],
+                score: 100,
+                evidence: [isPrimary ? "primary_locator" : "fallback_locator"],
+              }],
+            ),
+          };
+          return;
+        }
+
+        if (candidates.length > 1 && !firstAmbiguous) {
+          firstAmbiguous = {
+            locator,
+            candidates,
+            evidence: index === 0 ? "primary_locator" : "fallback_locator",
+            reason: index === 0
+              ? "stored_primary_locator_ambiguous"
+              : "stored_fallback_locator_ambiguous",
+          };
+        }
+      });
+
+      if (firstAmbiguous?.resolved) return firstAmbiguous.resolved;
+      if (!firstAmbiguous) return null;
+
+      return this.withMapperResolverLog({
+        element: null,
+        mode: "mapper",
+        mapperState: "ambiguous",
+        mapperReason: firstAmbiguous.reason,
+        strategy: firstAmbiguous.locator.strategy,
+        value: firstAmbiguous.locator.value,
+        confidence: 0,
+        attempts: firstAmbiguous.candidates.map((candidate) => candidate.summary),
+      }, component, action, firstAmbiguous.candidates.map((candidate) => ({
+        candidate,
+        score: 100,
+        evidence: [firstAmbiguous.evidence],
+      })));
+    }
+
+    findElementsByMapperLocator(locator = {}, options = {}) {
+      const strategy = String(locator.strategy || "");
+      const value = String(locator.value || "").trim();
+      if (!strategy || !value) return [];
+
+      let elements = [];
+      switch (strategy) {
+        case "id":
+          elements = this.queryAllMapperRoots(`#${this.cssEscapeIdentifier(value)}`);
+          break;
+        case "name":
+          elements = this.queryAllMapperRoots(`[name="${this.cssEscapeString(value)}"]`);
+          break;
+        case "ariaLabel":
+          elements = this.queryAllMapperRoots(`[aria-label="${this.cssEscapeString(value)}"]`);
+          break;
+        case "data-testid":
+        case "data-test":
+        case "data-qa":
+        case "data-cy":
+        case "data-automation-id":
+        case "data-component":
+          elements = this.queryAllMapperRoots(`[${strategy}="${this.cssEscapeString(value)}"]`);
+          break;
+        case "labelText":
+          elements = this.findMapperElementsByLabelText(value);
+          break;
+        case "text":
+          elements = this.findMapperElementsByText(value);
+          break;
+        case "css_selector":
+          elements = this.queryAllMapperRoots(value);
+          break;
+        case "ctrlHash":
+        case "fallback_hash":
+          elements = this.queryAllMapperRoots(
+            `[data-brunner-id="${this.cssEscapeString(value)}"],` +
+              `[data-brunner-fallback="${this.cssEscapeString(value)}"]`,
+          );
+          break;
+        case "placeholder":
+          elements = this.queryAllMapperRoots(`[placeholder="${this.cssEscapeString(value)}"]`);
+          break;
+        case "title":
+          elements = this.queryAllMapperRoots(`[title="${this.cssEscapeString(value)}"]`);
+          break;
+        case "role_text":
+          elements = this.findMapperElementsByRoleText(value);
+          break;
+        case "form_context":
+          elements = this.findMapperElementsByFormContext(value);
+          break;
+        case "dom_path":
+          elements = this.findMapperElementsByDomPath(value);
+          break;
+        default:
+          elements = [];
+      }
+
+      const seen = new Set();
+      return elements
+        .filter((element) => {
+          if (!element || !(element instanceof Element)) return false;
+          if (seen.has(element)) return false;
+          seen.add(element);
+          return options.includeHidden || this.isUsableControl(element);
+        })
+        .sort((a, b) => this.compareElementsByVisualOrder(a, b));
+    }
+
+    queryAllMapperRoots(selector = "") {
+      if (!selector) return [];
+      const elements = [];
+      this.getOpenDomRoots().forEach((root) => {
+        try {
+          root.querySelectorAll?.(selector)?.forEach((element) => {
+            elements.push(element);
+          });
+        } catch {
+          // Invalid saved selectors should fall through to fuzzy resolution.
+        }
+      });
+      return elements;
+    }
+
+    findMapperElementsByLabelText(value = "") {
+      const expected = this.normalizeMapperText(value);
+      const elements = [];
+      this.queryAllMapperRoots("label").forEach((label) => {
+        const text = this.normalizeMapperText(label.innerText || label.textContent || "");
+        if (text !== expected) return;
+
+        const forId = label.getAttribute("for");
+        if (forId) {
+          elements.push(...this.queryAllMapperRoots(`#${this.cssEscapeIdentifier(forId)}`));
+        }
+
+        const nested = label.querySelector?.([
+          "input",
+          "textarea",
+          "select",
+          "button",
+          "[role='button']",
+          "[contenteditable='true']",
+        ].join(","));
+        if (nested) elements.push(nested);
+      });
+      return elements;
+    }
+
+    findMapperElementsByText(value = "") {
+      const expected = this.normalizeMapperText(value);
+      return this.enumerateStaticCandidateElements().filter((element) => {
+        return this.normalizeMapperText(resolver.getStableElementText(element)) === expected;
+      });
+    }
+
+    findMapperElementsByRoleText(value = "") {
+      const [role, ...textParts] = String(value).split("::");
+      const expectedText = this.normalizeMapperText(textParts.join("::"));
+      if (!role || !expectedText) return [];
+
+      return this.queryAllMapperRoots(`[role="${this.cssEscapeString(role)}"]`)
+        .filter((element) => {
+          return this.normalizeMapperText(resolver.getStableElementText(element)) === expectedText;
+        });
+    }
+
+    findMapperElementsByFormContext(value = "") {
+      const selector = String(value).replace(/::text\(.*\)$/i, "");
+      return this.queryAllMapperRoots(selector);
+    }
+
+    findMapperElementsByDomPath(value = "") {
+      return this.queryAllMapperRoots("*").filter((element) => {
+        return this.getMapperDomPath(element) === value;
+      });
+    }
+
+    getMapperDomPath(element) {
+      if (!element || !(element instanceof Element)) return "";
+
+      const parts = [];
+      let current = element;
+      while (
+        current &&
+        current.nodeType === Node.ELEMENT_NODE &&
+        current !== document.documentElement &&
+        parts.length < 10
+      ) {
+        const parent = current.parentElement;
+        if (!parent) break;
+
+        const tag = current.tagName.toLowerCase();
+        const index = Array.from(parent.children).indexOf(current);
+        parts.unshift(`${tag}:${index}`);
+        current = parent;
+      }
+
+      return parts.join("/");
+    }
+
+    cssEscapeIdentifier(value) {
+      if (window.CSS && typeof window.CSS.escape === "function") {
+        return window.CSS.escape(value);
+      }
+
+      return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+    }
+
+    cssEscapeString(value) {
+      return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     }
 
     mapperResolutionFromCandidate(candidate, locator, state, reason, confidence, component = null, scored = null) {
@@ -1735,12 +2195,14 @@
 
       const expectedName = this.normalizeMapperText(
         expectedSemantic.accessibleName ||
+          expectedSemantic.altText ||
           expectedSemantic.labelText ||
           expectedSemantic.stableText ||
           expectedSemantic.placeholder,
       );
       const actualName = this.normalizeMapperText(
         actualSemantic.accessibleName ||
+          actualSemantic.altText ||
           actualSemantic.labelText ||
           actualSemantic.stableText ||
           actualSemantic.placeholder,
@@ -2660,9 +3122,27 @@
           "input",
           "textarea",
           "select",
+          "img",
+          "picture",
+          "svg",
+          "canvas",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "p",
+          "label",
+          "li",
+          "td",
+          "th",
+          "span",
           "[role='button']",
           "[role='link']",
           "[role='textbox']",
+          "[role='img']",
+          "[role='heading']",
           "[contenteditable='true']",
         ].join(","),
       );
@@ -2672,7 +3152,91 @@
       if (!this.isVisibleElement(element)) return false;
       if (element.disabled) return false;
       if (element.getAttribute("aria-hidden") === "true") return false;
+      if (this.isPassiveTextCandidate(element)) {
+        return this.hasMappableText(element);
+      }
+      if (this.isVisualMediaCandidate(element)) {
+        return this.hasMappableMediaSignal(element);
+      }
       return true;
+    }
+
+    isPassiveTextCandidate(element) {
+      const tag = element?.tagName?.toLowerCase?.() || "";
+      const role = (element?.getAttribute?.("role") || "").toLowerCase();
+      return [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "label",
+        "li",
+        "td",
+        "th",
+        "span",
+      ].includes(tag) || role === "heading";
+    }
+
+    isVisualMediaCandidate(element) {
+      const tag = element?.tagName?.toLowerCase?.() || "";
+      const role = (element?.getAttribute?.("role") || "").toLowerCase();
+      return ["img", "picture", "svg", "canvas"].includes(tag) || role === "img";
+    }
+
+    hasMappableText(element) {
+      if (this.hasInteractiveAncestor(element)) return false;
+      const text = this.cleanMapperText(element.innerText || element.textContent || "");
+      if (text.length < 2 || text.length > 180) return false;
+      return !this.hasNestedMappableText(element);
+    }
+
+    hasMappableMediaSignal(element) {
+      if (this.hasInteractiveAncestor(element)) return false;
+      const tag = element.tagName?.toLowerCase?.() || "";
+      if (tag === "canvas") return true;
+      return Boolean(
+        element.getAttribute("alt") ||
+          element.getAttribute("aria-label") ||
+          element.getAttribute("title") ||
+          element.getAttribute("src") ||
+          this.cleanMapperText(element.textContent || ""),
+      );
+    }
+
+    hasInteractiveAncestor(element) {
+      const interactive = element.closest?.([
+        "button",
+        "a",
+        "input",
+        "textarea",
+        "select",
+        "[role='button']",
+        "[role='link']",
+        "[role='textbox']",
+        "[contenteditable='true']",
+      ].join(","));
+      return Boolean(interactive && interactive !== element);
+    }
+
+    hasNestedMappableText(element) {
+      return Array.from(element.children || []).some((child) => {
+        if (!this.isVisibleElement(child)) return false;
+        if (this.isPassiveTextCandidate(child) && this.hasMappableText(child)) {
+          return true;
+        }
+        return this.hasNestedMappableText(child);
+      });
+    }
+
+    isPointerClickableElement(element) {
+      if (!element || !(element instanceof Element)) return false;
+      if (typeof element.onclick === "function") return true;
+      const role = (element.getAttribute("role") || "").toLowerCase();
+      if (["button", "link", "menuitem", "tab", "checkbox", "radio"].includes(role)) return true;
+      return window.getComputedStyle(element).cursor === "pointer";
     }
 
     isVisibleElement(element) {

@@ -61,6 +61,43 @@ test("mapper coordinator preserves locked component ids across recorder drift", 
   assert.equal(state.maps.at(-1).components.at(-1).componentId, first.componentRef.componentId);
 });
 
+test("mapper coordinator links incoming fact after visual reordering", async () => {
+  const storage = createMemoryStorage();
+  const store = new ChromeMapStore(storage);
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => "2026-07-04T00:00:00.000Z",
+  });
+
+  await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_bottom",
+      componentUid: "bottom-uid",
+      locator: "#bottom",
+      accessibleName: "Bottom",
+      documentBounds: { x: 20, y: 400, width: 80, height: 30 },
+    }),
+    { sessionId: "recording-visual-order" },
+  );
+  const top = await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_top",
+      componentUid: "top-uid",
+      locator: "#top",
+      accessibleName: "Top",
+      documentBounds: { x: 20, y: 20, width: 80, height: 30 },
+    }),
+    { sessionId: "recording-visual-order" },
+  );
+
+  const state = await store.getWorkflowMapperState("recording-visual-order");
+  const components = state.maps.at(-1).components;
+
+  assert.deepEqual(components.map((component) => component.displayName), ["Top", "Bottom"]);
+  assert.equal(top.componentRef.componentId, components[0].componentId);
+  assert.equal(components[0].historicalLinks.some((link) => link.componentUid === "top-uid"), true);
+});
+
 test("mapper coordinator attaches stored component context for execution", async () => {
   const storage = createMemoryStorage();
   const store = new ChromeMapStore(storage);
@@ -142,6 +179,66 @@ test("mapper coordinator retains bounded page map history", async () => {
   ]);
 });
 
+test("mapper coordinator isolates changes by page profile within the same site", async () => {
+  const storage = createMemoryStorage();
+  const store = new ChromeMapStore(storage);
+  let tick = 0;
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => `2026-07-04T00:0${tick++}:00.000Z`,
+  });
+
+  const login = await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_login",
+      componentUid: "login-submit",
+      locator: "#login-submit",
+      accessibleName: "Sign in",
+      url: "https://example.com/login",
+      title: "Login",
+      pageProfileKey: "example_com::login",
+    }),
+    { sessionId: "recording-pages" },
+  );
+  const home = await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_home",
+      componentUid: "home-welcome",
+      locator: "#home-welcome",
+      accessibleName: "Welcome",
+      url: "https://example.com/home",
+      title: "Home",
+      pageProfileKey: "example_com::home",
+    }),
+    { sessionId: "recording-pages" },
+  );
+  await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_login_changed",
+      componentUid: "login-submit",
+      locator: "#login-submit-new",
+      accessibleName: "Sign in",
+      url: "https://example.com/login",
+      title: "Login",
+      pageProfileKey: "example_com::login",
+    }),
+    { sessionId: "recording-pages" },
+  );
+
+  const state = await store.getWorkflowMapperState("recording-pages");
+  const loginMaps = state.maps.filter((map) => map.pageProfileKey === "example_com::login");
+  const homeMaps = state.maps.filter((map) => map.pageProfileKey === "example_com::home");
+
+  assert.equal(login.mapper.pageProfileKey, "example_com::login");
+  assert.equal(home.mapper.pageProfileKey, "example_com::home");
+  assert.equal(loginMaps.length, 2);
+  assert.equal(homeMaps.length, 1);
+  assert.equal(homeMaps[0].components[0].componentId, home.componentRef.componentId);
+  assert.equal(homeMaps[0].components[0].status, "new");
+  assert.equal(loginMaps.at(-1).components[0].componentId, login.componentRef.componentId);
+  assert.equal(loginMaps.at(-1).components[0].status, "changed");
+});
+
 function createMemoryStorage() {
   const memory = {};
   return {
@@ -159,26 +256,31 @@ function recordedStep({
   componentUid,
   locator,
   accessibleName = "Save",
+  url = "https://example.com/account",
+  title = "Account",
+  siteKey = "example_com",
+  pageProfileKey = "example_com::account",
+  documentBounds = null,
 } = {}) {
   return {
     action: "element.click",
     page: {
-      url: "https://example.com/account",
-      title: "Account",
+      url,
+      title,
     },
     componentRef: {
       mapperSchemaVersion: 1,
       componentId,
       componentUid,
-      siteKey: "example_com",
-      pageProfileKey: "example_com::account",
+      siteKey,
+      pageProfileKey,
       capturedMapVersionId: "incoming",
     },
     mapperFact: {
       mapperSchemaVersion: 1,
       action: "element.click",
-      siteKey: "example_com",
-      pageProfileKey: "example_com::account",
+      siteKey,
+      pageProfileKey,
       componentId,
       componentUid,
       capturedMapVersionId: "incoming",
@@ -198,6 +300,9 @@ function recordedStep({
         },
         technical: {
           tag: "button",
+        },
+        visual: {
+          documentBounds,
         },
       },
       expectedCapabilities: ["click", "extract"],
