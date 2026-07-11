@@ -3,6 +3,7 @@ import {
   buildStaticPageMap,
   createComponentRefFromRecord,
   createDefaultMapperSettings,
+  recordMapperRuntimeResolution,
 } from "../mapper/core.js";
 
 export function createMapperCoordinator({
@@ -24,10 +25,32 @@ export function createMapperCoordinator({
     };
     const state = await mapStore.getWorkflowMapperState(workflowId);
     const previousMap = findPreviousPageMap(state, step.mapperFact);
+    const activeSettings = state?.settings || settings;
+    const effectiveSettings = effectiveMapperSettings(activeSettings, step.mapperFact);
+    if (effectiveSettings.mode === "explicit") {
+      const component = findComponentForFact(previousMap || {}, step.mapperFact);
+      const componentRef = component
+        ? createComponentRefFromRecord(component)
+        : step.componentRef || null;
+      return {
+        ...step,
+        ...(componentRef ? { componentRef } : {}),
+        mapper: {
+          schemaVersion: previousMap?.schemaVersion || 1,
+          workflowId,
+          mapVersionId: previousMap?.mapVersionId || "",
+          siteKey: step.mapperFact.siteKey || "",
+          pageProfileKey: step.mapperFact.pageProfileKey || "",
+          classification: previousMap?.classification || "explicit_mapping_required",
+          componentId: component?.componentId || "",
+          mode: "explicit",
+        },
+      };
+    }
     const pageMap = attachIncomingFactLink(preserveRecordedComponentLocks(buildStaticPageMap({
       page: pageFromStep(step),
       componentFacts: collectPageFacts(previousMap, step.mapperFact),
-      settings: state?.settings || settings,
+      settings: activeSettings,
       previousMap,
       now: clock(),
     }), previousMap, step.mapperFact), step.mapperFact);
@@ -39,11 +62,11 @@ export function createMapperCoordinator({
     await mapStore.saveWorkflowMapperState(workflowId, {
       ...(state || {}),
       workflowId,
-      settings: state?.settings || settings,
+      settings: activeSettings,
       maps: replacePageMap(
         state?.maps || [],
         pageMap,
-        state?.settings || settings,
+        activeSettings,
       ),
     });
 
@@ -98,9 +121,41 @@ export function createMapperCoordinator({
     };
   }
 
+  async function recordResolverOutcome(step = {}, outcome = {}) {
+    const workflowId = step.mapper?.workflowId || step.workflowId || "";
+    if (!workflowId || !step?.componentRef) return null;
+
+    const state = await mapStore.getWorkflowMapperState(workflowId);
+    const pageMap = findPageMapForComponent(state, step.componentRef);
+    if (!pageMap) return null;
+
+    const updatedMap = recordMapperRuntimeResolution(pageMap, {
+      ...(outcome || {}),
+      action: outcome?.action || step.action || step.type || "",
+      componentId: outcome?.componentId || step.componentRef.componentId || "",
+      componentUid: outcome?.componentUid || step.componentRef.componentUid || "",
+      pageProfileKey: outcome?.pageProfileKey || step.componentRef.pageProfileKey || "",
+      mapVersionId: outcome?.mapVersionId || pageMap.mapVersionId || "",
+    }, clock());
+
+    await mapStore.saveWorkflowMapperState(workflowId, {
+      ...(state || {}),
+      workflowId,
+      maps: (state?.maps || []).map((map) => {
+        return map.mapVersionId === pageMap.mapVersionId &&
+          map.pageProfileKey === pageMap.pageProfileKey
+          ? updatedMap
+          : map;
+      }),
+    });
+
+    return updatedMap;
+  }
+
   return {
     reconcileRecordedStep,
     attachExecutionContext,
+    recordResolverOutcome,
   };
 }
 
@@ -312,6 +367,14 @@ function pageFromStep(step = {}) {
     url: page.url || "",
     title: page.title || "",
     materialMutationCount: Number(page.materialMutationCount) || 0,
+  };
+}
+
+function effectiveMapperSettings(settings = {}, mapperFact = {}) {
+  return {
+    ...(settings || {}),
+    ...(settings.siteOverrides?.[mapperFact.siteKey] || {}),
+    ...(settings.pageOverrides?.[mapperFact.pageProfileKey] || {}),
   };
 }
 

@@ -25,16 +25,61 @@ test("recorder emits mapper component refs from live DOM facts", async () => {
   );
 
   assert.match(source, /enumerateStaticCandidateElements/);
+  assert.match(source, /observeMapperRoots/);
+  assert.match(source, /observedMapperRoots/);
+  assert.match(source, /getMapperShadowPath/);
+  assert.match(source, /getMapperPathWithinRoot/);
+  assert.match(source, /getMapperFrameScope/);
+  assert.match(source, /mapper\.frame_scope\.v1/);
+  assert.match(source, /pageWindow = window\.top/);
+  assert.match(source, /cross_origin_frame_unsupported/);
+  assert.match(source, /::shadow::/);
   assert.match(source, /getOpenDomRoots/);
   assert.match(source, /event\.composedPath/);
   assert.match(source, /buildMapperComponentFact/);
   assert.match(source, /createComponentRef/);
+  assert.match(source, /getMapperPlatformScope/);
+  assert.match(source, /detectKnownMapperPlatformProfile/);
+  assert.match(source, /web\.whatsapp\.com/);
+  assert.match(source, /getInferredChatPlatformScope/);
+  assert.match(source, /getInferredSocialPlatformScope/);
+  assert.match(source, /getMapperStableContainerToken/);
+  assert.match(source, /unsupported_scope/);
+  assert.match(source, /mapperPlatformScopeAllowsAction/);
+  assert.match(source, /getMapperIdentityText/);
+  assert.match(source, /isMapperEphemeralElement/);
+  assert.match(source, /exclude_ephemeral_descendants/);
+  assert.match(source, /mappingDisposition: ephemeral \? "context_only"/);
+  assert.match(source, /dynamicContext: this\.isMapperEphemeralElement/);
+  assert.match(source, /recordMapperRegionMutation/);
+  assert.match(source, /getMapperRegionDynamics/);
+  assert.match(source, /getMapperRepeatScope/);
+  assert.match(source, /mapperRepeatScopeToken/);
+  assert.match(source, /mapper\.repeat_scope\.v1/);
+  assert.match(source, /pattern_requires_condition/);
+  assert.match(source, /mapper\.region_dynamics\.v1/);
+  assert.match(source, /loadedContentOnly: loadedWindow/);
+  assert.match(source, /platformScopeToken/);
+  assert.match(source, /platformScope/);
+  assert.match(source, /mapper\.platform_scope\.v1/);
+  assert.match(source, /mapperPlatformScopesCompatible/);
+  assert.match(source, /platform_scope_contradiction/);
+  assert.match(source, /\["threadId", "containerId", "repeatedKind"\]/);
   assert.match(source, /componentRef/);
   assert.match(source, /mapperFact/);
   assert.match(source, /capturedMapVersionId/);
   assert.match(source, /"img"/);
   assert.match(source, /isPassiveTextCandidate/);
   assert.match(source, /hasMappableMediaSignal/);
+});
+
+test("mapper content scripts run in frames for path-scoped routing", async () => {
+  const manifest = JSON.parse(await readFile(new URL("BRunner/manifest.json", root), "utf8"));
+  const mapperScript = manifest.content_scripts.find((entry) => {
+    return entry.js?.includes("content/mapper.js");
+  });
+  assert.equal(mapperScript.all_frames, true);
+  assert.equal(mapperScript.match_about_blank, true);
 });
 
 test("content execution resolves mapper context before legacy targets", async () => {
@@ -49,6 +94,21 @@ test("content execution resolves mapper context before legacy targets", async ()
   assert.match(source, /dynamic_deferred/);
   assert.match(source, /primary_locator_ambiguous/);
   assert.match(source, /mapper_resolved_with_fallback|resolved_with_fallback/);
+  assert.match(source, /withMapperRuntimeResolution/);
+  assert.match(source, /createMapperRuntimeResolutionOutcome/);
+  assert.match(source, /rawLocatorStored:\s*false/);
+});
+
+test("background persists mapper runtime resolver outcomes", async () => {
+  const source = await readFile(
+    new URL("BRunner/background.js", root),
+    "utf8",
+  );
+
+  assert.match(source, /recordMapperResolutionOutcome/);
+  assert.match(source, /mapperCoordinator\.recordResolverOutcome/);
+  assert.match(source, /response\.diagnostics\?\.targetResolution\?\.mapperResolution/);
+  assert.match(source, /response\?\.mapperResolution/);
 });
 
 test("wait conditions return mapper diagnostics before generic timeouts", async () => {

@@ -448,93 +448,94 @@ CANCELLED
 22. Upload File
 23. Submit Form
 24. Reset Form
+25. Fill Form from Data
 
 ### Page control, dialogs, download, and capture
 
-25. Open UI / Expand Section
-26. Close Overlay / Dismiss UI
-27. Handle Browser Dialog
-28. Handle Download
-29. Screen Capture
+26. Open UI / Expand Section
+27. Close Overlay / Dismiss UI
+28. Handle Browser Dialog
+29. Handle Download
+30. Screen Capture
 
 ### Data input and file processing
 
-30. File Input
-31. Find Files
-32. Wait for File
-33. Raw File Input
-34. Text Input
-35. CSV / TSV / Delimited Data Input
-36. JSON Input
-37. XML Input
-38. YAML Input
-39. Spreadsheet Input
-40. Document Input
-41. PDF Input
-42. Image Input
+31. File Input
+32. Find Files
+33. Wait for File
+34. Raw File Input
+35. Text Input
+36. CSV / TSV / Delimited Data Input
+37. JSON Input
+38. XML Input
+39. YAML Input
+40. Spreadsheet Input
+41. Document Input
+42. PDF Input
+43. Image Input
 
 ### Data, variables, transformation, and code
 
-43. Set Variable
-44. Template Text
-45. Select Data
-46. Transform Data
-47. Convert Data Type
-48. Map Fields
-49. Filter List
-50. Sort List
-51. Remove Duplicates
-52. Merge Data
-53. Split Data
-54. Aggregate Data
-55. Calculate Value
-56. Compare Values
-57. Validate Data
-58. Function Node
-59. Code Node
+44. Set Variable
+45. Template Text
+46. Select Data
+47. Transform Data
+48. Convert Data Type
+49. Map Fields
+50. Filter List
+51. Sort List
+52. Remove Duplicates
+53. Merge Data
+54. Split Data
+55. Aggregate Data
+56. Calculate Value
+57. Compare Values
+58. Validate Data
+59. Function Node
+60. Code Node
 
 ### Workflow control and execution
 
-60. If / Else
-61. Switch
-62. Loop Through List
-63. Repeat Until
-64. Pagination Loop
-65. Break Loop
-66. Continue Loop
-67. Delay
-68. Try / Catch Scope
-69. Join Branches
-70. Manual Confirmation
-71. Manual Step Required
-72. Stop Workflow
+61. If / Else
+62. Switch
+63. Loop Through List
+64. Repeat Until
+65. Pagination Loop
+66. Break Loop
+67. Continue Loop
+68. Delay
+69. Try / Catch Scope
+70. Join Branches
+71. Manual Confirmation
+72. Manual Step Required
+73. Stop Workflow
 
 ### Browser data collection and extraction
 
-73. Extract Text
-74. Extract Attribute
-75. Extract Element Value
-76. Extract HTML
-77. Extract List / Repeating Records
-78. Extract Table
-79. Extract Links
-80. Extract Images
-81. Extract Form Data
-82. Extract Page Information
-83. Extract Structured Page Data
-84. Extract Visible Messages
-85. Get Element Count
-86. Read Selected Text
+74. Extract Text
+75. Extract Attribute
+76. Extract Element Value
+77. Extract HTML
+78. Extract List / Repeating Records
+79. Extract Table
+80. Extract Links
+81. Extract Images
+82. Extract Form Data
+83. Extract Page Information
+84. Extract Structured Page Data
+85. Extract Visible Messages
+86. Get Element Count
+87. Read Selected Text
 
 ### Output and reporting (initial node set)
 
-87. Save Data
-88. Export Data
-89. Show Notification
-90. Show Workflow Message
-91. Generate Summary
-92. Log Message
-93. Create Run Report
+88. Save Data
+89. Export Data
+90. Show Notification
+91. Show Workflow Message
+92. Generate Summary
+93. Log Message
+94. Create Run Report
 
 ---
 
@@ -582,82 +583,83 @@ The base runtime exists. Implement only the node-layer dependencies shown here.
 26. Upload File.
 27. Submit Form.
 28. Reset Form.
-29. Open UI / Expand Section.
-30. Close Overlay / Dismiss UI.
-31. Handle Browser Dialog.
-32. Handle Download.
-33. Screen Capture.
+29. Fill Form from Data.
+30. Open UI / Expand Section.
+31. Close Overlay / Dismiss UI.
+32. Handle Browser Dialog.
+33. Handle Download.
+34. Screen Capture.
 
 **Gate:** A workflow can complete common forms, deal with page UI, upload/download files, and capture evidence.
 
 ### Phase 4 — Data input and storage integration
 
-34. File Input.
-35. Find Files.
-36. Wait for File.
-37. Raw File Input.
-38. Text Input.
-39. CSV / TSV Input.
-40. JSON Input.
-41. Spreadsheet Input.
-42. Document Input.
-43. PDF Input.
-44. Image Input.
-45. XML Input.
-46. YAML Input.
+35. File Input.
+36. Find Files.
+37. Wait for File.
+38. Raw File Input.
+39. Text Input.
+40. CSV / TSV Input.
+41. JSON Input.
+42. Spreadsheet Input.
+43. Document Input.
+44. PDF Input.
+45. Image Input.
+46. XML Input.
+47. YAML Input.
 
 **Gate:** A workflow can locate live files in approved directories and convert them to structured outputs.
 
 ### Phase 5 — Data transformation and advanced logic
 
-47. Set Variable.
-48. Template Text.
-49. Select Data.
-50. Transform Data.
-51. Convert Data Type.
-52. Map Fields.
-53. Filter List.
-54. Sort List.
-55. Remove Duplicates.
-56. Merge Data.
-57. Split Data.
-58. Aggregate Data.
-59. Calculate Value.
-60. Compare Values.
-61. Validate Data.
-62. Function Node.
-63. Code Node.
+48. Set Variable.
+49. Template Text.
+50. Select Data.
+51. Transform Data.
+52. Convert Data Type.
+53. Map Fields.
+54. Filter List.
+55. Sort List.
+56. Remove Duplicates.
+57. Merge Data.
+58. Split Data.
+59. Aggregate Data.
+60. Calculate Value.
+61. Compare Values.
+62. Validate Data.
+63. Function Node.
+64. Code Node.
 
 **Gate:** Browser/file outputs can be cleaned, transformed, validated, and processed with awaited custom code.
 
 ### Phase 6 — Workflow control and extraction
 
-64. If / Else.
-65. Switch.
-66. Loop Through List.
-67. Repeat Until.
-68. Pagination Loop.
-69. Break Loop.
-70. Continue Loop.
-71. Delay.
-72. Try / Catch Scope.
-73. Join Branches.
-74. Manual Confirmation.
-75. Manual Step Required.
-76. Stop Workflow.
-77. Extraction nodes 73–86 from the catalog.
+65. If / Else.
+66. Switch.
+67. Loop Through List.
+68. Repeat Until.
+69. Pagination Loop.
+70. Break Loop.
+71. Continue Loop.
+72. Delay.
+73. Try / Catch Scope.
+74. Join Branches.
+75. Manual Confirmation.
+76. Manual Step Required.
+77. Stop Workflow.
+78. Extraction nodes 74–87 from the catalog.
 
 **Gate:** Workflows can branch, loop, recover, pause for user action, and collect structured page data.
 
 ### Phase 7 — Outputs, reporting, and end-to-end packs
 
-78. Save Data.
-79. Export Data.
-80. Show Notification.
-81. Show Workflow Message.
-82. Generate Summary.
-83. Log Message.
-84. Create Run Report.
+79. Save Data.
+80. Export Data.
+81. Show Notification.
+82. Show Workflow Message.
+83. Generate Summary.
+84. Log Message.
+85. Create Run Report.
 
 **Gate:** Every major workflow can save results, notify the user, and generate a non-sensitive run artifact.
 
@@ -1222,6 +1224,51 @@ The following cards define the required node-level behavior. All cards inherit S
 **Outputs:** controls reset, preserved controls, safe before/after summary.
 
 **Tests:** native reset, custom reset, preserve list, sensitive values excluded.
+
+---
+
+### E10. Fill Form from Data
+
+**Stable type:** `form.fill_from_data`
+
+**Purpose:** Fill compatible controls from an object or current table row by
+matching data-field meaning to mapper control semantics. This removes the need
+to record one Enter Text, Select, or Toggle node per field.
+
+**Core config:** object/table-row expression, optional field metadata and
+aliases, optional form/region target, strict score and winner-margin policy,
+overwrite mode (`empty only`, `always`, `never`), unmatched-field policy,
+verification mode, output alias, and sensitive-field policy.
+
+**Matching evidence:** data key/title/description/aliases against mapper
+Component ID and display semantics, associated label, accessible name,
+placeholder, title, stable `name`, nearby text, form context, role, tag, and
+input type. Use one-to-one assignment; DOM order is never a terminal
+tie-breaker.
+
+**Execution:** preflight the complete fill plan before mutation; reject or route
+ambiguous assignments according to policy; dispatch the existing Enter Text,
+Select Dropdown Option, Set Checkbox/Toggle, Select Radio Option, Date/Time,
+and autocomplete action contracts; read values/states back after filling. Never
+submit the form.
+
+**Outputs:** matched fields with Component IDs and safe score/margin evidence,
+unmatched data keys and controls, ambiguous assignments, filled/skipped/failed
+counts, verification results, and target-resolution summaries. Raw secret values
+must not appear in logs or persisted map data.
+
+**Safety:** password controls accept only explicitly password-classified data;
+hidden, disabled, readonly, or unsupported controls are skipped; each key and
+control is used at most once; live mapper ambiguity prevents interaction for
+that assignment. External embeddings may suggest candidates later but cannot
+bypass deterministic scope, type, uniqueness, score, or margin gates.
+
+**Tests:** contact/address aliases, field metadata descriptions, text/textarea,
+select, checkbox/radio/switch, date, autocomplete, repeated labels in different
+forms, duplicate labels in one form, hidden/disabled/readonly fields, password
+guard, empty-only overwrite, verification failure, dynamic replacement between
+preflight and execution, table-row iteration, no-submit guarantee, and
+secret-safe logs.
 
 ---
 
@@ -2320,4 +2367,3 @@ validate config
 → persist non-sensitive logs
 → route through success/failure ports
 ```
-

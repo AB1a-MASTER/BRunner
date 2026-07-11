@@ -18,6 +18,7 @@ Deferred scope:
 - dynamic regions;
 - infinite or repeating feeds;
 - feed-item pinning;
+- platform-specific app profiles for chat and social media products;
 - same-origin frame routing;
 - cross-origin frames;
 - automatic scrolling or pagination for mapping;
@@ -35,6 +36,7 @@ Closed Shadow DOM and inaccessible cross-origin frames are hard limits.
 | Aliases | Optional display aliases may be edited in the Inspector, but never replace the canonical Component ID. |
 | Default strategy | Use hybrid mapping: reuse a fresh persisted map, preflight/validate where possible, refresh/reconcile when the page is reached or a target cannot be resolved. |
 | Ambiguity | Never click, type, select, extract, or otherwise interact when identity is ambiguous. Return a structured outcome and route through an explicit unresolved branch. |
+| Review policy | Manual review is exceptional. Strong unique reconciliation is accepted automatically. Weak or close historical matches become new components while unmatched prior records become bounded tombstones. Runtime ambiguity still blocks interaction. |
 | Continuation | Mapper failures must not crash the workflow or silently continue on success. DOM nodes expose an `unresolved` path. |
 | Configuration | All mapper configuration lives in `workflow.settings.mapper`; site/page overrides are nested under that workflow. There is no extension-global mapper policy. |
 | Initial persistence | Use compact workflow-scoped maps in `chrome.storage.local` behind a storage adapter. Add filesystem persistence later through the existing local host adapter. |
@@ -84,6 +86,92 @@ Every DOM-dependent node must follow this contract:
    state in structured form.
 10. Keep canonical component name and ID stable across selector, layout, and
    label changes when reconciliation establishes the same component.
+
+## Autonomous Reconciliation and Review Budget
+
+The map exists primarily for runtime automation. Inspector review is a recovery
+tool, not a required maintenance loop. Normal page drift must therefore converge
+without a person opening the Inspector.
+
+Reconciliation uses these tiers:
+
+1. Exact persisted component UID or strong unique historical evidence preserves
+   the locked Component ID automatically and records the decision, score, and
+   winner margin.
+2. Weak evidence, inadequate winner margin, or close historical candidates do
+   not preserve an old identity. The live fact becomes a new component and each
+   unmatched prior component becomes a bounded removed tombstone.
+3. Removed tombstones remain available for retained-version diagnostics and old
+   workflow references, but do not require review by default.
+4. Runtime resolution remains stricter than reconciliation. Duplicate direct
+   locators or close live candidates return `ambiguous`; no event is dispatched.
+5. A strong unique historical rebind preserves the old Component ID
+   automatically, but is marked `pending` until a later settled capture confirms
+   the same live UID. Confirmation is deterministic, counted, and logged; it
+   must never mean "choose the first candidate".
+
+`reviewRequired` is reserved for genuine identity conflicts that cannot be
+represented safely as new plus removed records, policy violations, or explicit
+operator requests. Changed/new/removed status is useful history and does not by
+itself imply human work.
+
+Required reliability metrics per page profile:
+
+- automatic strong-match count and rate;
+- uncertain-as-new count;
+- automatic rebind pending/confirmed count;
+- runtime fallback recovery count;
+- runtime ambiguous/not-found count;
+- incorrect-action count, which must remain zero in deterministic fixtures;
+- stale-to-resolved convergence attempts;
+- Component ID survival rate across controlled DOM drift.
+
+Static map reconciliation stores `mapper.reliability.v1` metrics as counts and
+rates only. It records redaction flags proving that raw visible text and raw
+locator values are not copied into the metrics payload. Runtime DOM resolution
+now feeds the same metrics shape with fallback recovery, ambiguous, not-found,
+incorrect-action, attempt count, and last-attempt timestamp counters. Bounded
+`mapper.runtime_resolution.v1` attempts keep counts, scores, evidence labels,
+and hashed candidate identities only.
+
+The product target of 99.99% cannot be established from a scoring constant. It
+requires a large adversarial fixture corpus, replay telemetry with redacted
+evidence, measured false-positive and false-negative rates, and release gates.
+
+## Platform-Specific App Profiles
+
+Some websites are application products with domain-specific DOM behavior rather
+than ordinary document pages. Chat and social media products such as WhatsApp
+Web, Facebook, Instagram, and Reddit must not be treated as generic static
+sites once live evidence shows poor grouping, unstable identity, virtualized
+feeds, route shells, or component reuse.
+
+Add a mapper profile track for these product classes before claiming reliable
+automation coverage:
+
+- chat apps: conversation list, active thread, message composer, attachment
+  controls, message rows, reactions, unread markers, pinned/archived state, and
+  virtualized message history need semantic grouping rules;
+- social media apps: home feed, post/card boundaries, comment composer, action
+  bars, story/reel/media viewers, profile tabs, infinite scroll, and virtualized
+  rows need feed-aware grouping and tracking rules;
+- repeated cards must preserve card/container scope and should avoid naming
+  every repeated child as a flat page-level component;
+- dynamic counters, unread badges, timestamps, ephemeral notifications, typing
+  indicators, and loaded/unloaded feed windows should be classified separately
+  from durable action targets;
+- platform profile detection should be workflow-scoped, explainable in the
+  Inspector, and fall back to conservative `dynamic_deferred` or unresolved
+  states when the profile cannot prove safe identity.
+
+The platform profile layer must be data-driven and redacted. It may recognize
+known product patterns, ARIA roles, stable app containers, and repeated content
+structures, but it must not hard-code secret-bearing user content or click by
+visual order alone. WhatsApp Web grouping/tracking needs a dedicated acceptance
+fixture or live checklist before it is considered supported.
+
+Detailed profile requirements are tracked in
+`11_MAPPER_PLATFORM_APP_PROFILES.md`.
 
 ## Resolver States
 
@@ -803,7 +891,9 @@ badges/redaction, and persisted live resolver attempts are now present in
 source. Review acceptance and live-candidate linking now produce a fresh review
 map version, preserving the previous map for inspection. Live resolution now
 returns a structured `mapper.resolver.log.v1` record with thresholds, selected
-candidate, runner-up, margin, ranked candidates, and attempts. A Graph
+candidate, runner-up, margin, ranked candidates, and attempts. Saved runtime
+resolver attempts and page reliability counters are now surfaced in compact
+redacted Inspector panels without raw selector/text payloads. A Graph
 view hierarchy canvas now exists in source with top-down Site -> Page -> Region
 -> Component nodes, connector ports, right-angle edges, pan/zoom controls,
 selected-node state, and live-highlight selection wiring. Tree view now uses a
@@ -840,9 +930,9 @@ stale hover overlays, and the Inspector shell uses flex height to reduce
 sub-fullscreen layout artifacts. The Inspector UI now also uses compact
 icon/tooltip controls for common map, clear, graph, collapse, and destructive
 actions; Tree and Graph expose a visible map color legend; website rows include
-direct delete-site actions; and responsive rules wrap the header, Page/Version
-controls, filters, Tree, Graph, and side rails instead of assuming full-screen
-desktop width.
+direct delete-site actions; the Page selector has an adjacent delete-page action;
+and responsive rules wrap the header, Page/Version controls, filters, Tree,
+Graph, and side rails instead of assuming full-screen desktop width.
 Saved map records, Inspector Tree/Graph/Review Queue lists, and live content
 capture now use visual page reading order top-to-bottom then left-to-right while
 preserving resolver safety. Content-side mapper refresh responses now include
@@ -861,9 +951,11 @@ mutations. The content script still reports lifetime mutation counts for
 read-only live checks, while saved maps can refresh once the DOM is settled.
 Retained page-map lists prefer usable versions over already-saved unsupported
 zero-component versions for the same page.
-The Page/Version toolbar includes a delete-version action that removes only the
-selected saved map version, preserves other saved pages and versions for the
-site, clears live overlays, and falls back to the nearest remaining version.
+The Page/Version toolbar includes delete-page and delete-version actions beside
+their matching selectors. Delete-page removes all retained versions for the
+selected saved page while preserving other site pages; delete-version removes
+only the selected saved map version, clears live overlays, and falls back to the
+nearest remaining version.
 Highlight/live-resolution now includes hidden candidates for diagnostic
 purposes. If a stored component resolves to an element that is present but not
 visible, the Inspector reports `hidden`, does not draw a misleading overlay, and
@@ -1020,26 +1112,34 @@ labels, drift, open Shadow DOM, and mutation-heavy regions for mapper acceptance
 
 - Add recursive open-shadow traversal, composed-path capture, shadow paths, and
   shadow-root mutation observation.
-  **Initial open-shadow capture/traversal source support is already present in
-  the content adapter for reachable open roots. Shadow-path persistence remains
-  future work.**
+  **Open-shadow capture/traversal, bounded composed-path persistence, and
+  mutation observation for discovered open roots are implemented in source.**
 - Add bounded map version history and reconciliation outcomes.
   **Initial source pass complete: Chrome `MapStore` retains bounded page-map
   history per workflow/page, and static map reconciliation now records
   `same`, `changed`, `new`, `removed`, and `ambiguous` summaries.**
 - Preserve historical Component IDs on strong semantic/structural matches.
-  **Initial source pass complete: strong historical matches keep locked
-  Component IDs while changed/ambiguous records are flagged for review.**
+  **Source pass complete for static reconciliation: exact UID drift and strong
+  historical matches keep locked Component IDs without manual review, weak or
+  close history becomes new plus removed tombstones, and strong automatic
+  rebinds carry pending/confirmed identity confirmation metadata.**
 - Mark changed/ambiguous associations for review.
-  **Implemented in source for static map reconciliation.**
+  **Policy revised and implemented in source: changed/new/removed status is
+  informational by default, while `reviewRequired` is reserved for genuine
+  conflicts, policy violations, or explicit operator requests. Runtime
+  ambiguity still blocks interaction.**
 - Implement stale/invalidation lifecycle and hybrid runtime refresh.
   **Initial source pass complete: changed map fingerprints create `refreshed`
-  page-map versions and dynamic/mutation-heavy pages safely decline with
-  `dynamic_deferred`; full observer-driven invalidation remains later.**
+  page-map versions and unbounded dynamic/mutation-heavy pages safely decline
+  with `dynamic_deferred`; bounded identified regions use `hybrid_dynamic` and
+  retain currently loaded components while observer rescans update facts.**
 - Add structured resolver/reconciliation logs and node output.
   **Partially complete: reconciliation summaries are stored on map versions and
-  mapper unresolved execution produces structured node diagnostics/output. Full
-  Inspector-facing resolver attempt logs remain later.**
+  mapper unresolved execution produces structured node diagnostics/output.
+  Static reconciliation stores redacted count-only reliability metrics, and
+  runtime mapper resolution now persists redacted fallback/ambiguous/not-found
+  counters plus bounded attempts on the page map. The Inspector now surfaces
+  those saved counters and attempts using compact redacted labels.**
 
 Exit: moved components retain Component IDs, labels may drift without ID
 regeneration, and close-score alternatives are not auto-linked or interacted
@@ -1080,13 +1180,20 @@ equivalent resolution behavior.
 ### Milestone 5 - Deferred Dynamic, Feed, and Frame Support
 
 - Region-level static/dynamic/infinite/unsupported classification.
+  **Implemented for bounded `hybrid_dynamic`, loaded-window, ephemeral-context,
+  and unbounded `dynamic_deferred` behavior.**
 - Dynamic-region identity rules excluding volatile text/position.
+  **Implemented for platform badges/timestamps and loaded-window position.**
 - Repeatable feed-template Component IDs and pattern plus condition resolution.
+  **Stable generic/platform item keys are pinned; unkeyed repeated patterns
+  return `repeat_condition_required` until a future workflow supplies a
+  condition.**
 - Explicit feed-item pinning, loaded-content-only policy, no automatic
-  scroll/pagination.
+  scroll/pagination. **Implemented in source.**
 - Same-origin frame routing and cross-frame Inspector messaging where permitted.
+  **Implemented by stable frame path; cross-origin frames stay protected.**
 
-Do not begin until static/open-shadow reliability tests are stable.
+Source implementation is complete; live extension acceptance remains.
 
 ## Required Tests
 
@@ -1161,6 +1268,11 @@ Shadow DOM:
 - closed roots and deferred dynamic pages produce honest unsupported states;
 - map persistence is compact, bounded, and redacted for sensitive pages;
 - Inspector explains resolution/change/failure without unsafe auto-selection.
+- routine reconciliation does not create manual review work for changed, new,
+  or removed records when a safe automatic outcome exists;
+- uncertain history is represented as new plus removed rather than an
+  ambiguous identity assignment;
+- every automatic identity decision records reason, score, margin, and policy.
 
 ## Non-Goals
 

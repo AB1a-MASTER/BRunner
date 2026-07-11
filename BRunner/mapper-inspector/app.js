@@ -31,6 +31,7 @@ const state = {
   lastResolutionByTarget: {},
   liveStatusByEntry: {},
   hoverHighlightRequestId: 0,
+  hoverRestoreTimer: null,
   highlightRequestId: 0,
   activeResolutionKey: "",
   graphView: {
@@ -278,6 +279,13 @@ function liveStatusFromResponse(response = {}) {
       detail: response.reason || "dynamic_deferred",
     };
   }
+  if (!response.stale && live.classification === "hybrid_dynamic") {
+    return {
+      state: "current",
+      label: `Live bounded dynamic | ${live.componentCount || 0} components`,
+      detail: response.reason || "bounded_dynamic_regions",
+    };
+  }
   if (!response.stale) {
     return {
       state: "current",
@@ -425,7 +433,7 @@ function filterComponents(entry = null, options = {}) {
       ));
     if (!statusMatches) return false;
     if (!query) return true;
-    return componentSearchText(component).includes(query);
+    return componentMatchesSearch(component, query);
   });
 }
 
@@ -478,6 +486,11 @@ function componentSearchText(component = {}) {
   const semantic = component.fingerprint?.semantic || {};
   const behavioral = component.fingerprint?.behavioral || {};
   const technical = component.fingerprint?.technical || {};
+  const structural = component.fingerprint?.structural || {};
+  const locators = [
+    component.primaryLocator,
+    ...(component.fallbackLocators || []),
+  ].filter(Boolean);
   return normalizeText([
     component.componentId,
     component.componentUid,
@@ -485,6 +498,7 @@ function componentSearchText(component = {}) {
     component.displayName,
     componentShortName(component),
     componentIsHidden(component) ? "hidden invisible not visible" : "",
+    componentIsDynamicContext(component) ? "dynamic context loaded window ephemeral" : "",
     component.status,
     component.reviewRequired ? "review required" : "",
     semantic.role,
@@ -496,16 +510,50 @@ function componentSearchText(component = {}) {
     semantic.title,
     semantic.name,
     ...Object.values(semantic.stableAttributes || {}),
+    ...collectSearchTokens(structural),
     behavioral.href,
     technical.tag,
     technical.id,
+    technical.domPath,
     ...(technical.classes || []),
-    component.primaryLocator?.value,
-    ...(component.fallbackLocators || []).map((locator) => locator.value),
+    ...collectSearchTokens(locators),
+    ...collectSearchTokens(component.reconciliationDecision || {}),
+    ...collectSearchTokens(component.identityConfirmation || {}),
     componentRegionName(component),
     componentTypeGroupName(component),
     ...(component.expectedCapabilities || []),
   ].join(" "));
+}
+
+function componentMatchesSearch(component = {}, normalizedQuery = "") {
+  const haystack = componentSearchText(component);
+  return queryMatchesNormalizedText(haystack, normalizedQuery);
+}
+
+function queryMatchesNormalizedText(haystack = "", query = "") {
+  if (!query) return true;
+  if (haystack.includes(query)) return true;
+  const terms = query.split(" ").filter((term) => term.length > 1);
+  return Boolean(terms.length) && terms.every((term) => haystack.includes(term));
+}
+
+function collectSearchTokens(value, tokens = [], depth = 0) {
+  if (depth > 4 || value === null || value === undefined) return tokens;
+  if (["string", "number", "boolean"].includes(typeof value)) {
+    tokens.push(String(value));
+    return tokens;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSearchTokens(item, tokens, depth + 1));
+    return tokens;
+  }
+  if (typeof value === "object") {
+    Object.entries(value).forEach(([key, item]) => {
+      tokens.push(key);
+      collectSearchTokens(item, tokens, depth + 1);
+    });
+  }
+  return tokens;
 }
 
 function componentFilterSummaryText(components = [], filteredComponents = []) {
@@ -697,6 +745,7 @@ function renderSites() {
 }
 
 function renderSelectedMap() {
+  resetTransientViewInteractions();
   const entry = selectedEntry();
   if (!entry) {
     els.title.textContent = "No map selected";
@@ -746,10 +795,17 @@ function renderLiveStatus(entry = selectedEntry()) {
 
 function mapSubtitle(map = {}) {
   const mutationCount = Number(map.diagnostics?.materialMutationCount) || 0;
+  const frames = map.diagnostics?.frameSummary || {};
+  const profile = map.platformProfile || {};
+  const profileText = profile.family && profile.family !== "generic"
+    ? `profile ${profile.family} ${Number(profile.confidence) || 0}%`
+    : "";
   return [
     `${map.hostname || ""}${map.path || ""}`,
     map.status || "unknown",
+    profileText,
     mutationCount ? `${mutationCount} material mutation(s)` : "",
+    Number(frames.sameOriginFrames) ? `${Number(frames.sameOriginFrames)} frame(s)` : "",
     map.diagnostics?.reason || "",
     map.mapVersionId || "",
   ].filter(Boolean).join(" | ");
@@ -779,6 +835,12 @@ function renderVersionTools(entry) {
         }).join("")}
       </select>
     </label>
+    ${iconButtonHtml({
+      id: "btn-delete-page",
+      icon: "trash-page",
+      label: "Delete selected saved page",
+      className: "icon-button danger-icon",
+    })}
     <label class="map-picker version-picker">
       <span>Version</span>
       <select id="map-version-select" aria-label="Map version">
@@ -795,12 +857,6 @@ function renderVersionTools(entry) {
       id: "btn-delete-map-version",
       icon: "trash",
       label: "Delete selected map version",
-      className: "icon-button danger-icon",
-    })}
-    ${iconButtonHtml({
-      id: "btn-delete-site",
-      icon: "trash-site",
-      label: "Delete all saved pages and versions for this site",
       className: "icon-button danger-icon",
     })}
   `;
@@ -826,10 +882,8 @@ function renderVersionTools(entry) {
     renderAll();
     void checkSelectedPageLiveStatus();
   });
+  document.getElementById("btn-delete-page")?.addEventListener("click", deleteSelectedPageGroup);
   document.getElementById("btn-delete-map-version")?.addEventListener("click", deleteSelectedMapVersion);
-  document.getElementById("btn-delete-site")?.addEventListener("click", () => {
-    void deleteSiteGroup(group.key);
-  });
 }
 
 async function deleteSelectedMapVersion() {
@@ -858,6 +912,64 @@ async function deleteSelectedMapVersion() {
     void checkSelectedPageLiveStatus();
   } catch (error) {
     setStatus(`Delete saved mapper version failed: ${error.message || error}`, true);
+  }
+}
+
+async function deleteSelectedPageGroup() {
+  const entry = selectedEntry();
+  if (!entry) return;
+
+  const siteKey = siteGroupKey(entry);
+  const pageKey = pageEntryKey(entry);
+  const pageEntries = state.entries.filter((item) => {
+    return siteGroupKey(item) === siteKey && pageEntryKey(item) === pageKey;
+  });
+  const label = pageLabel(entry);
+  const confirmed = window.confirm(
+    `Delete saved mapper page?\n\n${label}\n${pageEntries.length || 1} retained version(s)`,
+  );
+  if (!confirmed) return;
+
+  const nextEntryId = nextEntryIdAfterDeletePage(entry);
+  cancelHoverPreview();
+  void clearWebsiteHighlight(entry);
+
+  try {
+    const workflowIds = Array.from(new Set(pageEntries.map((item) => item.workflowId).filter(Boolean)));
+    for (const workflowId of workflowIds) {
+      const current = state.states[workflowId];
+      if (!current) continue;
+      const nextState = pruneWorkflowMapperState({
+        ...structuredClone(current),
+        maps: (current.maps || []).filter((pageMap) => {
+          return !(
+            siteGroupKey({ workflowId, pageMap }) === siteKey &&
+            pageEntryKey({ workflowId, pageMap }) === pageKey
+          );
+        }),
+      });
+      const response = await chrome.runtime.sendMessage({
+        type: Messages.SaveWorkflowMapperState,
+        workflowId,
+        state: nextState,
+      });
+      if (response?.ok === false) throw new Error(response.error || "Save failed.");
+      state.states[workflowId] = response.state || nextState;
+    }
+
+    state.entries = flattenMapEntries(state.states);
+    state.siteGroups = groupSiteEntries(state.entries);
+    pruneInspectorResolutionState();
+    state.selectedEntryId = state.entries.some((item) => item.id === nextEntryId)
+      ? nextEntryId
+      : state.siteGroups[0]?.latest?.id || state.entries[0]?.id || "";
+    state.selectedComponentId = "";
+    resetGraphView();
+    renderAll();
+    setStatus(nextEntryId ? "Saved mapper page deleted." : "Saved mapper page deleted. No saved maps remain.");
+    void checkSelectedPageLiveStatus();
+  } catch (error) {
+    setStatus(`Delete saved mapper page failed: ${error.message || error}`, true);
   }
 }
 
@@ -923,6 +1035,16 @@ function nextEntryIdAfterDelete(entry = {}) {
   return sameSite[0]?.id || remaining[0]?.id || "";
 }
 
+function nextEntryIdAfterDeletePage(entry = {}) {
+  const currentSiteKey = siteGroupKey(entry);
+  const currentPageKey = pageEntryKey(entry);
+  const remaining = state.entries.filter((item) => {
+    return !(siteGroupKey(item) === currentSiteKey && pageEntryKey(item) === currentPageKey);
+  });
+  const sameSite = remaining.filter((item) => siteGroupKey(item) === currentSiteKey);
+  return sameSite[0]?.id || remaining[0]?.id || "";
+}
+
 function pageGroupsForSite(group = {}) {
   return Object.entries(groupBy(group.entries || [], pageEntryKey))
     .map(([key, entries]) => {
@@ -981,11 +1103,33 @@ function renderPolicyPanel() {
   const sensitive = isSensitiveEntry(entry);
 
   els.policy.innerHTML = `
+    ${renderPlatformProfileSummary(map)}
+    ${renderFrameSummary(map)}
+    ${renderReliabilitySummary(entry)}
     <div class="policy-grid">
       <div>
         <span class="badge ${sensitive ? "sensitive-badge" : ""}">${sensitive ? "sensitive" : "normal"}</span>
         <span class="badge">${escapeHtml(effective.mode || "automatic")}</span>
       </div>
+      <label>
+        Workflow mapping
+        <select id="policy-global-mode">
+          <option value="automatic" ${settings.mode !== "explicit" ? "selected" : ""}>Automatic</option>
+          <option value="explicit" ${settings.mode === "explicit" ? "selected" : ""}>Manual map only</option>
+        </select>
+      </label>
+      <label>
+        Site mapping override
+        <select id="policy-site-mode">
+          ${policyOverrideOptions(siteOverride.mode)}
+        </select>
+      </label>
+      <label>
+        Page mapping override
+        <select id="policy-page-mode">
+          ${policyOverrideOptions(pageOverride.mode)}
+        </select>
+      </label>
       <label>
         Query allowlist
         <input id="policy-query-allowlist" type="text" value="${escapeAttr((settings.queryAllowlist || []).join(", "))}">
@@ -1001,8 +1145,13 @@ function renderPolicyPanel() {
       <label>
         Site sensitivity
         <select id="policy-site-sensitive">
-          <option value="false" ${siteOverride.sensitive === true ? "" : "selected"}>Normal</option>
-          <option value="true" ${siteOverride.sensitive === true ? "selected" : ""}>Sensitive</option>
+          ${policyBooleanOverrideOptions(siteOverride.sensitive)}
+        </select>
+      </label>
+      <label>
+        Page sensitivity
+        <select id="policy-page-sensitive">
+          ${policyBooleanOverrideOptions(pageOverride.sensitive)}
         </select>
       </label>
       <button id="btn-save-policy" type="button">Save policy</button>
@@ -1010,6 +1159,27 @@ function renderPolicyPanel() {
   `;
 
   document.getElementById("btn-save-policy")?.addEventListener("click", savePolicy);
+}
+
+function policyOverrideOptions(value = "") {
+  return [
+    ["", "Inherit"],
+    ["automatic", "Automatic"],
+    ["explicit", "Manual map only"],
+  ].map(([optionValue, label]) => {
+    return `<option value="${optionValue}" ${value === optionValue ? "selected" : ""}>${label}</option>`;
+  }).join("");
+}
+
+function policyBooleanOverrideOptions(value) {
+  const selected = value === true ? "true" : value === false ? "false" : "";
+  return [
+    ["", "Inherit"],
+    ["false", "Normal"],
+    ["true", "Sensitive"],
+  ].map(([optionValue, label]) => {
+    return `<option value="${optionValue}" ${selected === optionValue ? "selected" : ""}>${label}</option>`;
+  }).join("");
 }
 
 function renderTree(entry, filteredComponents = filterComponents(entry)) {
@@ -1132,11 +1302,32 @@ function renderGraph(entry, filteredComponents = filterComponents(entry)) {
           ${graph.nodes.map(graphNodeHtml).join("")}
         </div>
       </div>
+      ${renderMobileGraphList(filteredComponents)}
     </div>
   `;
 
   wireComponentRows(els.views.graph);
   wireGraphCanvas(els.views.graph, graph);
+}
+
+function renderMobileGraphList(components = []) {
+  const groups = Object.entries(groupBy(sortComponentsByVisualOrder(components), componentRegionName));
+  return `
+    <div class="graph-mobile-list" aria-label="Graph hierarchy list">
+      ${groups.map(([region, group]) => `
+        <section class="graph-mobile-region">
+          <h3>${escapeHtml(region)} <span>${group.length}</span></h3>
+          ${group.map((component) => `
+            <button class="component-row selectable ${component.componentId === state.selectedComponentId ? "active" : ""} ${componentIsHidden(component) ? "hidden-component" : ""}"
+              data-component-id="${escapeAttr(component.componentId)}" type="button">
+              <span class="row-title">${escapeHtml(componentShortName(component))}</span>
+              <span class="row-meta">${componentStatusLineHtml(component)}</span>
+            </button>
+          `).join("")}
+        </section>
+      `).join("") || `<div class="empty-state">No components match the current filter.</div>`}
+    </div>
+  `;
 }
 
 function buildInspectorGraph(entry, filteredComponents = null) {
@@ -1427,6 +1618,11 @@ function insertComponentIntoStructure(root, component = {}) {
 }
 
 function componentStructurePath(component = {}) {
+  const scopePath = componentPlatformScopePath(component);
+  if (scopePath.length) return scopePath;
+  const repeatPath = componentRepeatScopePath(component);
+  if (repeatPath.length) return repeatPath;
+
   const domPath = component.fingerprint?.technical?.domPath || "";
   const parts = String(domPath || "")
     .split("/")
@@ -1442,6 +1638,28 @@ function componentStructurePath(component = {}) {
     ...ancestors.slice().reverse().map((item) => `section:${normalizeIdentifier(item) || "ancestor"}`),
     `${component.fingerprint?.technical?.tag || "element"}:${structural.relativeIndex ?? 0}`,
   ];
+}
+
+function componentRepeatScopePath(component = {}) {
+  const scope = component.fingerprint?.structural?.repeatScope || {};
+  if (!scope.kind) return [];
+  return [
+    `repeat:${scope.kind}`,
+    scope.containerId ? `container:${scope.containerId}` : "",
+    scope.itemKey ? `item:${scope.itemKey}` : "pattern:condition-required",
+  ].filter(Boolean);
+}
+
+function componentPlatformScopePath(component = {}) {
+  const scope = component.fingerprint?.structural?.platformScope || {};
+  if (!scope.family || !scope.region) return [];
+  return [
+    `profile:${scope.family}`,
+    `region:${scope.region}`,
+    scope.threadId ? `thread:${scope.threadId}` : "",
+    scope.containerId ? `container:${scope.containerId}` : "",
+    scope.repeatedKind ? `repeat:${scope.repeatedKind}` : "",
+  ].filter(Boolean);
 }
 
 function structurePartLabel(part = "") {
@@ -1583,6 +1801,7 @@ function renderMapLegend() {
     ["Review", "#c084fc", "Review required or ambiguous"],
     ["Hidden", "#fb923c", "Resolved but hidden"],
     ["Removed", "#ef4444", "Historical removed record"],
+    ["Dynamic", "#facc15", "Bounded dynamic or loaded-window context"],
     ["Button", componentTypeColor("button"), "Button/action"],
     ["Input", componentTypeColor("input"), "Input/control"],
     ["Link", componentTypeColor("link"), "Link/navigation"],
@@ -1654,7 +1873,7 @@ function renderDetail(lastResolution = null) {
       <h3>Identity</h3>
       <div><strong>${escapeHtml(component.displayAlias || componentShortName(component))}</strong></div>
       <div><code>${escapeHtml(component.componentId)}</code></div>
-      <div>${statusHtml(component.status)} ${component.reviewRequired ? `<span class="badge">review</span>` : ""} ${componentIsHidden(component) ? `<span class="badge hidden-badge">hidden</span>` : ""} ${sensitive ? `<span class="badge sensitive-badge">redacted</span>` : ""}</div>
+      <div>${statusHtml(component.status)} ${component.reviewRequired ? `<span class="badge">review</span>` : ""} ${componentIsHidden(component) ? `<span class="badge hidden-badge">hidden</span>` : ""} ${componentIsDynamicContext(component) ? `<span class="badge dynamic-badge">dynamic context</span>` : ""} ${sensitive ? `<span class="badge sensitive-badge">redacted</span>` : ""}</div>
     </div>
     <div class="detail-block detail-actions">
       <label>
@@ -1683,6 +1902,11 @@ function renderDetail(lastResolution = null) {
       <h3>History</h3>
       <pre>${escapeHtml(jsonForDisplay(component.historicalLinks || [], false))}</pre>
     </div>
+    ${renderComponentRegionDynamics(component)}
+    ${renderComponentFrameScope(component)}
+    ${renderComponentRepeatScope(component)}
+    ${renderComponentPlatformScope(component)}
+    ${renderComponentReliability(component, entry)}
     ${resolution ? `
       <div class="detail-block">
         <h3>Live Resolution</h3>
@@ -1730,6 +1954,242 @@ function renderLiveCandidateLinks(resolution = {}, component = {}) {
   `;
 }
 
+function renderPlatformProfileSummary(map = {}) {
+  const profile = map.platformProfile || {};
+  if (!profile.family || profile.family === "generic") return "";
+  const signals = profile.signals || {};
+  const loaded = profile.loadedWindowHints || {};
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Platform Profile</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Family", profile.family)}
+        ${profile.product ? metricPillHtml("Product", profile.product) : ""}
+        ${metricPillHtml("Confidence", `${Number(profile.confidence) || 0}%`)}
+        ${profile.detectionSource ? metricPillHtml("Detected", profile.detectionSource) : ""}
+        ${metricPillHtml("Chat signals", Number(signals.chat) || 0)}
+        ${metricPillHtml("Social signals", Number(signals.social) || 0)}
+        ${Number(loaded.messages) ? metricPillHtml("Messages", Number(loaded.messages) || 0) : ""}
+        ${Number(loaded.feedCards) ? metricPillHtml("Cards", Number(loaded.feedCards) || 0) : ""}
+      </div>
+      <div class="metric-footnote">Profile metadata is redacted counts only.</div>
+    </div>
+  `;
+}
+
+function renderFrameSummary(map = {}) {
+  const summary = map.diagnostics?.frameSummary || {};
+  const sameOrigin = Number(summary.sameOriginFrames) || 0;
+  const crossOrigin = Number(summary.crossOriginFrames) || 0;
+  if (!sameOrigin && !crossOrigin) return "";
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Frames</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Same origin", sameOrigin)}
+        ${metricPillHtml("Protected", crossOrigin)}
+      </div>
+      <div class="metric-footnote">Same-origin frames are mapped by stable frame path; cross-origin frames stay protected.</div>
+    </div>
+  `;
+}
+
+function renderComponentFrameScope(component = {}) {
+  const scope = component.fingerprint?.structural?.frameScope || {};
+  if (!scope.path || scope.path === "top") return "";
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Frame Scope</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Access", scope.access || "unknown")}
+        ${metricPillHtml("Depth", Number(scope.depth) || 0)}
+      </div>
+      <div class="metric-footnote">${escapeHtml(scope.path)}</div>
+    </div>
+  `;
+}
+
+function renderComponentRepeatScope(component = {}) {
+  const scope = component.fingerprint?.structural?.repeatScope || {};
+  if (!scope.kind) return "";
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Repeat Scope</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Kind", scope.kind)}
+        ${scope.containerId ? metricPillHtml("Container", scope.containerId) : ""}
+        ${scope.itemKey ? metricPillHtml("Item", scope.itemKey) : ""}
+        ${scope.resolutionPolicy ? metricPillHtml("Policy", scope.resolutionPolicy) : ""}
+        ${scope.loadedContentOnly ? metricPillHtml("Scope", "loaded only") : ""}
+      </div>
+      <div class="metric-footnote">Unpinned repeated items require an explicit matching condition before actions.</div>
+    </div>
+  `;
+}
+
+function renderComponentPlatformScope(component = {}) {
+  const scope = component.fingerprint?.structural?.platformScope || {};
+  if (!scope.family || scope.family === "generic" || !scope.region) return "";
+
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Platform Scope</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Family", scope.family)}
+        ${metricPillHtml("Region", scope.region)}
+        ${scope.durability ? metricPillHtml("Durability", scope.durability) : ""}
+        ${scope.threadId ? metricPillHtml("Thread", scope.threadId) : ""}
+        ${scope.containerId ? metricPillHtml("Container", scope.containerId) : ""}
+        ${scope.repeatedKind ? metricPillHtml("Repeat", scope.repeatedKind) : ""}
+        ${scope.loadedWindowIndex !== undefined && scope.loadedWindowIndex !== null && scope.loadedWindowIndex !== "" ? metricPillHtml("Window", scope.loadedWindowIndex) : ""}
+        ${scope.dynamicKind ? metricPillHtml("Dynamic", scope.dynamicKind) : ""}
+        ${scope.mappingDisposition ? metricPillHtml("Use", scope.mappingDisposition) : ""}
+        ${scope.scopeSource ? metricPillHtml("Source", scope.scopeSource) : ""}
+        ${scope.confidence ? metricPillHtml("Confidence", `${Number(scope.confidence) || 0}%`) : ""}
+      </div>
+      <div class="metric-footnote">Sanitized structural scope; page content is not stored here.</div>
+    </div>
+  `;
+}
+
+function renderComponentRegionDynamics(component = {}) {
+  const region = component.fingerprint?.structural?.regionDynamics || {};
+  if (!region.regionId || region.classification === "static") return "";
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Region Dynamics</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Region", region.regionId)}
+        ${metricPillHtml("Class", region.classification || "dynamic")}
+        ${metricPillHtml("Mutations", Number(region.mutationCount) || 0)}
+        ${metricPillHtml("Bounded", region.bounded === false ? "no" : "yes")}
+        ${region.loadedContentOnly ? metricPillHtml("Scope", "loaded only") : ""}
+      </div>
+      <div class="metric-footnote">Dynamic regions map only the currently loaded DOM.</div>
+    </div>
+  `;
+}
+
+function renderReliabilitySummary(entry = selectedEntry()) {
+  const metrics = reliabilityMetricsForEntry(entry);
+  if (!metrics) {
+    return `
+      <div class="detail-block reliability-panel">
+        <h3>Reliability</h3>
+        <div class="empty-state">No reliability metrics saved yet.</div>
+      </div>
+    `;
+  }
+
+  const runtime = metrics.runtime || {};
+  const rebind = metrics.rebindConfirmation || {};
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Reliability</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Strong", metrics.automaticStrongMatchCount)}
+        ${metricPillHtml("Survival", percentText(metrics.componentIdSurvivalRate))}
+        ${metricPillHtml("New?", metrics.uncertainAsNewCount)}
+        ${metricPillHtml("Rebind", `${Number(rebind.confirmedCount) || 0}/${Number(rebind.pendingCount) || 0}`)}
+        ${metricPillHtml("Fallback", runtime.fallbackRecoveryCount)}
+        ${metricPillHtml("Ambig", runtime.ambiguousCount)}
+        ${metricPillHtml("Missing", runtime.notFoundCount)}
+        ${metricPillHtml("Bad action", runtime.incorrectActionCount)}
+      </div>
+      <div class="metric-footnote">
+        ${Number(runtime.attemptCount) || 0} runtime attempt(s)
+        ${runtime.lastAttemptAt ? ` | last ${escapeHtml(shortTimestamp(runtime.lastAttemptAt))}` : ""}
+        | redacted ${metrics.redaction?.rawTextStored === false && metrics.redaction?.rawLocatorStored === false ? "on" : "unknown"}
+      </div>
+    </div>
+  `;
+}
+
+function renderComponentReliability(component = {}, entry = selectedEntry()) {
+  const attempts = runtimeAttemptsForComponent(entry, component);
+  const confirmation = component.identityConfirmation || null;
+  const decision = component.reconciliationDecision || null;
+  const hasDecision = decision && (decision.reason || decision.score || decision.margin !== null);
+  return `
+    <div class="detail-block reliability-panel">
+      <h3>Reliability</h3>
+      <div class="metric-grid">
+        ${hasDecision ? metricPillHtml("Decision", decision.reason || "automatic") : ""}
+        ${hasDecision ? metricPillHtml("Score", Number(decision.score) || 0) : ""}
+        ${decision?.margin !== undefined && decision?.margin !== null ? metricPillHtml("Margin", decision.margin) : ""}
+        ${confirmation ? metricPillHtml("Confirm", `${confirmation.status || "pending"} ${Number(confirmation.confirmationCount) || 0}/${Number(confirmation.requiredCaptures) || 0}`) : ""}
+      </div>
+      ${attempts.length ? `
+        <div class="attempt-list" aria-label="Runtime resolver attempts">
+          ${attempts.slice(-5).reverse().map(runtimeAttemptHtml).join("")}
+        </div>
+      ` : `<div class="empty-state">No saved runtime attempts for this component.</div>`}
+    </div>
+  `;
+}
+
+function runtimeAttemptHtml(attempt = {}) {
+  const selected = attempt.selected || {};
+  const runnerUp = attempt.runnerUp || {};
+  return `
+    <article class="attempt-row">
+      <div>
+        <strong>${statusHtml(attempt.state || "unknown")}</strong>
+        <span>${escapeHtml(attempt.reason || attempt.finalReason || "")}</span>
+      </div>
+      <div class="attempt-metrics">
+        ${metricPillHtml("Conf", Number(attempt.confidence) || 0)}
+        ${attempt.margin !== null && attempt.margin !== undefined ? metricPillHtml("Margin", attempt.margin) : ""}
+        ${selected.score !== undefined ? metricPillHtml("Top", selected.score) : ""}
+        ${runnerUp.score !== undefined ? metricPillHtml("Next", runnerUp.score) : ""}
+      </div>
+      <div class="attempt-meta">
+        ${escapeHtml(shortTimestamp(attempt.createdAt))}
+        ${selected.primaryStrategy ? ` | ${escapeHtml(selected.primaryStrategy)}` : ""}
+        ${attempt.evidence?.length ? ` | ${escapeHtml(attempt.evidence.join(", "))}` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function runtimeAttemptsForComponent(entry = null, component = {}) {
+  const attempts = Array.isArray(entry?.pageMap?.resolverAttempts)
+    ? entry.pageMap.resolverAttempts
+    : [];
+  const componentId = String(component.componentId || "");
+  const componentUid = String(component.componentUid || "");
+  return attempts.filter((attempt) => {
+    return (componentId && attempt.componentId === componentId) ||
+      (componentUid && attempt.componentUid === componentUid);
+  });
+}
+
+function reliabilityMetricsForEntry(entry = null) {
+  return entry?.pageMap?.reliabilityMetrics ||
+    entry?.pageMap?.reconciliation?.reliabilityMetrics ||
+    null;
+}
+
+function metricPillHtml(label = "", value = "") {
+  return `
+    <span class="metric-pill">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value === undefined || value === null || value === "" ? "0" : String(value))}</strong>
+    </span>
+  `;
+}
+
+function percentText(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0%";
+  return `${Math.round(number * 1000) / 10}%`;
+}
+
+function shortTimestamp(value = "") {
+  const text = String(value || "");
+  return text ? text.replace("T", " ").slice(0, 16) : "";
+}
+
 function wireComponentRows(root) {
   root.querySelectorAll("[data-component-id]").forEach((button) => {
     button.addEventListener("click", () => selectComponent(button.dataset.componentId));
@@ -1765,10 +2225,29 @@ function componentShortName(component = {}) {
 }
 
 function componentRegionName(component = {}) {
-  return component.fingerprint?.structural?.formName ||
+  const scope = component.fingerprint?.structural?.platformScope || {};
+  return platformScopeRegionLabel(scope) ||
+    repeatScopeRegionLabel(component.fingerprint?.structural?.repeatScope || {}) ||
+    component.fingerprint?.structural?.formName ||
     component.fingerprint?.structural?.nearbyLabel ||
     component.fingerprint?.semantic?.role ||
     "Page";
+}
+
+function repeatScopeRegionLabel(scope = {}) {
+  if (!scope.kind) return "";
+  return ["Repeated", scope.kind, scope.containerId].filter(Boolean).join(" / ");
+}
+
+function platformScopeRegionLabel(scope = {}) {
+  if (!scope.family || !scope.region) return "";
+  const parts = [
+    scope.family,
+    scope.region,
+    scope.threadId ? `thread ${scope.threadId}` : "",
+    scope.containerId && !scope.threadId ? scope.containerId : "",
+  ].filter(Boolean);
+  return parts.join(" / ");
 }
 
 function componentTypeGroupName(component = {}) {
@@ -1831,6 +2310,7 @@ function iconSvg(type = "element") {
     pulse: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
     x: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
     trash: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>`,
+    "trash-page": `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 14h10l1-14"/><path d="M10 12h4M10 16h4"/></svg>`,
     "trash-site": `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 14h10l1-14"/><path d="M9.5 12h5M9.5 16h5"/></svg>`,
     tree: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18"/><path d="M6 7h7v4H6M6 15h10v4H6"/></svg>`,
     graph: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 7l3 8M16 7l-3 8"/></svg>`,
@@ -1855,6 +2335,7 @@ function normalizeIdentifier(value = "") {
 
 async function selectComponent(componentId) {
   cancelHoverPreview();
+  clearHoverRestoreTimer();
   state.selectedComponentId = componentId;
   renderSelectedMap();
   renderReviewQueue();
@@ -1895,6 +2376,8 @@ async function checkLiveResolution() {
 
 async function previewComponentHighlight(componentId) {
   if (!els.highlightEnabled.checked || !els.highlightHoverEnabled.checked) return;
+  if (componentId === state.selectedComponentId) return;
+  clearHoverRestoreTimer();
   const entry = selectedEntry();
   const component = (entry?.pageMap?.components || []).find((item) => {
     return item.componentId === componentId;
@@ -1910,9 +2393,21 @@ async function previewComponentHighlight(componentId) {
 
 function cancelHoverPreview(options = {}) {
   state.hoverHighlightRequestId += 1;
+  clearHoverRestoreTimer();
   if (options.restoreSelection && els.highlightEnabled.checked && selectedComponent()) {
-    void highlightSelectedComponent();
+    state.hoverRestoreTimer = window.setTimeout(() => {
+      state.hoverRestoreTimer = null;
+      if (els.highlightEnabled.checked && selectedComponent()) {
+        void highlightSelectedComponent();
+      }
+    }, 80);
   }
+}
+
+function clearHoverRestoreTimer() {
+  if (!state.hoverRestoreTimer) return;
+  window.clearTimeout(state.hoverRestoreTimer);
+  state.hoverRestoreTimer = null;
 }
 
 async function highlightComponent(entry, component, requestId = null, options = {}) {
@@ -2074,17 +2569,31 @@ async function savePolicy() {
   if (!entry) return;
 
   try {
+    const siteOverride = applyPolicyOverrideValues(
+      entry.settings?.siteOverrides?.[entry.pageMap.siteKey] || {},
+      document.getElementById("policy-site-mode")?.value || "",
+      document.getElementById("policy-site-sensitive")?.value || "",
+    );
+    const pageOverride = applyPolicyOverrideValues(
+      entry.settings?.pageOverrides?.[entry.pageMap.pageProfileKey] || {},
+      document.getElementById("policy-page-mode")?.value || "",
+      document.getElementById("policy-page-sensitive")?.value || "",
+    );
     const nextSettings = {
       ...(entry.settings || {}),
+      mode: document.getElementById("policy-global-mode")?.value === "explicit"
+        ? "explicit"
+        : "automatic",
       queryAllowlist: splitCsv(document.getElementById("policy-query-allowlist")?.value || ""),
       maxComponents: clampNumber(document.getElementById("policy-max-components")?.value, 1, 2000, 500),
       materialMutationLimit: clampNumber(document.getElementById("policy-mutation-limit")?.value, 1, 500, 50),
       siteOverrides: {
         ...(entry.settings?.siteOverrides || {}),
-        [entry.pageMap.siteKey]: {
-          ...(entry.settings?.siteOverrides?.[entry.pageMap.siteKey] || {}),
-          sensitive: document.getElementById("policy-site-sensitive")?.value === "true",
-        },
+        [entry.pageMap.siteKey]: siteOverride,
+      },
+      pageOverrides: {
+        ...(entry.settings?.pageOverrides || {}),
+        [entry.pageMap.pageProfileKey]: pageOverride,
       },
     };
 
@@ -2096,6 +2605,16 @@ async function savePolicy() {
   } catch (error) {
     setStatus(`Policy save failed: ${error.message || error}`, true);
   }
+}
+
+function applyPolicyOverrideValues(current = {}, mode = "", sensitive = "") {
+  const next = { ...(current || {}) };
+  if (mode) next.mode = mode;
+  else delete next.mode;
+  if (sensitive === "true") next.sensitive = true;
+  else if (sensitive === "false") next.sensitive = false;
+  else delete next.sensitive;
+  return next;
 }
 
 async function updateSelectedComponent(updater) {
@@ -2194,14 +2713,18 @@ function pruneWorkflowMapperState(workflowState = {}) {
 
 function setView(view) {
   cancelHoverPreview();
-  state.graphView.dragging = false;
-  els.views.graph.querySelectorAll(".panning").forEach((element) => {
-    element.classList.remove("panning");
-  });
+  resetTransientViewInteractions();
   state.activeView = view;
   els.tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
   Object.entries(els.views).forEach(([key, element]) => {
     element.classList.toggle("active", key === view);
+  });
+}
+
+function resetTransientViewInteractions() {
+  state.graphView.dragging = false;
+  els.views.graph.querySelectorAll(".panning").forEach((element) => {
+    element.classList.remove("panning");
   });
 }
 
@@ -2214,8 +2737,15 @@ function componentStatusLineHtml(component = {}, hidden = componentIsHidden(comp
   return [
     statusHtml(component.status),
     hidden ? `<span class="status-hidden">hidden</span>` : "",
+    componentIsDynamicContext(component) ? `<span class="status-dynamic-context">dynamic</span>` : "",
     escapeHtml(component.componentId || ""),
   ].filter(Boolean).join(" | ");
+}
+
+function componentIsDynamicContext(component = {}) {
+  const region = component.fingerprint?.structural?.regionDynamics || {};
+  return component.fingerprint?.behavioral?.dynamicContext === true ||
+    ["dynamic", "loaded_window", "ephemeral_context"].includes(region.classification);
 }
 
 function componentIsHidden(component = {}) {

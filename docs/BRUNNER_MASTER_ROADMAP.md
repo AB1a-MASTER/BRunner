@@ -268,9 +268,18 @@ Implementation phases:
    `same`/`changed`/`new`/`removed`/`ambiguous`, strong matches preserve locked
    Component IDs, review-required states are marked, refreshed map versions are
    produced on fingerprint drift, and `mapper_stress_test.html` plus
-   `MAPPER_MANUAL_ACCEPTANCE.md` cover manual acceptance. Shadow-path
-   persistence, full observer-driven stale invalidation, and Inspector-facing
-   attempt logs remain later.**
+   `MAPPER_MANUAL_ACCEPTANCE.md` cover manual acceptance. Open-shadow paths are
+   now persisted, discovered open roots are observed for rescans, and
+   Inspector-facing attempt logs are stored. Live extension acceptance remains.**
+   **Autonomous reconciliation policy started: strong unique drift now preserves
+   identity without review, weak or close historical evidence becomes a new
+   component, and unmatched prior records become informational removed
+   tombstones. Runtime ambiguity still blocks interaction. Static
+   reconciliation now records pending/confirmed automatic rebind confirmation
+   and count-only redacted reliability metrics. Runtime mapper resolution now
+   feeds fallback/ambiguous/not-found counters and bounded redacted attempts
+   back into the saved page map. The Mapper Inspector surfaces those counters
+   and attempts as compact redacted app telemetry.**
 4. Dedicated Mapper Inspector window with map browsing, live resolution checks,
    highlight, Review Queue, aliases, sensitive-site badges, and effective policy
    view. The Inspector must expose a saved-map website list plus Tree and Graph
@@ -313,7 +322,8 @@ Implementation phases:
    against its open website tab, so component-only DOM changes such as appended
    feed/tree/graph items can update Tree/Graph counts without changing other
    saved pages.
-   Final UX polish remains follow-up after manual stress-page testing.**
+   Responsive source polish now includes a phone Graph hierarchy fallback.
+   Final live extension visual acceptance remains.**
 5. Filesystem `MapStore` adapter through the existing companion/local-host
    bridge.
    **Initial source pass complete: the host now has a mapper repository,
@@ -324,8 +334,18 @@ Implementation phases:
    revision stamps, and retained last-write-wins conflict metadata. Chrome
    storage remains the default until the product switch to filesystem-backed
    persistence is explicitly accepted.**
-6. Deferred dynamic, feed, and same-origin frame work only after static/open-
-   shadow reliability tests are stable.
+6. Dynamic, feed, same-origin frame, and platform-specific app profile work
+   after static/open-shadow reliability tests are stable. Bounded region
+   dynamics, loaded-window behavior, same-origin frame path routing, known-host
+   profile inference, and conservative repeated-row/card protection are now in
+   source. Chat and
+   social media products such as WhatsApp Web, Facebook, Instagram, and Reddit
+   need their own mapper profile track for virtualized feeds, repeated cards,
+   conversation/thread regions, composers, action bars, unread badges, and
+   ephemeral dynamic content. They must not be marked supported by the generic
+   mapper when grouping/tracking evidence is poor; use conservative unresolved
+   or `dynamic_deferred` outcomes until a profile-specific fixture/checklist is
+   accepted.
 
 After the mapper execution and Inspector basics are complete, add a dedicated
 manual mapper stress page with static, dynamic, mutation-heavy, infinite-scroll,
@@ -345,6 +365,18 @@ surfaces fail honestly; the Inspector explains resolution without unsafe
 auto-selection.
 
 See [08_MAPPER_RELIABILITY_TRANSITION.md](specs/08_MAPPER_RELIABILITY_TRANSITION.md).
+
+Mapper Inspector small-screen layout is tracked in
+[10_MAPPER_INSPECTOR_SMALL_SCREEN.md](specs/10_MAPPER_INSPECTOR_SMALL_SCREEN.md).
+
+Chat/social platform mapper profiles are tracked in
+[11_MAPPER_PLATFORM_APP_PROFILES.md](specs/11_MAPPER_PLATFORM_APP_PROFILES.md).
+
+Semantic form filling is specified in
+[09_SEMANTIC_FORM_FILL.md](specs/09_SEMANTIC_FORM_FILL.md). Its pure matcher
+foundation is preparatory only. Mapper-scoped form scanning, execution, node
+registration, Studio authoring, and live acceptance are deferred to Milestone
+3.4 Phase 3 and must not be implemented during the mapper phase.
 
 ## Milestone 3.4 — Final node implementation program
 

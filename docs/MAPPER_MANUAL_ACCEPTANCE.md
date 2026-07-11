@@ -15,6 +15,7 @@ Open:
 
 - `http://127.0.0.1:8765/BRunner_Host/mapper_test.html`
 - `http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html`
+- `http://127.0.0.1:8765/BRunner_Host/mapper_platform_profiles_test.html`
 
 ## Unresolved Routing
 
@@ -93,6 +94,70 @@ Expected result: loaded-content-only behavior until the deferred feed milestone.
 
 Expected result: open Shadow DOM controls can be captured and resolved.
 
+## Same-Origin Frames
+
+1. Open `mapper_stress_test.html` and map the page.
+2. Confirm **Frame name** and **Save Frame** appear under a non-top Frame Scope.
+3. Select **Save Frame** and confirm highlight is drawn inside the iframe.
+4. Reload the stress page, run Check live resolution again, and confirm the
+   stable frame path rediscovers the current Chrome frame ID.
+5. Execute a recorded frame input/save action and confirm the nested frame log
+   changes without targeting a same-named top-page control.
+6. Confirm inaccessible cross-origin frames are counted as protected and never
+   exposed as actionable components.
+
+Expected result: same-origin frames work by stable path; cross-origin frames
+fail honestly as `protected_unsupported`.
+
+## Platform Profile Fixture
+
+1. Open `mapper_platform_profiles_test.html`.
+2. In the chat fixture, map the active thread region, conversation list,
+   message composer, **Attach**, **Send**, and one loaded message action.
+3. Use **Swap Active Thread**, **Load Older Messages**, and **Tick Chat
+   Ephemeral Data**. Confirm mapper grouping remains scoped to the active
+   thread, composer targets do not drift to another thread, and ephemeral unread
+   badges/timestamps do not cause durable Component ID churn. Confirm the
+   Inspector subtitle or Policy panel reports a redacted `chat` platform
+   profile hint when mapped. Confirm component IDs/Structure groups include
+   chat scope such as message composer, message row, or thread context, and
+   Regions mode groups by the same chat scope without storing raw message text.
+   Select one scoped component and confirm its Component panel shows the same
+   sanitized family, region, durability, and available thread/container/window
+   metadata in a compact **Platform Scope** block.
+   With that component selected, swap threads and confirm live resolution never
+   targets an identically named control from the other thread; it should report
+   `no_platform_scope_compatible_candidates` when the original scoped target is
+   absent.
+4. In the social fixture, map the home feed region, one post/card action bar,
+   the comment composer, **Media**, and **Post**.
+5. Use **Append Feed Window** and **Tick Social Ephemeral Data**. Confirm
+   repeated post/card controls stay scoped to their card, loaded-window content
+   is represented as currently loaded only, and changing counters/timestamps are
+   treated as dynamic context rather than stable action identity. Confirm the
+   Inspector subtitle or Policy panel reports a redacted `social` platform
+   profile hint when mapped. Confirm component IDs/Structure groups include
+   social scope such as feed card, profile tabs, or comment composer, and
+   Regions mode groups by the same social scope without storing raw post text.
+   Select one scoped component and confirm its compact **Platform Scope** block
+   agrees with the Structure and Regions grouping.
+   Append or replace feed cards and confirm a repeated action never rebinds to
+   an identically named action in another card. Loading a different virtualized
+   window may change the displayed window index without invalidating the same
+   thread/card target.
+
+Expected result: chat/social pages are either grouped by profile-specific
+regions with safe scope, or conservatively marked unresolved/dynamic-deferred.
+Generic flat page-level grouping is not considered accepted for these app
+classes.
+
+For the generic stress-page feed, select a repeated **Open item** component and
+confirm Repeat Scope shows a pinned item key and `loaded only`. Append feed
+items, refresh the map, and confirm the selected item does not resolve to a
+different card when its loaded-window index changes. A deliberately unkeyed
+repeated fixture should report `repeat_condition_required` rather than click an
+arbitrary row.
+
 ## Mapper Inspector Checks
 
 1. Open `mapper-inspector/index.html` from the extension or the sidebar button.
@@ -106,10 +171,12 @@ Expected result: open Shadow DOM controls can be captured and resolved.
    retained versions for the selected page. Confirm only the latest three
    versions are available for any page profile. Delete an older selected
    version and confirm the Inspector falls back to another saved version without
-   deleting the rest of the site.
-5. Confirm top-bar, map, graph, clear-filter, collapse, delete-version, and
-   delete-site controls use compact icon affordances with hover/focus tooltips
-   where text labels are not necessary.
+   deleting the rest of the site. Delete a disposable selected page from the
+   button beside the Page selector and confirm all retained versions for that
+   page are removed while other pages for the site remain.
+5. Confirm top-bar, map, graph, clear-filter, collapse, delete-page,
+   delete-version, and delete-site controls use compact icon affordances with
+   hover/focus tooltips where text labels are not necessary.
 6. Confirm the Tree and Graph views show a visible color legend describing
    selected, review, hidden, removed, and component-type colors.
 7. Collapse and restore the Websites rail, full Details rail, and individual
@@ -121,6 +188,10 @@ Expected result: open Shadow DOM controls can be captured and resolved.
 10. Resize the Inspector below full desktop width and confirm the header,
     Page/Version controls, filters, Tree, Graph, Websites rail, and Details rail
     wrap or stack without horizontal control clipping or unreadable text.
+    In mobile/narrow emulation, confirm the Inspector uses the device viewport
+    instead of shrinking the whole desktop UI, buttons/selects remain tappable,
+    and collapsed Websites/Details panels render as horizontal disclosure bars
+    with readable text.
 11. Switch through Tree and Graph views.
 12. In Tree view, confirm the map appears as a compact explorer hierarchy with
    type icons, indentation, lock affordances, compact labels, and stable
@@ -205,11 +276,28 @@ Expected result: open Shadow DOM controls can be captured and resolved.
 
 Current follow-up gaps found during stress-page testing:
 
-- Hover and click highlighting can visually fight when requests complete out of
-  order.
-- Tree/Graph switching can show transient artifacts or stale interaction state.
-- Component search must reliably match visible text, not only Component IDs and
-  technical names.
+- Hover and click highlighting now have source-level stale-request guards plus
+  debounced selected-highlight restore; verify visually that quick row hover,
+  click, and focus changes no longer fight in the live extension window.
+- Tree/Graph switching now clears transient graph panning state before view
+  changes and map rerenders; verify visually that no panning/artifact state
+  remains in the live extension window.
+- Component search now uses exact phrase or all-term matching across visible
+  semantic text, structural labels, locator data, decision metadata, Component
+  IDs, and capabilities; verify live stress-page searches such as partial feed
+  item text and role/type terms.
 - The compact Inspector UI pass now includes icon controls, tooltips, a map
   color legend, direct site deletion, improved contrast, and responsive wrapping;
   these still need manual visual acceptance in the live extension window.
+- Mid-size Inspector responsive wrapping now has tighter source-level guards for
+  the map title/subtitle, live-status badge, page/version selectors, and filter
+  summary; verify the toolbar and filter bar do not clip around tablet and
+  narrow desktop widths.
+- Mobile/narrow Inspector layout now has an explicit viewport and collapsed
+  panels should become horizontal disclosure bars instead of clipped vertical
+  rail labels; verify in browser mobile emulation.
+- Platform-specific app profiles remain unimplemented. WhatsApp Web, chat apps,
+  and social media apps need dedicated profile rules/checklists for virtualized
+  feeds, repeated cards, thread/composer regions, action bars, unread badges,
+  and ephemeral dynamic content before generic mapper support is claimed. See
+  `specs/11_MAPPER_PLATFORM_APP_PROFILES.md`.

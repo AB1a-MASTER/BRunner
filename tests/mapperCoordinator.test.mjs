@@ -61,6 +61,40 @@ test("mapper coordinator preserves locked component ids across recorder drift", 
   assert.equal(state.maps.at(-1).components.at(-1).componentId, first.componentRef.componentId);
 });
 
+test("explicit mapper mode does not create or mutate maps during recording", async () => {
+  const storage = createMemoryStorage();
+  const store = new ChromeMapStore(storage);
+  await store.saveWorkflowMapperState("recording-explicit", {
+    workflowId: "recording-explicit",
+    settings: {
+      mode: "automatic",
+      pageOverrides: {
+        "example_com::account": { mode: "explicit" },
+      },
+    },
+    maps: [],
+  });
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => "2026-07-04T00:00:00.000Z",
+  });
+
+  const recorded = await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_explicit",
+      componentUid: "explicit-uid",
+      locator: "#explicit",
+    }),
+    { sessionId: "recording-explicit" },
+  );
+  const state = await store.getWorkflowMapperState("recording-explicit");
+
+  assert.equal(recorded.mapper.mode, "explicit");
+  assert.equal(recorded.mapper.classification, "explicit_mapping_required");
+  assert.equal(recorded.mapper.componentId, "");
+  assert.equal(state.maps.length, 0);
+});
+
 test("mapper coordinator links incoming fact after visual reordering", async () => {
   const storage = createMemoryStorage();
   const store = new ChromeMapStore(storage);
@@ -237,6 +271,52 @@ test("mapper coordinator isolates changes by page profile within the same site",
   assert.equal(homeMaps[0].components[0].status, "new");
   assert.equal(loginMaps.at(-1).components[0].componentId, login.componentRef.componentId);
   assert.equal(loginMaps.at(-1).components[0].status, "changed");
+});
+
+test("mapper coordinator persists runtime resolver reliability outcomes", async () => {
+  const storage = createMemoryStorage();
+  const store = new ChromeMapStore(storage);
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => "2026-07-04T00:05:00.000Z",
+  });
+
+  const recorded = await coordinator.reconcileRecordedStep(
+    recordedStep({
+      componentId: "pending_email",
+      componentUid: "email-uid",
+      locator: "#email",
+      accessibleName: "Email",
+    }),
+    { sessionId: "recording-runtime-metrics" },
+  );
+
+  await coordinator.recordResolverOutcome(recorded, {
+    state: "resolved_with_fallback",
+    reason: "fingerprint_unique",
+    confidence: 86,
+    resolverLog: {
+      selected: {
+        rank: 1,
+        score: 86,
+        evidence: ["name", "structural"],
+        componentId: "candidate",
+        componentUid: "candidate-uid",
+        primary: { strategy: "css_selector", value: "#email-new" },
+      },
+      attemptCount: 1,
+    },
+  });
+
+  const state = await store.getWorkflowMapperState("recording-runtime-metrics");
+  const pageMap = state.maps.at(-1);
+
+  assert.equal(pageMap.reliabilityMetrics.runtime.attemptCount, 1);
+  assert.equal(pageMap.reliabilityMetrics.runtime.fallbackRecoveryCount, 1);
+  assert.equal(pageMap.resolverAttempts.length, 1);
+  assert.equal(pageMap.resolverAttempts[0].redaction.rawLocatorStored, false);
+  assert.equal(pageMap.resolverAttempts[0].selected.primaryStrategy, "css_selector");
+  assert.equal(Object.hasOwn(pageMap.resolverAttempts[0].selected, "primary"), false);
 });
 
 function createMemoryStorage() {

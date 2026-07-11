@@ -16,6 +16,7 @@ export const MapperShadowDomModes = Object.freeze({
 
 export const MapperPageClassifications = Object.freeze({
   Static: "static",
+  HybridDynamic: "hybrid_dynamic",
   DynamicDeferred: "dynamic_deferred",
   Unsupported: "unsupported",
 });
@@ -50,6 +51,7 @@ export const MapperScoringProfile = Object.freeze({
   version: "mapper.scoring.v1",
   minimumScore: 75,
   minimumMargin: 15,
+  rebindConfirmationCaptures: 2,
   weights: Object.freeze({
     semantic: 45,
     structural: 30,
@@ -224,12 +226,28 @@ export function buildStaticPageMap({
     .filter(Boolean);
   const orderedFacts = sortComponentFactsByVisualOrder(usableFacts);
   const materialMutationCount = Math.max(Number(page.materialMutationCount) || 0, 0);
+  const platformProfile = normalizePlatformProfile(page.platformProfile);
+  const frameSummary = normalizeFrameSummary(page.frameSummary);
   const dynamic = materialMutationCount > policy.materialMutationLimit;
   const overLimit = orderedFacts.length > policy.maxComponents;
-  const classification = dynamic || overLimit
+  const dynamicRegionCount = orderedFacts.filter((fact) => {
+    return ["dynamic", "loaded_window", "ephemeral_context"].includes(
+      fact.fingerprint?.structural?.regionDynamics?.classification,
+    );
+  }).length;
+  const hasBoundedDynamicRegions = dynamicRegionCount > 0;
+  const classification = overLimit
     ? MapperPageClassifications.DynamicDeferred
-    : MapperPageClassifications.Static;
-  const componentResult = classification === MapperPageClassifications.Static
+    : dynamic && hasBoundedDynamicRegions
+      ? MapperPageClassifications.HybridDynamic
+      : dynamic
+        ? MapperPageClassifications.DynamicDeferred
+        : MapperPageClassifications.Static;
+  const supportedClassification = [
+    MapperPageClassifications.Static,
+    MapperPageClassifications.HybridDynamic,
+  ].includes(classification);
+  const componentResult = supportedClassification
     ? createComponentRecords({
         facts: orderedFacts,
         profile,
@@ -251,24 +269,32 @@ export function buildStaticPageMap({
     siteKey: profile.siteKey,
     pageProfileKey: profile.pageKey,
     createdAt: now,
-    status: classification === MapperPageClassifications.Static
+    status: supportedClassification
       ? refreshed
         ? MapperMapStatuses.Refreshed
         : MapperMapStatuses.Ready
       : MapperMapStatuses.Unsupported,
     classification,
+    platformProfile,
     componentCount: componentResult.components.filter((component) => {
       return component.status !== MapperComponentStatuses.Removed;
     }).length,
     fingerprintDigest,
     components: componentResult.components,
     reconciliation: componentResult.reconciliation,
+    reliabilityMetrics: componentResult.reconciliation.reliabilityMetrics,
     diagnostics: {
       scoringProfile: MapperScoringProfile.version,
       materialMutationCount,
       maxComponents: policy.maxComponents,
+      platformProfileFamily: platformProfile.family,
+      frameSummary,
+      dynamicRegionCount,
+      loadedContentOnly: classification === MapperPageClassifications.HybridDynamic,
       reason: dynamic
-        ? "material_mutation_limit_exceeded"
+        ? hasBoundedDynamicRegions && !overLimit
+          ? "bounded_dynamic_regions"
+          : "material_mutation_limit_exceeded"
         : overLimit
           ? "component_limit_exceeded"
           : "",
@@ -288,6 +314,27 @@ export function createComponentRefFromRecord(component = {}) {
 }
 
 export function resolveMappedComponent(component = {}, candidateFacts = [], options = {}) {
+  const componentScope = component.fingerprint?.structural?.platformScope || {};
+  const frameScope = component.fingerprint?.structural?.frameScope || {};
+  const repeatScope = component.fingerprint?.structural?.repeatScope || {};
+  if (repeatScope.resolutionPolicy === "pattern_requires_condition") {
+    return createResolutionResult(MapperResolverStates.ProtectedUnsupported, {
+      reason: "repeat_condition_required",
+      component,
+    });
+  }
+  if (frameScope.access === "cross_origin") {
+    return createResolutionResult(MapperResolverStates.ProtectedUnsupported, {
+      reason: "cross_origin_frame_unsupported",
+      component,
+    });
+  }
+  if (componentScope.mappingDisposition === "unsupported_scope") {
+    return createResolutionResult(MapperResolverStates.ProtectedUnsupported, {
+      reason: "platform_scope_insufficient",
+      component,
+    });
+  }
   if (options.pageClassification === MapperPageClassifications.DynamicDeferred) {
     return createResolutionResult(MapperResolverStates.DynamicDeferred, {
       reason: "dynamic_deferred",
@@ -296,13 +343,27 @@ export function resolveMappedComponent(component = {}, candidateFacts = [], opti
   }
 
   const action = String(options.action || component.action || "");
-  const candidates = candidateFacts
+  const actionCandidates = candidateFacts
     .map((fact, index) => normalizeComponentFact(fact, index))
     .filter((fact) => isActionCompatible(fact.expectedCapabilities, action));
+  const candidates = actionCandidates.filter((candidate) => {
+    return repeatScopesCompatible(
+      component.fingerprint?.structural?.repeatScope,
+      candidate.fingerprint?.structural?.repeatScope,
+    ) && frameScopesCompatible(
+      component.fingerprint?.structural?.frameScope,
+      candidate.fingerprint?.structural?.frameScope,
+    ) && platformScopesCompatible(
+      component.fingerprint?.structural?.platformScope,
+      candidate.fingerprint?.structural?.platformScope,
+    );
+  });
 
   if (!candidates.length) {
     return createResolutionResult(MapperResolverStates.NotFound, {
-      reason: "no_compatible_candidates",
+      reason: actionCandidates.length
+        ? "no_platform_scope_compatible_candidates"
+        : "no_compatible_candidates",
       component,
     });
   }
@@ -367,11 +428,73 @@ export function resolveMappedComponent(component = {}, candidateFacts = [], opti
   });
 }
 
+export function recordMapperRuntimeResolution(pageMap = {}, outcome = {}, now = new Date().toISOString()) {
+  if (!pageMap || typeof pageMap !== "object") return pageMap;
+  const redactedOutcome = redactRuntimeResolutionOutcome(outcome, now);
+  const reliabilityMetrics = updateRuntimeReliabilityMetrics(
+    pageMap.reliabilityMetrics ||
+      pageMap.reconciliation?.reliabilityMetrics ||
+      createRedactedReliabilityMetrics(null, pageMap.components || [], pageMap.reconciliation || null),
+    redactedOutcome,
+  );
+  const resolverAttempts = [
+    ...(Array.isArray(pageMap.resolverAttempts) ? pageMap.resolverAttempts : []),
+    redactedOutcome,
+  ].slice(-25);
+
+  return {
+    ...structuredClone(pageMap),
+    reliabilityMetrics,
+    reconciliation: {
+      ...(pageMap.reconciliation || createEmptyReconciliation(null)),
+      reliabilityMetrics,
+    },
+    resolverAttempts,
+    updatedAt: now,
+  };
+}
+
 export function scoreCandidateAgainstComponent(component = {}, candidate = {}) {
   const expected = component.fingerprint || {};
   const actual = candidate.fingerprint || {};
   const evidence = [];
   let score = 0;
+
+  if (!platformScopesCompatible(
+    expected.structural?.platformScope,
+    actual.structural?.platformScope,
+  )) {
+    return {
+      score: 0,
+      evidence: ["platform_scope_contradiction"],
+      disqualified: true,
+      reason: "platform_scope_mismatch",
+    };
+  }
+
+  if (!frameScopesCompatible(
+    expected.structural?.frameScope,
+    actual.structural?.frameScope,
+  )) {
+    return {
+      score: 0,
+      evidence: ["frame_scope_contradiction"],
+      disqualified: true,
+      reason: "frame_scope_mismatch",
+    };
+  }
+
+  if (!repeatScopesCompatible(
+    expected.structural?.repeatScope,
+    actual.structural?.repeatScope,
+  )) {
+    return {
+      score: 0,
+      evidence: ["repeat_scope_contradiction"],
+      disqualified: true,
+      reason: "repeat_scope_mismatch",
+    };
+  }
 
   const semantic = scoreSemantic(expected.semantic, actual.semantic);
   if (semantic.disqualified) {
@@ -453,6 +576,13 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
     const primaryLocator = selectPrimaryLocator(fact);
     const fallbackLocators = fact.locators.filter((locator) => locator !== primaryLocator);
     const status = match.status;
+    const identityConfirmation = createIdentityConfirmation({
+      previous,
+      componentUid,
+      match,
+      mapVersionId,
+      now,
+    });
 
     return {
       mapperSchemaVersion: MapperSchemaVersion,
@@ -466,8 +596,15 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
       createdAt: previous?.createdAt || now,
       updatedAt: now,
       status,
-      reviewRequired: status === MapperComponentStatuses.Changed ||
-        status === MapperComponentStatuses.Ambiguous,
+      reviewRequired: match.reviewRequired === true,
+      reconciliationDecision: {
+        reason: match.reason || "",
+        score: match.score || 0,
+        margin: Number.isFinite(match.margin) ? match.margin : null,
+        automatic: match.reviewRequired !== true,
+        evidence: redactEvidenceLabels(match.evidence),
+      },
+      identityConfirmation,
       primaryLocator,
       fallbackLocators,
       fingerprint: fact.fingerprint,
@@ -491,7 +628,13 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
       capturedMapVersionId: mapVersionId,
       updatedAt: now,
       status: MapperComponentStatuses.Removed,
-      reviewRequired: true,
+      reviewRequired: false,
+      reconciliationDecision: {
+        reason: "not_present_in_current_map",
+        score: 0,
+        margin: null,
+        automatic: true,
+      },
       historicalLinks: [
         ...(Array.isArray(component.historicalLinks) ? component.historicalLinks : []),
         {
@@ -572,14 +715,21 @@ function selectPreviousComponentMatch({
 }) {
   const exact = previousByUid.get(componentUid);
   if (exact && !usedPreviousUids.has(exact.componentUid)) {
-    const score = scoreCandidateAgainstComponent(exact, candidate).score;
-    return {
-      previous: exact,
-      status: score >= 95
-        ? MapperComponentStatuses.Same
-        : MapperComponentStatuses.Changed,
-      score,
-    };
+    const scored = scoreCandidateAgainstComponent(exact, candidate);
+    if (!scored.disqualified) {
+      const score = scored.score;
+      return {
+        previous: exact,
+        status: score >= 95
+          ? MapperComponentStatuses.Same
+          : MapperComponentStatuses.Changed,
+        score,
+        margin: 100,
+        reason: score >= 95 ? "component_uid_unchanged" : "component_uid_drift",
+        reviewRequired: false,
+        evidence: scored.evidence,
+      };
+    }
   }
 
   const scored = previousComponents
@@ -596,6 +746,9 @@ function selectPreviousComponentMatch({
       previous: null,
       status: MapperComponentStatuses.New,
       score: 0,
+      margin: null,
+      reason: "no_compatible_history",
+      reviewRequired: false,
     };
   }
 
@@ -609,8 +762,11 @@ function selectPreviousComponentMatch({
   ) {
     return {
       previous: null,
-      status: MapperComponentStatuses.Ambiguous,
+      status: MapperComponentStatuses.New,
       score: best.score,
+      margin,
+      reason: "uncertain_history_treated_as_new",
+      reviewRequired: false,
     };
   }
 
@@ -619,14 +775,10 @@ function selectPreviousComponentMatch({
       previous: best.component,
       status: MapperComponentStatuses.Changed,
       score: best.score,
-    };
-  }
-
-  if (best.score >= 65 && margin >= MapperScoringProfile.minimumMargin) {
-    return {
-      previous: best.component,
-      status: MapperComponentStatuses.Changed,
-      score: best.score,
+      margin,
+      reason: "strong_unique_history_match",
+      reviewRequired: false,
+      evidence: best.evidence,
     };
   }
 
@@ -634,6 +786,11 @@ function selectPreviousComponentMatch({
     previous: null,
     status: MapperComponentStatuses.New,
     score: best.score,
+    margin,
+    reason: best.score >= 65
+      ? "weak_history_treated_as_new"
+      : "history_below_identity_threshold",
+    reviewRequired: false,
   };
 }
 
@@ -655,6 +812,7 @@ function summarizeReconciliation(previousMap, components = []) {
     else if (component.status === MapperComponentStatuses.Removed) summary.removed += 1;
     else if (component.status === MapperComponentStatuses.Ambiguous) summary.ambiguous += 1;
   }
+  summary.reliabilityMetrics = createRedactedReliabilityMetrics(previousMap, components, summary);
   return summary;
 }
 
@@ -666,7 +824,291 @@ function createEmptyReconciliation(previousMap = null) {
     new: 0,
     removed: 0,
     ambiguous: 0,
+    reliabilityMetrics: createRedactedReliabilityMetrics(previousMap, [], null),
   };
+}
+
+function createIdentityConfirmation({
+  previous = null,
+  componentUid = "",
+  match = {},
+  mapVersionId = "",
+  now = "",
+} = {}) {
+  const prior = normalizeIdentityConfirmation(previous?.identityConfirmation);
+  const isHistoricalRebind = Boolean(
+    previous?.componentUid &&
+      componentUid &&
+      previous.componentUid !== componentUid &&
+      match.reason === "strong_unique_history_match",
+  );
+
+  if (isHistoricalRebind) {
+    const evidenceSignature = createEvidenceSignature({
+      previous,
+      componentUid,
+      match,
+    });
+    const sameEvidence = prior?.evidenceSignature === evidenceSignature;
+    const confirmationCount = sameEvidence
+      ? Math.max(1, Number(prior.confirmationCount) || 1) + 1
+      : 1;
+    return {
+      status: confirmationCount >= MapperScoringProfile.rebindConfirmationCaptures
+        ? "confirmed"
+        : "pending",
+      confirmationCount,
+      requiredCaptures: MapperScoringProfile.rebindConfirmationCaptures,
+      reason: "strong_unique_history_match",
+      firstSeenAt: sameEvidence ? prior.firstSeenAt || now : now,
+      lastSeenAt: now,
+      lastConfirmedMapVersionId: mapVersionId,
+      evidenceSignature,
+      score: match.score || 0,
+      margin: Number.isFinite(match.margin) ? match.margin : null,
+      automatic: match.reviewRequired !== true,
+    };
+  }
+
+  if (prior?.status === "pending" && previous?.componentUid === componentUid) {
+    const confirmationCount = Math.max(1, Number(prior.confirmationCount) || 1) + 1;
+    return {
+      ...prior,
+      status: confirmationCount >= MapperScoringProfile.rebindConfirmationCaptures
+        ? "confirmed"
+        : "pending",
+      confirmationCount,
+      requiredCaptures: MapperScoringProfile.rebindConfirmationCaptures,
+      reason: "settled_capture_confirmed_rebind",
+      lastSeenAt: now,
+      lastConfirmedMapVersionId: mapVersionId,
+      score: match.score || prior.score || 0,
+      margin: Number.isFinite(match.margin) ? match.margin : prior.margin ?? null,
+      automatic: match.reviewRequired !== true,
+    };
+  }
+
+  if (prior?.status === "confirmed" && previous?.componentUid === componentUid) {
+    return {
+      ...prior,
+      reason: "settled_capture_confirmed_rebind",
+      lastSeenAt: now,
+      lastConfirmedMapVersionId: mapVersionId,
+      score: match.score || prior.score || 0,
+      margin: Number.isFinite(match.margin) ? match.margin : prior.margin ?? null,
+      automatic: match.reviewRequired !== true,
+    };
+  }
+
+  return null;
+}
+
+function normalizeIdentityConfirmation(value = null) {
+  if (!value || typeof value !== "object") return null;
+  const status = ["pending", "confirmed"].includes(value.status) ? value.status : "";
+  if (!status) return null;
+  return {
+    status,
+    confirmationCount: Math.max(1, Number(value.confirmationCount) || 1),
+    requiredCaptures: Math.max(1, Number(value.requiredCaptures) || MapperScoringProfile.rebindConfirmationCaptures),
+    reason: cleanToken(value.reason),
+    firstSeenAt: cleanValue(value.firstSeenAt),
+    lastSeenAt: cleanValue(value.lastSeenAt),
+    lastConfirmedMapVersionId: cleanValue(value.lastConfirmedMapVersionId),
+    evidenceSignature: cleanValue(value.evidenceSignature),
+    score: clampInteger(value.score, 0, 100, 0),
+    margin: Number.isFinite(Number(value.margin)) ? Number(value.margin) : null,
+    automatic: value.automatic !== false,
+  };
+}
+
+function createEvidenceSignature({ previous = {}, componentUid = "", match = {} } = {}) {
+  return digestSerializable({
+    reason: cleanToken(match.reason),
+    previousUid: cleanValue(previous.componentUid),
+    nextUid: cleanValue(componentUid),
+    scoreBand: Math.floor((Number(match.score) || 0) / 5) * 5,
+    marginBand: Math.floor((Number(match.margin) || 0) / 5) * 5,
+    evidence: redactEvidenceLabels(match.evidence),
+  }).slice(0, 16);
+}
+
+function redactEvidenceLabels(evidence = []) {
+  return normalizeStringList(evidence)
+    .map(cleanToken)
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function createRedactedReliabilityMetrics(previousMap = null, components = [], summary = null) {
+  const liveComponents = components.filter((component) => {
+    return component.status !== MapperComponentStatuses.Removed;
+  });
+  const previousLiveCount = Array.isArray(previousMap?.components)
+    ? previousMap.components.filter((component) => {
+        return component.status !== MapperComponentStatuses.Removed;
+      }).length
+    : 0;
+  const decisions = liveComponents.map((component) => component.reconciliationDecision || {});
+  const automaticStrongMatchReasons = new Set([
+    "component_uid_unchanged",
+    "component_uid_drift",
+    "strong_unique_history_match",
+  ]);
+  const uncertainAsNewReasons = new Set([
+    "uncertain_history_treated_as_new",
+    "weak_history_treated_as_new",
+  ]);
+  const automaticStrongMatchCount = decisions.filter((decision) => {
+    return decision.automatic !== false && automaticStrongMatchReasons.has(decision.reason);
+  }).length;
+  const uncertainAsNewCount = decisions.filter((decision) => {
+    return uncertainAsNewReasons.has(decision.reason);
+  }).length;
+  const reviewRequiredCount = components.filter((component) => component.reviewRequired === true).length;
+  const rebindPendingCount = liveComponents.filter((component) => {
+    return component.identityConfirmation?.status === "pending";
+  }).length;
+  const rebindConfirmedCount = liveComponents.filter((component) => {
+    return component.identityConfirmation?.status === "confirmed";
+  }).length;
+  const same = summary?.same || 0;
+  const changed = summary?.changed || 0;
+
+  return {
+    version: "mapper.reliability.v1",
+    source: "static_reconciliation",
+    redaction: {
+      level: "counts_only",
+      rawTextStored: false,
+      rawLocatorStored: false,
+    },
+    liveComponentCount: liveComponents.length,
+    previousLiveComponentCount: previousLiveCount,
+    automaticStrongMatchCount,
+    automaticStrongMatchRate: ratio(automaticStrongMatchCount, liveComponents.length),
+    uncertainAsNewCount,
+    reviewRequiredCount,
+    componentIdSurvivalRate: previousLiveCount
+      ? ratio(same + changed, previousLiveCount)
+      : 1,
+    rebindConfirmation: {
+      requiredCaptures: MapperScoringProfile.rebindConfirmationCaptures,
+      pendingCount: rebindPendingCount,
+      confirmedCount: rebindConfirmedCount,
+    },
+    runtime: {
+      fallbackRecoveryCount: 0,
+      ambiguousCount: 0,
+      notFoundCount: 0,
+      incorrectActionCount: 0,
+      staleToResolvedConvergenceAttempts: 0,
+      attemptCount: 0,
+      lastAttemptAt: "",
+      source: "static_mapper_core_initialized",
+    },
+  };
+}
+
+function updateRuntimeReliabilityMetrics(metrics = {}, outcome = {}) {
+  const next = structuredClone(metrics || {});
+  const runtime = {
+    fallbackRecoveryCount: 0,
+    ambiguousCount: 0,
+    notFoundCount: 0,
+    incorrectActionCount: 0,
+    staleToResolvedConvergenceAttempts: 0,
+    attemptCount: 0,
+    lastAttemptAt: "",
+    source: "runtime_resolution",
+    ...(next.runtime || {}),
+  };
+  runtime.attemptCount += 1;
+  runtime.lastAttemptAt = outcome.createdAt || runtime.lastAttemptAt || "";
+  runtime.source = "runtime_resolution";
+
+  if (outcome.state === MapperResolverStates.ResolvedWithFallback) {
+    runtime.fallbackRecoveryCount += 1;
+  } else if (outcome.state === MapperResolverStates.Ambiguous) {
+    runtime.ambiguousCount += 1;
+  } else if (outcome.state === MapperResolverStates.NotFound) {
+    runtime.notFoundCount += 1;
+  }
+
+  if (outcome.finalReason === "post_action_verification_failed") {
+    runtime.incorrectActionCount += 1;
+  }
+  if (outcome.staleToResolved === true) {
+    runtime.staleToResolvedConvergenceAttempts += 1;
+  }
+
+  return {
+    ...next,
+    runtime,
+  };
+}
+
+function redactRuntimeResolutionOutcome(outcome = {}, now = "") {
+  const state = cleanToken(outcome.state || outcome.mapperState || "unresolved");
+  const resolverLog = outcome.resolverLog && typeof outcome.resolverLog === "object"
+    ? outcome.resolverLog
+    : {};
+  const selected = sanitizeRuntimeCandidate(resolverLog.selected);
+  const runnerUp = sanitizeRuntimeCandidate(resolverLog.runnerUp);
+  const margin = Number.isFinite(Number(outcome.margin))
+    ? Number(outcome.margin)
+    : Number.isFinite(Number(resolverLog.margin))
+      ? Number(resolverLog.margin)
+      : selected && runnerUp
+        ? selected.score - runnerUp.score
+        : null;
+
+  return {
+    version: "mapper.runtime_resolution.v1",
+    createdAt: cleanValue(outcome.createdAt || now),
+    action: cleanToken(outcome.action || resolverLog.action || ""),
+    componentId: cleanValue(outcome.componentId || resolverLog.componentId),
+    componentUid: cleanValue(outcome.componentUid || resolverLog.componentUid),
+    pageProfileKey: cleanValue(outcome.pageProfileKey),
+    mapVersionId: cleanValue(outcome.mapVersionId),
+    state,
+    reason: cleanToken(outcome.reason || outcome.mapperReason || resolverLog.reason),
+    finalReason: cleanToken(outcome.finalReason),
+    confidence: clampInteger(outcome.confidence ?? resolverLog.confidence, 0, 100, 0),
+    margin,
+    attemptCount: clampInteger(outcome.attemptCount ?? resolverLog.attemptCount, 0, 1000, 0),
+    selected,
+    runnerUp,
+    evidence: redactEvidenceLabels(outcome.evidence || selected?.evidence || []),
+    staleToResolved: outcome.staleToResolved === true,
+    redaction: {
+      level: "counts_and_scores",
+      rawTextStored: false,
+      rawLocatorStored: false,
+    },
+  };
+}
+
+function sanitizeRuntimeCandidate(candidate = null) {
+  if (!candidate || typeof candidate !== "object") return null;
+  return {
+    rank: clampInteger(candidate.rank, 1, 100, 1),
+    score: clampInteger(candidate.score, 0, 100, 0),
+    evidence: redactEvidenceLabels(candidate.evidence),
+    componentIdHash: candidate.componentId
+      ? digestSerializable(cleanValue(candidate.componentId)).slice(0, 12)
+      : "",
+    componentUidHash: candidate.componentUid
+      ? digestSerializable(cleanValue(candidate.componentUid)).slice(0, 12)
+      : "",
+    primaryStrategy: cleanToken(candidate.primary?.strategy),
+    visible: candidate.visible !== false,
+  };
+}
+
+function ratio(numerator, denominator) {
+  if (!denominator) return 0;
+  return Math.round((numerator / denominator) * 10000) / 10000;
 }
 
 function normalizeComponentFact(fact = {}, index = 0) {
@@ -700,6 +1142,115 @@ function normalizeComponentFact(fact = {}, index = 0) {
   };
 }
 
+function normalizePlatformProfile(profile = {}) {
+  const family = ["chat", "social", "generic"].includes(cleanToken(profile?.family))
+    ? cleanToken(profile.family)
+    : "generic";
+  const signals = normalizeRecord(profile?.signals);
+  const loadedWindowHints = normalizeRecord(profile?.loadedWindowHints);
+
+  return {
+    version: cleanValue(profile?.version || "mapper.platform_profile.v1").slice(0, 80),
+    family,
+    confidence: clampInteger(profile?.confidence, 0, 100, 0),
+    product: cleanToken(profile?.product).slice(0, 80),
+    detectionSource: cleanToken(profile?.detectionSource).slice(0, 80),
+    signals: {
+      chat: clampInteger(signals.chat, 0, 999, 0),
+      social: clampInteger(signals.social, 0, 999, 0),
+    },
+    loadedWindowHints: {
+      messages: clampInteger(loadedWindowHints.messages, 0, 9999, 0),
+      feedCards: clampInteger(loadedWindowHints.feedCards, 0, 9999, 0),
+    },
+  };
+}
+
+function normalizePlatformScope(scope = {}) {
+  const family = ["chat", "social", "generic"].includes(cleanToken(scope?.family))
+    ? cleanToken(scope.family)
+    : "";
+  if (!family || family === "generic") {
+    return {
+      version: "mapper.platform_scope.v1",
+      family: "",
+      region: "",
+      containerId: "",
+      threadId: "",
+      repeatedKind: "",
+      loadedWindowIndex: "",
+      durability: "",
+      dynamicKind: "",
+      mappingDisposition: "",
+      scopeSource: "",
+      confidence: 0,
+    };
+  }
+
+  return {
+    version: cleanValue(scope?.version || "mapper.platform_scope.v1").slice(0, 80),
+    family,
+    region: cleanToken(scope?.region).slice(0, 80),
+    containerId: cleanToken(scope?.containerId).slice(0, 120),
+    threadId: cleanToken(scope?.threadId).slice(0, 120),
+    repeatedKind: cleanToken(scope?.repeatedKind).slice(0, 80),
+    loadedWindowIndex: cleanToken(scope?.loadedWindowIndex).slice(0, 80),
+    durability: cleanToken(scope?.durability).slice(0, 80),
+    dynamicKind: cleanToken(scope?.dynamicKind).slice(0, 80),
+    mappingDisposition: cleanToken(scope?.mappingDisposition).slice(0, 80),
+    scopeSource: cleanToken(scope?.scopeSource).slice(0, 80),
+    confidence: clampInteger(scope?.confidence, 0, 100, 0),
+  };
+}
+
+function normalizeRegionDynamics(region = {}) {
+  const classification = ["static", "dynamic", "loaded_window", "ephemeral_context"]
+    .includes(cleanToken(region?.classification))
+    ? cleanToken(region.classification)
+    : "static";
+  return {
+    version: "mapper.region_dynamics.v1",
+    regionId: cleanToken(region?.regionId).slice(0, 120),
+    classification,
+    mutationCount: clampInteger(region?.mutationCount, 0, 10000, 0),
+    loadedContentOnly: region?.loadedContentOnly === true,
+    bounded: region?.bounded !== false,
+  };
+}
+
+function normalizeFrameScope(scope = {}) {
+  const access = ["top", "same_origin", "cross_origin"].includes(cleanToken(scope?.access))
+    ? cleanToken(scope.access)
+    : "top";
+  return {
+    version: "mapper.frame_scope.v1",
+    access,
+    path: cleanValue(scope?.path || "top").slice(0, 480),
+    depth: clampInteger(scope?.depth, 0, 6, 0),
+  };
+}
+
+function normalizeFrameSummary(summary = {}) {
+  return {
+    sameOriginFrames: clampInteger(summary?.sameOriginFrames, 0, 100, 0),
+    crossOriginFrames: clampInteger(summary?.crossOriginFrames, 0, 100, 0),
+  };
+}
+
+function normalizeRepeatScope(scope = {}) {
+  return {
+    version: "mapper.repeat_scope.v1",
+    kind: cleanToken(scope?.kind).slice(0, 80),
+    containerId: cleanToken(scope?.containerId).slice(0, 120),
+    itemKey: cleanToken(scope?.itemKey).slice(0, 120),
+    loadedWindowIndex: cleanToken(scope?.loadedWindowIndex).slice(0, 80),
+    loadedContentOnly: scope?.loadedContentOnly === true,
+    resolutionPolicy: ["pinned_item", "pattern_requires_condition"].includes(cleanToken(scope?.resolutionPolicy))
+      ? cleanToken(scope.resolutionPolicy)
+      : "",
+  };
+}
+
 function normalizeFingerprint(fingerprint = {}) {
   const semantic = fingerprint.semantic || {};
   const structural = fingerprint.structural || {};
@@ -721,7 +1272,11 @@ function normalizeFingerprint(fingerprint = {}) {
       stableAttributes: normalizeRecord(semantic.stableAttributes),
     },
     structural: {
-      ancestorTokens: normalizeStringList(structural.ancestorTokens || fingerprint.ancestorTokens).slice(0, 2),
+      ancestorTokens: normalizeStringList(structural.ancestorTokens || fingerprint.ancestorTokens).slice(0, 3),
+      platformScope: normalizePlatformScope(structural.platformScope || fingerprint.platformScope),
+      frameScope: normalizeFrameScope(structural.frameScope || fingerprint.frameScope),
+      repeatScope: normalizeRepeatScope(structural.repeatScope || fingerprint.repeatScope),
+      regionDynamics: normalizeRegionDynamics(structural.regionDynamics || fingerprint.regionDynamics),
       formName: cleanToken(structural.formName || fingerprint.formName),
       relativeIndex: Number.isFinite(Number(structural.relativeIndex))
         ? Number(structural.relativeIndex)
@@ -733,11 +1288,13 @@ function normalizeFingerprint(fingerprint = {}) {
       id: cleanToken(technical.id || fingerprint.id),
       classes: normalizeStringList(technical.classes || fingerprint.classes).slice(0, 8),
       domPath: cleanValue(technical.domPath || fingerprint.domPath),
+      shadowPath: normalizeShadowPath(technical.shadowPath || fingerprint.shadowPath),
     },
     behavioral: {
       capabilities: normalizeCapabilities(behavioral.capabilities),
       href: cleanValue(behavioral.href || fingerprint.href),
       state: normalizeRecord(behavioral.state),
+      dynamicContext: behavioral.dynamicContext === true,
     },
     visual: {
       bounds: normalizeBounds(visual.bounds || fingerprint.bounds),
@@ -762,6 +1319,16 @@ function normalizeLocators(locators = []) {
 
 function normalizeCapabilities(capabilities = []) {
   return normalizeStringList(capabilities);
+}
+
+function normalizeShadowPath(path = []) {
+  return (Array.isArray(path) ? path : [])
+    .slice(0, 4)
+    .map((boundary) => ({
+      hostPath: cleanValue(boundary?.hostPath).slice(0, 320),
+      innerPath: cleanValue(boundary?.innerPath).slice(0, 320),
+    }))
+    .filter((boundary) => boundary.hostPath && boundary.innerPath);
 }
 
 function inferCapabilities(fingerprint = {}) {
@@ -1067,11 +1634,52 @@ function pageNameFromPath(path = "/") {
 }
 
 function collectStructuralTokens(structural = {}) {
+  const scope = structural.platformScope || {};
+  const repeat = structural.repeatScope || {};
   return [
+    scope.family && scope.region ? `${scope.family} ${scope.region}` : "",
+    scope.threadId ? `${scope.family} thread ${scope.threadId}` : "",
+    scope.containerId ? `${scope.family} container ${scope.containerId}` : "",
+    repeat.kind ? `repeat ${repeat.kind}` : "",
+    repeat.containerId ? `repeat container ${repeat.containerId}` : "",
+    repeat.itemKey ? `repeat item ${repeat.itemKey}` : "",
     ...(Array.isArray(structural.ancestorTokens) ? structural.ancestorTokens : []),
     structural.formName,
     structural.nearbyLabel,
   ].map(cleanValue).filter(Boolean);
+}
+
+function platformScopesCompatible(expected = {}, actual = {}) {
+  const expectedFamily = cleanToken(expected?.family);
+  if (!expectedFamily || expectedFamily === "generic") return true;
+
+  const actualFamily = cleanToken(actual?.family);
+  if (actualFamily !== expectedFamily) return false;
+  if (cleanToken(actual?.region) !== cleanToken(expected?.region)) return false;
+
+  for (const field of ["threadId", "containerId", "repeatedKind"]) {
+    const expectedValue = cleanToken(expected?.[field]);
+    if (expectedValue && cleanToken(actual?.[field]) !== expectedValue) return false;
+  }
+
+  return true;
+}
+
+function frameScopesCompatible(expected = {}, actual = {}) {
+  const expectedPath = cleanValue(expected?.path || "top");
+  const actualPath = cleanValue(actual?.path || "top");
+  return expectedPath === actualPath;
+}
+
+function repeatScopesCompatible(expected = {}, actual = {}) {
+  const expectedKind = cleanToken(expected?.kind);
+  if (!expectedKind) return true;
+  if (cleanToken(actual?.kind) !== expectedKind) return false;
+  for (const field of ["containerId", "itemKey"]) {
+    const expectedValue = cleanToken(expected?.[field]);
+    if (expectedValue && cleanToken(actual?.[field]) !== expectedValue) return false;
+  }
+  return true;
 }
 
 function normalizeBounds(bounds = null) {

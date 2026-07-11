@@ -221,13 +221,17 @@ diagnostic instead of silently choosing a candidate.
 
 Mapper acceptance pages are served from the repo root. The current fixtures are
 `http://127.0.0.1:8765/BRunner_Host/mapper_test.html` and
-`http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html`. They exercise
-duplicate Save buttons, Component ID drift, static controls, controlled dynamic
-drift, mutation-heavy safe decline, infinite-scroll boundaries, open Shadow DOM
-controls, and visible counters/logs. The manual test should map each section,
-mutate the page, verify honest unresolved/deferred outcomes, and later, after
-the Inspector exists, switch through Tree/Graph views and verify live
-page highlighting from selected map elements.
+`http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html`. The platform
+profile fixture is
+`http://127.0.0.1:8765/BRunner_Host/mapper_platform_profiles_test.html`.
+Together they exercise duplicate Save buttons, Component ID drift, static
+controls, controlled dynamic drift, mutation-heavy safe decline, infinite-scroll
+boundaries, open Shadow DOM controls, chat-thread shells, message composers,
+social feed cards, repeated action bars, virtualized loaded windows, and
+visible counters/logs. The manual test should map each section, mutate the
+page, verify honest unresolved/deferred outcomes, and later, after the
+Inspector exists, switch through Tree/Graph views and verify live page
+highlighting from selected map elements.
 The source manual checklist is in
 [`MAPPER_MANUAL_ACCEPTANCE.md`](MAPPER_MANUAL_ACCEPTANCE.md).
 
@@ -241,8 +245,10 @@ Ambiguous components go to a Review Queue. The Inspector must not offer a
 "choose first candidate" action. A reviewer can explicitly link a historical
 component to a selected candidate, and that decision is recorded in the next map
 version. Review acceptance and live-candidate linking create a fresh review map
-version so the previous map remains inspectable. Remaining Inspector work is
-manual stress-page polish.
+version so the previous map remains inspectable. The Inspector also explains
+bounded dynamic regions, platform and frame scope, and uses a selectable Graph
+hierarchy list at phone widths. Remaining Inspector work is live extension
+acceptance from `MAPPER_MANUAL_ACCEPTANCE.md`.
 
 ## Companion capability states
 

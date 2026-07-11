@@ -398,7 +398,9 @@ async function mapCurrentPageForInspector(request = {}, sender = null) {
   const pageSnapshot = {
     url: snapshot.tab.url || snapshot.page.url || "",
     title: snapshot.tab.title || snapshot.page.title || "",
+    platformProfile: snapshot.page.platformProfile || null,
     materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
+    frameSummary: snapshot.page.frameSummary || null,
   };
   const settings = {
     ...createDefaultMapperSettings(),
@@ -485,7 +487,9 @@ async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
     page: {
       url: snapshot.tab.url || snapshot.page.url || "",
       title: snapshot.tab.title || snapshot.page.title || "",
+      platformProfile: snapshot.page.platformProfile || null,
       materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
+      frameSummary: snapshot.page.frameSummary || null,
     },
     componentFacts: snapshot.mapperFacts,
     settings,
@@ -549,27 +553,72 @@ async function getInspectorLiveMapperSnapshot(request = {}, sender = null) {
     throw new Error("No website tab found. Open the page you want to map, then try again.");
   }
 
-  let controlsResponse;
+  let frameSnapshots;
   try {
-    controlsResponse = await sendInspectorMapperMessage(tab, {
-      type: "GET_CONTROLS_TREE",
-      snapshotMode: request.snapshotMode || "",
-    });
+    frameSnapshots = await getInspectorMapperFrameSnapshots(
+      tab,
+      request.snapshotMode || "",
+    );
   } catch (error) {
     throw new Error(`Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`);
   }
 
-  if (controlsResponse?.ok === false) {
-    throw new Error(controlsResponse.error || "Mapper content scan failed.");
-  }
+  const topSnapshot = frameSnapshots.find((snapshot) => snapshot.frameId === 0) || frameSnapshots[0];
+  if (!topSnapshot) throw new Error("Mapper content scan returned no accessible frame snapshots.");
+  const accessible = frameSnapshots.filter((snapshot) => snapshot.frameScope?.access !== "cross_origin");
 
   return {
     tab,
-    page: controlsResponse?.page || {},
-    mapperFacts: (controlsResponse?.controls || [])
-      .map((control) => control.mapperFact)
-      .filter(Boolean),
+    page: {
+      ...(topSnapshot.page || {}),
+      platformProfile: accessible
+        .map((snapshot) => snapshot.page?.platformProfile)
+        .filter(Boolean)
+        .sort((a, b) => Number(b.confidence) - Number(a.confidence))[0] || null,
+      materialMutationCount: accessible.reduce((sum, snapshot) => {
+        return sum + (Number(snapshot.page?.materialMutationCount) || 0);
+      }, 0),
+      frameSummary: {
+        sameOriginFrames: accessible.filter((snapshot) => snapshot.frameScope?.access === "same_origin").length,
+        crossOriginFrames: frameSnapshots.filter((snapshot) => snapshot.frameScope?.access === "cross_origin").length,
+      },
+    },
+    mapperFacts: accessible.flatMap((snapshot) => {
+      return (snapshot.controls || []).map((control) => control.mapperFact).filter(Boolean);
+    }),
   };
+}
+
+async function getInspectorMapperFrameSnapshots(tab = {}, snapshotMode = "") {
+  const collect = async () => {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      func: (mode) => {
+        const mapper = window.__BRUNNER_MAPPER__;
+        if (!mapper) return null;
+        return {
+          controls: mapper.scanDom(),
+          page: mapper.getMapperPageSnapshot({
+            settledCurrentDom: mode === "settled_current_dom",
+          }),
+          frameScope: mapper.getMapperFrameScope(),
+        };
+      },
+      args: [snapshotMode],
+    });
+    return results
+      .filter((result) => result.result)
+      .map((result) => ({
+        frameId: result.frameId,
+        ...result.result,
+      }));
+  };
+
+  let snapshots = await collect();
+  if (snapshots.length) return snapshots;
+  await injectMapperContentScripts(tab.id);
+  snapshots = await collect();
+  return snapshots;
 }
 
 async function highlightMapperComponentForInspector(request = {}, sender = null) {
@@ -597,20 +646,46 @@ async function highlightMapperComponentForInspector(request = {}, sender = null)
 }
 
 async function sendInspectorMapperMessage(tab = {}, payload = {}) {
+  const frameId = await resolveMapperFrameId(tab.id, payload.component);
   try {
-    return await chrome.tabs.sendMessage(tab.id, payload);
+    return await chrome.tabs.sendMessage(tab.id, payload, { frameId });
   } catch (error) {
     if (!isMissingContentScriptError(error)) throw error;
   }
 
   await injectMapperContentScripts(tab.id);
-  return await chrome.tabs.sendMessage(tab.id, payload);
+  return await chrome.tabs.sendMessage(tab.id, payload, { frameId });
+}
+
+async function resolveMapperFrameId(tabId, component = null) {
+  const scope = component?.fingerprint?.structural?.frameScope || {};
+  const expectedPath = String(scope.path || "top");
+  if (!component || expectedPath === "top") return 0;
+  if (scope.access === "cross_origin") {
+    throw new Error("Cross-origin frame components are protected and cannot be inspected or executed.");
+  }
+
+  const findFrame = async () => {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => window.__BRUNNER_MAPPER__?.getMapperFrameScope?.() || null,
+    });
+    return results.find((result) => result.result?.path === expectedPath)?.frameId;
+  };
+
+  let frameId = await findFrame();
+  if (Number.isInteger(frameId)) return frameId;
+  await injectMapperContentScripts(tabId);
+  frameId = await findFrame();
+  if (Number.isInteger(frameId)) return frameId;
+  throw new Error(`Mapped same-origin frame is no longer available: ${expectedPath}`);
 }
 
 async function injectMapperContentScripts(tabId) {
   await chrome.scripting.executeScript({
     target: {
       tabId,
+      allFrames: true,
     },
     files: [
       "content/targetResolver.js",
@@ -2413,13 +2488,23 @@ async function executeContentStep(tab, step, runId = "") {
 
   try {
     const executableStep = await mapperCoordinator.attachExecutionContext(step);
+    const frameId = await resolveMapperFrameId(
+      tab.id,
+      executableStep.mapperContext?.component,
+    );
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: Messages.ExecuteStep,
       step: executableStep,
       runId,
-    });
+    }, { frameId });
 
     if (response?.ok === false) {
+      await recordMapperResolutionOutcome(
+        executableStep,
+        response.diagnostics?.targetResolution?.mapperResolution ||
+          response.mapperResolution ||
+          null,
+      );
       const executionError = new Error(
         response.error || "Content step failed.",
       );
@@ -2427,6 +2512,7 @@ async function executeContentStep(tab, step, runId = "") {
       throw executionError;
     }
 
+    await recordMapperResolutionOutcome(executableStep, response?.mapperResolution || null);
     return response || { ok: true };
   } catch (error) {
     console.warn("[BRunner] Content step failed:", error);
@@ -2441,6 +2527,15 @@ async function executeContentStep(tab, step, runId = "") {
       finalReason: "content_script_transport_failed",
     };
     throw wrappedError;
+  }
+}
+
+async function recordMapperResolutionOutcome(step = {}, outcome = null) {
+  if (!outcome || !step?.componentRef) return;
+  try {
+    await mapperCoordinator.recordResolverOutcome(step, outcome);
+  } catch (error) {
+    console.warn("[BRunner] Mapper reliability outcome was not persisted:", error);
   }
 }
 
@@ -2476,6 +2571,17 @@ async function executeContentStepWithVisibleHostFallback(tab, step, runId = "") 
 
 async function executeVisibleHostFallback(tab, step, runId, browserError) {
   const action = step?.action || step?.type || "unknown";
+  const executableStep = await mapperCoordinator.attachExecutionContext(step);
+  const frameScope = executableStep.mapperContext?.component?.fingerprint?.structural?.frameScope || {};
+  if (frameScope.path && frameScope.path !== "top") {
+    const error = new Error("Visible host fallback is not available for nested frame coordinates.");
+    error.diagnostics = {
+      action,
+      finalReason: "frame_host_fallback_unsupported",
+      framePath: frameScope.path,
+    };
+    throw error;
+  }
   throwIfRunCancelled(runId);
 
   const prepared = await sendContentRequest(tab, {

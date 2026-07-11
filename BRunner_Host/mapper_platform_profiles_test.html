@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BRunner Mapper Platform Profile Harness</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+      background: #eef3f8;
+      color: #172033;
+    }
+    body { margin: 0; }
+    header, main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+    header { border-bottom: 1px solid #d7deea; background: #fff; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    section { margin: 18px 0; padding: 16px; border: 1px solid #d7deea; border-radius: 8px; background: #fff; }
+    button, input, textarea {
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid #b9c5d8;
+      border-radius: 5px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+    }
+    button { cursor: pointer; font-weight: 700; }
+    button:hover { border-color: #2563eb; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .app-shell { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); min-height: 520px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .rail { border-right: 1px solid #cbd5e1; background: #fff; }
+    .rail h3, .pane h3 { margin: 0; padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 16px; }
+    .thread-row, .profile-tab { width: 100%; display: grid; gap: 4px; padding: 10px 12px; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; text-align: left; background: transparent; }
+    .thread-row.active, .profile-tab.active { background: #e0f2fe; }
+    .unread-badge, .ephemeral-badge { display: inline-flex; justify-content: center; min-width: 22px; padding: 2px 6px; border-radius: 999px; background: #16a34a; color: #fff; font-size: 12px; }
+    .pane { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+    .message-window, .feed-window { min-height: 0; overflow: auto; padding: 12px; }
+    .message-row, .feed-card { margin: 10px 0; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+    .message-row { max-width: 72%; }
+    .message-row.outgoing { margin-left: auto; background: #dcfce7; }
+    .message-actions, .card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .composer, .comment-composer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 12px; border-top: 1px solid #cbd5e1; background: #fff; }
+    .composer textarea, .comment-composer textarea { resize: vertical; min-height: 38px; }
+    .social-shell { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); min-height: 560px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .card-header { display: flex; justify-content: space-between; gap: 12px; }
+    .dynamic-note { color: #64748b; font-size: 12px; }
+    #platform-event-log { min-height: 120px; max-height: 240px; overflow: auto; white-space: pre-wrap; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #0f172a; color: #dbeafe; font-family: Consolas, monospace; font-size: 12px; }
+    @media (max-width: 760px) {
+      .app-shell, .social-shell { grid-template-columns: 1fr; }
+      .rail { border-right: 0; border-bottom: 1px solid #cbd5e1; }
+      .message-row { max-width: 100%; }
+      .composer, .comment-composer { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BRunner Mapper Platform Profile Harness</h1>
+    <p>Use this page to test future chat/social mapper profiles before trying live WhatsApp, Facebook, Instagram, or Reddit pages.</p>
+  </header>
+  <main>
+    <section id="chat-profile" data-platform-profile="chat" data-testid="chat-profile" aria-label="Chat app profile fixture">
+      <h2>Chat App Fixture</h2>
+      <div class="toolbar">
+        <button id="swap-active-thread" type="button">Swap Active Thread</button>
+        <button id="load-older-messages" type="button">Load Older Messages</button>
+        <button id="tick-chat-ephemeral" type="button">Tick Chat Ephemeral Data</button>
+      </div>
+      <div class="app-shell" data-testid="chat-app-shell" aria-label="Chat application shell">
+        <aside class="rail" data-testid="conversation-list" aria-label="Conversation list">
+          <h3>Conversations</h3>
+          <button class="thread-row active" data-thread-id="alpha" data-testid="thread-alpha" type="button">
+            <strong>Project Alpha</strong>
+            <span>Reusable row shell <span class="unread-badge" data-testid="thread-alpha-unread">2</span></span>
+          </button>
+          <button class="thread-row" data-thread-id="beta" data-testid="thread-beta" type="button">
+            <strong>Project Beta</strong>
+            <span>Same controls, different thread <span class="unread-badge" data-testid="thread-beta-unread">0</span></span>
+          </button>
+        </aside>
+        <article class="pane" data-testid="active-thread-region" aria-label="Active conversation thread" data-active-thread="alpha">
+          <h3 id="active-thread-title">Project Alpha</h3>
+          <div id="message-window" class="message-window" data-testid="message-loaded-window" aria-label="Loaded message window"></div>
+          <form class="composer" data-testid="message-composer" aria-label="Message composer">
+            <button id="chat-attach" data-testid="chat-attach" type="button">Attach</button>
+            <textarea id="chat-message" data-testid="chat-message-input" placeholder="Message active thread"></textarea>
+            <button id="chat-send" data-testid="chat-send" type="button">Send</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section id="social-profile" data-platform-profile="social" data-testid="social-profile" aria-label="Social media app profile fixture">
+      <h2>Social Feed Fixture</h2>
+      <div class="toolbar">
+        <button id="append-feed-window" type="button">Append Feed Window</button>
+        <button id="tick-social-ephemeral" type="button">Tick Social Ephemeral Data</button>
+      </div>
+      <div class="social-shell" data-testid="social-app-shell" aria-label="Social application shell">
+        <nav class="rail" data-testid="profile-tabs" aria-label="Profile and feed tabs">
+          <h3>Tabs</h3>
+          <button class="profile-tab active" data-testid="tab-home" type="button">Home feed</button>
+          <button class="profile-tab" data-testid="tab-profile" type="button">Profile</button>
+          <button class="profile-tab" data-testid="tab-notifications" type="button">Notifications <span class="ephemeral-badge" data-testid="notification-badge">3</span></button>
+        </nav>
+        <article class="pane" data-testid="home-feed-region" aria-label="Home feed region">
+          <h3>Home Feed Loaded Window</h3>
+          <div id="feed-window" class="feed-window" data-testid="social-loaded-window" aria-label="Loaded social feed cards"></div>
+          <form class="comment-composer" data-testid="global-comment-composer" aria-label="Global comment composer">
+            <button id="social-media" data-testid="social-media" type="button">Media</button>
+            <textarea id="social-comment" data-testid="social-comment-input" placeholder="Write a comment"></textarea>
+            <button id="social-post" data-testid="social-post" type="button">Post</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section id="platform-results" aria-label="Platform profile results">
+      <h2>Results</h2>
+      <div class="toolbar">
+        <button id="clear-platform-log" type="button">Clear Log</button>
+        <span>Platform actions <strong id="platform-action-count">0</strong></span>
+      </div>
+      <pre id="platform-event-log" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script>
+    const platformState = {
+      actionCount: 0,
+      activeThread: "alpha",
+      chatTick: 0,
+      socialTick: 0,
+      loadedMessageStart: 1,
+      loadedMessageCount: 5,
+      loadedPostCount: 0,
+    };
+
+    const messagesByThread = {
+      alpha: ["Kickoff notes", "Design review", "Release checklist", "Mapper profile", "Thread scoped send"],
+      beta: ["Account setup", "Regression notes", "Fixture coverage", "Unread marker", "Thread scoped attach"],
+    };
+
+    const logPlatform = (message) => {
+      const entry = `[${new Date().toISOString()}] ${message}`;
+      const target = document.querySelector("#platform-event-log");
+      target.textContent = `${entry}\n${target.textContent}`.slice(0, 6000);
+    };
+
+    const setText = (selector, value) => {
+      document.querySelector(selector).textContent = String(value);
+    };
+
+    const recordPlatformAction = (label, event) => {
+      platformState.actionCount += 1;
+      setText("#platform-action-count", platformState.actionCount);
+      logPlatform(`${label} trusted=${Boolean(event && event.isTrusted)}`);
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target.closest("button");
+      if (!target || target.id === "clear-platform-log") return;
+      recordPlatformAction(target.dataset.testid || target.id || target.textContent.trim(), event);
+    });
+
+    function renderMessages() {
+      const windowEl = document.querySelector("#message-window");
+      const rows = messagesByThread[platformState.activeThread] || [];
+      windowEl.innerHTML = "";
+      rows.slice(platformState.loadedMessageStart - 1, platformState.loadedMessageStart - 1 + platformState.loadedMessageCount)
+        .forEach((text, index) => {
+          const messageNumber = platformState.loadedMessageStart + index;
+          const row = document.createElement("article");
+          row.className = `message-row ${index % 2 ? "outgoing" : "incoming"}`;
+          row.dataset.testid = `message-${platformState.activeThread}-${messageNumber}`;
+          row.dataset.threadId = platformState.activeThread;
+          row.innerHTML = `
+            <strong>Message ${messageNumber}</strong>
+            <p>${text}</p>
+            <span class="dynamic-note" data-testid="message-${platformState.activeThread}-${messageNumber}-timestamp">just now ${platformState.chatTick}</span>
+            <div class="message-actions" aria-label="Message actions">
+              <button type="button" data-testid="message-${platformState.activeThread}-${messageNumber}-reply">Reply</button>
+              <button type="button" data-testid="message-${platformState.activeThread}-${messageNumber}-react">React</button>
+            </div>
+          `;
+          windowEl.append(row);
+        });
+    }
+
+    function setActiveThread(threadId) {
+      platformState.activeThread = threadId;
+      platformState.loadedMessageStart = 1;
+      document.querySelector("[data-testid='active-thread-region']").dataset.activeThread = threadId;
+      setText("#active-thread-title", threadId === "alpha" ? "Project Alpha" : "Project Beta");
+      document.querySelectorAll(".thread-row").forEach((row) => {
+        row.classList.toggle("active", row.dataset.threadId === threadId);
+      });
+      renderMessages();
+      logPlatform(`active thread=${threadId}`);
+    }
+
+    function appendFeedCards(count = 3) {
+      const feed = document.querySelector("#feed-window");
+      for (let index = 0; index < count; index += 1) {
+        platformState.loadedPostCount += 1;
+        const postId = platformState.loadedPostCount;
+        const card = document.createElement("article");
+        card.className = "feed-card";
+        card.dataset.testid = `social-card-${postId}`;
+        card.dataset.loadedWindowIndex = String(postId);
+        card.innerHTML = `
+          <div class="card-header">
+            <strong>Post card ${postId}</strong>
+            <span class="dynamic-note" data-testid="social-card-${postId}-timestamp">${platformState.socialTick} min ago</span>
+          </div>
+          <p>Repeated social card body ${postId}. Action bars must remain scoped to this card.</p>
+          <div class="card-actions" aria-label="Post card ${postId} actions">
+            <button type="button" data-testid="social-card-${postId}-like">Like</button>
+            <button type="button" data-testid="social-card-${postId}-comment">Comment</button>
+            <button type="button" data-testid="social-card-${postId}-share">Share</button>
+          </div>
+        `;
+        feed.append(card);
+      }
+      logPlatform(`social feed loaded window=${platformState.loadedPostCount}`);
+    }
+
+    document.querySelectorAll(".thread-row").forEach((row) => {
+      row.addEventListener("click", () => setActiveThread(row.dataset.threadId));
+    });
+
+    document.querySelector("#swap-active-thread").addEventListener("click", () => {
+      setActiveThread(platformState.activeThread === "alpha" ? "beta" : "alpha");
+    });
+
+    document.querySelector("#load-older-messages").addEventListener("click", () => {
+      platformState.loadedMessageStart = Math.max(1, platformState.loadedMessageStart - 1);
+      platformState.loadedMessageCount += 1;
+      renderMessages();
+      logPlatform(`message loaded window count=${platformState.loadedMessageCount}`);
+    });
+
+    document.querySelector("#tick-chat-ephemeral").addEventListener("click", () => {
+      platformState.chatTick += 1;
+      setText("[data-testid='thread-alpha-unread']", 2 + platformState.chatTick);
+      renderMessages();
+      logPlatform(`chat ephemeral tick=${platformState.chatTick}`);
+    });
+
+    document.querySelector("#append-feed-window").addEventListener("click", () => appendFeedCards(3));
+
+    document.querySelector("#tick-social-ephemeral").addEventListener("click", () => {
+      platformState.socialTick += 1;
+      setText("[data-testid='notification-badge']", 3 + platformState.socialTick);
+      document.querySelectorAll("[data-testid$='-timestamp']").forEach((node) => {
+        node.textContent = `${platformState.socialTick} min ago`;
+      });
+      logPlatform(`social ephemeral tick=${platformState.socialTick}`);
+    });
+
+    document.querySelector("#clear-platform-log").addEventListener("click", () => {
+      document.querySelector("#platform-event-log").textContent = "";
+    });
+
+    setActiveThread("alpha");
+    appendFeedCards(4);
+  </script>
+</body>
+</html>

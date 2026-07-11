@@ -162,6 +162,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(background, /NativeBridge\.hostVisualMatch/);
   assert.match(background, /capturePreparedComponentImage/);
   assert.match(background, /mapperCoordinator\.attachExecutionContext/);
+  assert.match(background, /frame_host_fallback_unsupported/);
   assert.match(background, /if \(isMapperUnresolvedError\(error\)\)/);
   assert.match(background, /Messages\.PrepareHostFallback/);
   assert.match(background, /Messages\.VerifyHostFallback/);
@@ -298,10 +299,10 @@ test("mapper acceptance page covers tracking and ambiguity fixtures", async () =
 });
 
 test("mapper stress page covers static dynamic infinite and shadow fixtures", async () => {
-  const stressHarness = await readFile(
-    new URL("BRunner_Host/mapper_stress_test.html", root),
-    "utf8",
-  );
+  const [stressHarness, frameHarness] = await Promise.all([
+    readFile(new URL("BRunner_Host/mapper_stress_test.html", root), "utf8"),
+    readFile(new URL("BRunner_Host/mapper_frame_child.html", root), "utf8"),
+  ]);
 
   assert.match(stressHarness, /BRunner Mapper Stress Harness/);
   assert.match(stressHarness, /data-testid="static-section"/);
@@ -312,4 +313,32 @@ test("mapper stress page covers static dynamic infinite and shadow fixtures", as
   assert.match(stressHarness, /attachShadow\(\{ mode: "open" \}\)/);
   assert.match(stressHarness, /materialMutationCount/);
   assert.match(stressHarness, /appendFeedItems/);
+  assert.match(stressHarness, /data-testid="mapper-same-origin-frame"/);
+  assert.match(stressHarness, /mapper_frame_child\.html/);
+  assert.match(frameHarness, /data-testid="frame-save"/);
+  assert.match(frameHarness, /Same-origin frame form/);
+});
+
+test("mapper platform profile page covers chat and social fixtures", async () => {
+  const platformHarness = await readFile(
+    new URL("BRunner_Host/mapper_platform_profiles_test.html", root),
+    "utf8",
+  );
+
+  assert.match(platformHarness, /BRunner Mapper Platform Profile Harness/);
+  assert.match(platformHarness, /data-platform-profile="chat"/);
+  assert.match(platformHarness, /data-testid="conversation-list"/);
+  assert.match(platformHarness, /data-testid="active-thread-region"/);
+  assert.match(platformHarness, /data-testid="message-composer"/);
+  assert.match(platformHarness, /data-testid="message-loaded-window"/);
+  assert.match(platformHarness, /Swap Active Thread/);
+  assert.match(platformHarness, /Load Older Messages/);
+  assert.match(platformHarness, /tick-chat-ephemeral/);
+  assert.match(platformHarness, /data-platform-profile="social"/);
+  assert.match(platformHarness, /data-testid="home-feed-region"/);
+  assert.match(platformHarness, /data-testid="social-loaded-window"/);
+  assert.match(platformHarness, /data-testid="global-comment-composer"/);
+  assert.match(platformHarness, /Append Feed Window/);
+  assert.match(platformHarness, /tick-social-ephemeral/);
+  assert.match(platformHarness, /loadedWindowIndex/);
 });

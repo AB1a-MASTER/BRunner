@@ -593,17 +593,173 @@ Completed companion foundation slices:
     and prevents explicitly accepted records from remaining in the Review Queue.
 62. Added a compact Mapper Inspector app-UI pass: common controls now use
     icon/tooltip affordances, Tree/Graph expose a map color legend, saved site
-    rows have direct delete-site actions, the selected toolbar can delete an
-    entire saved site as well as one version, checkbox alignment and contrast
-    were tightened, and responsive rules now wrap the header, Page/Version
-    controls, filters, Tree, Graph, and side rails below full desktop width.
+    rows have direct delete-site actions, the selected toolbar can delete the
+    selected page next to the Page selector and one version next to the Version
+    selector, checkbox alignment and contrast were tightened, and responsive
+    rules now wrap the header, Page/Version controls, filters, Tree, Graph, and
+    side rails below full desktop width.
+63. Started autonomous mapper reconciliation: strong unique component drift is
+    accepted automatically with decision score/margin metadata; weak or close
+    historical matches are represented as new live components plus bounded
+    removed tombstones, so routine drift no longer creates manual review work.
+    Runtime duplicate/close-candidate resolution remains strict and dispatches
+    no action.
+64. Added deterministic semantic field-matching foundation for future
+    `form.fill_from_data`: common field aliases, labels, accessible names,
+    placeholders, titles, metadata descriptions, type compatibility, password
+    guards, one-to-one assignment, winner margins, and ambiguity diagnostics.
+    Added the complete node contract to
+    `workflow_nodes_implementation_blueprint.md` section E10 and
+    `docs/specs/09_SEMANTIC_FORM_FILL.md`. Runtime, registry, and Studio work is
+    explicitly deferred to Milestone 3.4 Phase 3.
+65. Added repeated-capture confirmation and count-only reliability metrics for
+    autonomous mapper reconciliation. Strong unique historical rebinds keep the
+    locked Component ID, start with pending identity confirmation, and confirm
+    after the next settled capture with the same live UID. Page maps now expose
+    `mapper.reliability.v1` counts/rates for automatic strong matches,
+    uncertain-as-new outcomes, Component ID survival, review-required count, and
+    pending/confirmed rebinds without copying raw visible text or raw locator
+    values into the metrics payload.
+66. Fed runtime mapper resolver outcomes back into saved page maps. Content
+    execution now returns redacted `mapper.runtime_resolution.v1` outcomes for
+    mapper-resolved successes and failures; background persists them through
+    `mapperCoordinator.recordResolverOutcome`. Saved maps now keep bounded
+    redacted resolver attempts plus runtime counters for fallback recovery,
+    ambiguous, not-found, incorrect-action, attempt count, and last attempt.
+67. Surfaced saved mapper reliability data in the Mapper Inspector. The Policy
+    panel now shows compact page-level reliability chips, and the Component
+    panel shows reconciliation decision/confirmation plus the last saved
+    redacted runtime attempts for that component. The UI uses only counts,
+    scores, evidence labels, timestamps, and locator strategies, not raw
+    selector/text payloads.
+68. Reduced Inspector hover/click highlight fighting. Hover previews now skip
+    the already-selected row, cancel pending selected-highlight restore when a
+    new hover starts, and debounce selected-highlight restoration after hover
+    leaves. Source tests guard the timer and restore behavior; live visual
+    acceptance is still needed in the extension window.
+69. Reduced Tree/Graph switching artifacts. The Inspector now clears transient
+    graph panning state before view switches and selected-map rerenders, so
+    drag/pan classes and state should not survive into a different view or a
+    rebuilt graph. Source tests guard the reset helper; live visual acceptance
+    is still needed.
+70. Strengthened Mapper Inspector component search. Search now supports exact
+    phrase or all-term matching across visible semantic text, structural labels,
+    locator data, reconciliation/confirmation metadata, Component IDs, hidden
+    state, status, and capabilities. This should make partial visible text
+    searches such as feed item text work across Tree, Graph, and Review Queue.
+71. Tightened Mapper Inspector responsive control wrapping. The map title,
+    subtitle, live-status badge, page/version selectors, and component filter
+    summary now shrink or wrap cleanly at mid-size and narrow widths, with a
+    source test guarding against toolbar clipping regressions.
+72. Added the platform-specific mapper profile track to docs. Chat/social apps
+    such as WhatsApp Web, Facebook, Instagram, and Reddit must not be treated as
+    generic static pages when grouping/tracking evidence is poor; virtualized
+    feeds, repeated cards, conversation/thread regions, composers, action bars,
+    unread badges, and ephemeral dynamic content need profile-specific rules or
+    conservative unresolved/dynamic-deferred outcomes.
+73. Started the Mapper Inspector small-screen app-layout track. Added a mobile
+    viewport, documented the small-screen plan in
+    `docs/specs/10_MAPPER_INSPECTOR_SMALL_SCREEN.md`, and changed collapsed
+    Websites/Details panels to horizontal disclosure bars below the stacked
+    breakpoint instead of clipped vertical rail labels.
+74. Continued small-screen Inspector implementation. Mobile CSS now gives major
+    panels `min-width: 0`, wraps saved-site/component labels, keeps detail
+    cards and badges from overflowing, and rearranges Graph controls/legend into
+    stacked mobile rows. Source tests guard these responsive app-layout rules.
+75. Added `docs/specs/11_MAPPER_PLATFORM_APP_PROFILES.md` for WhatsApp/chat and
+    social-media mapper profiles. It defines chat/thread/composer/message
+    regions, social feed/card/action-bar regions, virtualized loaded-window
+    limits, ephemeral dynamic content handling, Inspector disclosure needs, and
+    fixture/live acceptance gates before support is claimed.
+76. Added the local platform-profile mapper fixture
+    `BRunner_Host/mapper_platform_profiles_test.html`. It simulates a
+    WhatsApp-like chat shell with conversation list, active thread, loaded
+    message window, composer, thread swaps, older-message loading, and
+    ephemeral unread/timestamp changes; it also simulates a social feed with
+    tabs, loaded feed cards, scoped action bars, a comment composer, feed-window
+    appends, and dynamic counters/timestamps. Source tests and docs now include
+    the fixture.
+77. Started platform-profile source metadata. Content mapper snapshots now emit
+    redacted `mapper.platform_profile.v1` hints for chat/social pages using
+    structural signals and loaded-window counts only. Background forwards the
+    hint into `buildStaticPageMap`, Mapper Core sanitizes and stores it on the
+    page map, and the Inspector shows the detected family/confidence in the map
+    subtitle plus a compact Policy-panel summary. This is diagnostic metadata
+    only; profile-specific grouping/resolution remains a future slice.
+78. Added component-level platform scope facts. Content component facts now emit
+    redacted `mapper.platform_scope.v1` structural evidence for chat regions
+    such as conversation list, active thread, message row, and composer, and
+    social regions such as profile tabs, feed card, loaded feed window, and
+    comment composer. Mapper Core sanitizes the scope and uses family/region
+    plus thread/container tokens as structural identity context, improving
+    readable Component IDs and Tree Structure grouping for repeated chat/social
+    controls without storing raw chat/post text. Full profile-specific resolver
+    behavior is still not implemented.
+79. Surfaced platform scope in Mapper Inspector grouping. Structure mode now
+    prefers `mapper.platform_scope.v1` paths for chat/social components before
+    falling back to DOM paths, and Regions mode labels groups with
+    family/region/thread/container scope. This makes the platform fixture easier
+    to inspect while preserving generic behavior for ordinary pages.
+80. Added selected-component platform scope diagnostics. The Mapper Inspector
+    Component panel now shows a compact Platform Scope block for non-generic
+    scoped components, including sanitized family, region, durability,
+    thread/container token, repeated kind, and loaded-window index. Generic
+    components keep the existing compact detail layout, and no page content is
+    exposed by this diagnostic block.
+81. Added conservative platform-scope identity boundaries. Static
+    reconciliation and both pure/live mapper resolution now reject scoped
+    candidates from another platform family, region, thread, container, or
+    repeated-kind boundary before locator/fingerprint scoring. Contradictions
+    become new/not-found rather than cross-thread/card rebinds, including when
+    a Component UID is incorrectly reused. Loaded-window index remains
+    diagnostic so virtualized-window shifts do not break the same scoped target.
+82. Completed open-shadow path persistence and observation. Component facts now
+    carry bounded composed shadow boundary paths, runtime DOM paths include open
+    shadow transitions, and the mapper observes discovered open roots so nested
+    mutations trigger rescans.
+83. Added bounded region dynamics and `hybrid_dynamic` maps. Mutation-heavy
+    pages with identifiable dynamic/loaded-window regions retain current
+    components instead of collapsing to an empty unsupported map; unbounded or
+    over-cap pages still use `dynamic_deferred`.
+84. Excluded ephemeral chat/social descendants from durable identity text.
+    Unread badges and timestamps remain explicit dynamic context records while
+    conversation rows gain thread scope and stable controls avoid identity churn.
+85. Added a phone Graph hierarchy fallback and Region Dynamics diagnostics.
+    Phone widths use a compact selectable region/component list; larger widths
+    retain the graph canvas. Dynamic context is searchable and visibly labeled.
+86. Added known-host chat/social inference and conservative inferred scopes for
+    WhatsApp, Messenger, Telegram, Slack, Discord, Facebook, Instagram, and
+    Reddit. Repeated rows/cards lacking a durable hashed container are protected
+    unsupported instead of receiving unsafe generic actions.
+87. Implemented global/site/page mapper mode overrides. Manual-map-only mode now
+    prevents recording from creating or mutating page maps until the page is
+    explicitly mapped; Inspector Policy exposes all override levels.
+88. Added same-origin frame support. Content scripts run in all frames,
+    components store stable frame paths, Inspector mapping aggregates accessible
+    frames, and highlight/execution rediscover current frame IDs by path.
+    Cross-origin frames remain protected unsupported. The stress harness now
+    includes an interactive same-origin frame fixture.
+89. Added `docs/MAPPER_TODO_STATUS.md` as the consolidated mapper checklist,
+    separating completed source work, live extension acceptance, product
+    decisions, and intentional security limits.
+90. Added generic repeated-feed scope. Stable card/row keys are stored as
+    redacted pinned item tokens and remain valid across loaded-window index
+    shifts. Unkeyed repeated patterns are retained for inspection but actions
+    return `repeat_condition_required` until an explicit condition identifies
+    the intended item. Inspector Structure/Regions and Component details expose
+    the Repeat Scope and loaded-only policy.
+91. Hardened frame page/routing edges. Same-origin frame recordings inherit the
+    top page profile while retaining their frame path, unnamed frame paths use
+    realm-safe structural traversal, and visible-host coordinate fallback is
+    explicitly blocked for nested frames until frame-to-screen translation is
+    supported. Normal browser mapper execution remains frame-routed.
 
 Next isolated implementation slice:
 1. Continue Mapper Inspector manual stress-page testing, especially grouped-site
    page/version selection, dynamic DOM Refresh Map behavior, full rail collapse,
    right-section resizing, compact icon/tooltips, color legend, direct
-   site/version deletion, responsive widths, live highlight behavior, and Review
-   Queue candidate-link flows.
+   site/page/version deletion, responsive widths, live highlight behavior, and
+   Review Queue candidate-link flows.
 2. Decide, after live/manual acceptance, whether to switch mapper persistence
    default from Chrome storage to the filesystem-backed native adapter.
 3. Ask the user before removing old source artifacts. Current cleanup

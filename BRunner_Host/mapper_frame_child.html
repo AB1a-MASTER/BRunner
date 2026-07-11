@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapper Same-Origin Frame</title>
+  <style>
+    body { margin: 0; padding: 14px; background: #f8fafc; color: #172033; font: 14px Arial, sans-serif; }
+    form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    label { grid-column: 1 / -1; font-weight: 700; }
+    input, button { min-height: 34px; padding: 7px 10px; border: 1px solid #94a3b8; border-radius: 5px; background: #fff; font: inherit; }
+    #frame-log { margin-top: 10px; color: #475569; }
+  </style>
+</head>
+<body>
+  <form aria-label="Same-origin frame form" data-testid="frame-form">
+    <label for="frame-name">Frame name</label>
+    <input id="frame-name" data-testid="frame-name" placeholder="Name inside frame">
+    <button id="frame-save" data-testid="frame-save" type="button">Save Frame</button>
+  </form>
+  <div id="frame-log" aria-live="polite">Frame ready</div>
+  <script>
+    document.querySelector("#frame-save").addEventListener("click", (event) => {
+      document.querySelector("#frame-log").textContent =
+        `Frame save trusted=${Boolean(event.isTrusted)} value=${document.querySelector("#frame-name").value}`;
+    });
+  </script>
+</body>
+</html>
