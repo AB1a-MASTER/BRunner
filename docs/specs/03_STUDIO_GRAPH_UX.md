@@ -1,5 +1,14 @@
 # Specification 03 — Studio Graph UX
 
+## Status
+
+Studio-shell foundation reference. React/Vite build, canvas, persistence, and
+generic editor behavior remain relevant, but current node definitions,
+properties, ports, validation rules, and workflow compatibility are
+provisional. The emitted `BRunner/studio-graph/` assets must always match
+`BRunner/studio-graph-src/`. Final node UI is implemented later from
+`../../workflow_nodes_implementation_blueprint.md`.
+
 ## Goal
 
 Replace the hard-coded sequential editor with an n8n-inspired React Flow Studio driven by the canonical node registry.

@@ -2,18 +2,12 @@
 
 ## Status
 
-Approved roadmap scope captured from live UI review on 2026-06-20. This work
-follows the Studio shell refinement and precedes general visual polish.
-
-Forward planning update: the next implementation phase is now the Windows
-companion app transition in
-[07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md). The Data panel,
-approved-directory, host capability, and final node-catalog work in this spec
-should be interpreted through that companion-app architecture. After the
-companion foundation is accepted, implement the mapper reliability transition in
-[08_MAPPER_RELIABILITY_TRANSITION.md](08_MAPPER_RELIABILITY_TRANSITION.md),
-then implement the finalized node set from the root-level
-`workflow_nodes_implementation_blueprint.md`.
+Historical follow-up inventory. It does not define the current implementation
+order or final nodes. Shared infrastructure ideas may be reused where they agree
+with the current roadmap. Node-specific recording, data, control-flow,
+capability, and authoring work belongs to the later node phase and must follow
+`../../workflow_nodes_implementation_blueprint.md`; current node behavior does
+not need compatibility work.
 
 ## Goal
 

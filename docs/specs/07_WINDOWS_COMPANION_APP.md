@@ -2,17 +2,23 @@
 
 ## Status
 
-Active implementation spec for the Windows companion transition. This spec is
-derived from:
+Active implementation spec for the Windows companion transition. A July 2026
+source audit reopened pairing, storage-transition, approved-folder,
+visible-fallback, and packaging claims that were present in source but not
+correct or sufficiently verified. The companion is not source-complete and the
+current ZIP/EXE outputs are development test artifacts, not releases.
+
+This spec is derived from:
 
 - `BRunner_Windows_Companion_Transition_Plan.md`
 - `windows_companion_app_design_notes.docx`
 
 ## Goal
 
-Replace the current localhost browser manager UI with a native Windows
-companion application while preserving the working workflow storage, file
-access, data-source parsing, WebSocket transport, pairing, and execution-log
+Replace the current localhost browser manager UI with a native Windows-local
+companion application for the BRunner Chrome/Chromium extension while
+preserving the useful workflow storage, file access, data-source parsing,
+WebSocket transport, cooperative profile selection, and execution-log
 foundations.
 
 The browser extension remains the workflow runtime, tab/page awareness layer,
@@ -20,10 +26,9 @@ DOM resolver, and browser-native action executor. The companion app provides
 approved local capabilities only:
 
 - workflow repository and metadata;
-- future mapper map persistence through the same approved local-service bridge;
 - configurable workflow storage location;
 - approved directory aliases for file and data nodes;
-- local service status, pairing, and diagnostics;
+- local service status, cooperative profile pairing, and diagnostics;
 - visible foreground mouse and keyboard fallback when a browser-first node
   explicitly allows it.
 
@@ -45,6 +50,7 @@ structured result.
 ## Product Decisions
 
 - Desktop framework: PySide6 is the recommended target.
+- Supported browser family for this transition: Chrome/Chromium on Windows.
 - The browser manager UI on port 8998 is retired from production use.
 - The WebSocket host remains loopback-only and keeps default port 8999.
 - Existing v1 WebSocket commands remain during transition.
@@ -58,9 +64,15 @@ structured result.
 - Every user-visible local write uses shared atomic persistence.
 - Host input is visible foreground fallback only, after browser-first attempt
   and before extension-side verification.
-- Pairing must move away from manual extension-ID entry. The product goal is a
-  clean key/PIN pairing flow so one host trusts one selected extension instance
-  even when several browser profiles or browsers have BRunner installed.
+- Pairing is cooperative one-profile exclusivity, not authentication or a
+  security boundary. Each Chrome/Chromium profile generates a stable,
+  non-secret instance ID. An explicit Pair action stores one ID in the host,
+  Unpair clears it, and the host permits one active paired-extension connection.
+- Deliberate spoofing by malicious local software is out of scope. Pairing exists
+  to prevent accidental cross-profile use, not to protect local capabilities
+  from an adversarial process running as the same Windows user.
+- Code Node design and broader workflow-code security are outside this companion
+  transition.
 
 ## Target Desktop Experience
 
@@ -78,9 +90,10 @@ Required main-window sections:
   add/edit/remove.
 - Host Fallback: enabled state, coordinate confidence threshold, diagnostics
   screenshot setting, supported action status.
-- Pairing: current pairing state, generated key/PIN acceptance, verification,
-  unpair/regenerate controls, paired extension fingerprint where useful, and
-  WebSocket port configuration.
+- Pairing: current paired instance ID, explicit Pair and Unpair controls, live
+  connection state, one-active-connection status, and WebSocket port
+  configuration. The instance ID may be displayed or copied; it is not a
+  credential.
 - Diagnostics: host log view, recent capability requests, logs folder, export
   diagnostics.
 
@@ -129,16 +142,17 @@ changing workflow protocol behavior.
 
 ## Configuration Model
 
-Use a schema-versioned settings file. Preserve the current pairing key,
-temporary paired extension ID where present, host port, and file-access state
-during migration. The extension ID should be treated as an implementation
-detail, not as the long-term user-facing pairing mechanism.
+Use a schema-versioned settings file. The target schema stores one non-secret
+extension-profile instance ID. Transitional pairing keys and browser runtime IDs
+are migration inputs only and must not survive as credentials or trusted
+fingerprints in the accepted model.
 
 ```json
 {
-  "schemaVersion": 2,
-  "pairingKey": "...",
-  "pairedExtensionId": null,
+  "schemaVersion": 3,
+  "pairing": {
+    "pairedInstanceId": null
+  },
   "host": {
     "port": 8999,
     "startWithApp": true
@@ -165,61 +179,56 @@ detail, not as the long-term user-facing pairing mechanism.
 }
 ```
 
-Migration from the current config:
+Migration from the current schema-2 config:
 
 1. Load `brunner_config.json` if present.
-2. Preserve pairing, paired extension ID if present, port, and file-access
-   enabled state.
-3. Convert `local_file_access.allowed_roots` into provisional approved
+2. Preserve the host port, workflow location, approved-directory state, and
+   fallback preferences.
+3. Remove the transitional pairing key and runtime extension ID. Start the new
+   cooperative pairing state as unpaired so the user explicitly selects one
+   Chrome/Chromium profile.
+4. Convert `local_file_access.allowed_roots` into provisional approved
    directory aliases.
-4. Set workflow storage mode to `default`.
-5. Preserve a one-time v1 backup before replacing the older config.
-6. Write the migrated config atomically.
+5. Preserve the existing workflow-storage selection when valid; otherwise use
+   `default`.
+6. Preserve a one-time backup before replacing the older config.
+7. Write the migrated config atomically.
 
-## Pairing UX and Trust Model
+## Pairing UX and Cooperative Profile Model
 
-Pairing exists to bind the local companion host to one intended BRunner
-extension instance. If multiple Chrome/Edge profiles, browser instances, or
-compatible browsers have the extension installed, only the paired instance may
-authenticate and use host capabilities.
+Pairing selects one intended BRunner Chrome/Chromium profile for ordinary local
+use. It is not authentication, a credential exchange, or a security boundary.
+The host and extension are both local, and resistance to deliberate spoofing by
+malicious local software is a non-goal.
 
-Manual extension-ID entry is too fragile for normal users and should be
-replaced by a key/PIN procedure. Initial source implementation uses a copyable
-pairing key; later UX can shorten this into a numeric PIN if desired:
+Target procedure:
 
-1. The extension shows host status and a clear pairing action near that status.
-2. The extension generates a short-lived pairing PIN or key and displays it in
-   the extension UI.
-3. The host Pairing tab accepts the PIN/key, verifies it against the extension
-   over the loopback WebSocket channel, and stores the resulting trust record.
-4. After pairing, host commands require both the host pairing secret and the
-   verified extension trust record. Other installed BRunner extension instances
-   must be refused with a clear "not paired with this host" diagnostic.
-5. The Pairing tab exposes Pair, Verify, Unpair, Regenerate, and Copy controls,
-   plus the active WebSocket port and port-edit validation.
-6. The extension status area shows whether it is paired, unpaired, or rejected
-   by the current host, and shows the current PIN/key only during pairing.
+1. On first use, each extension profile generates a random, stable, non-secret
+   instance ID and stores it in that profile's `chrome.storage.local`.
+2. The extension shows host status, its instance ID where useful for
+   diagnostics, and an explicit Pair action.
+3. Pair records that instance ID in the host after a deliberate user action.
+   The host stores exactly one paired instance ID.
+4. The host accepts one active extension connection whose announced instance ID
+   matches the stored ID. A second profile or second active connection is
+   declined with a clear cooperative-use diagnostic.
+5. Unpair clears the stored ID and closes the active extension connection. The
+   user may then explicitly pair another profile.
+6. The companion reports paired/unpaired plus live connected/disconnected state
+   separately. A stored ID must not be presented as proof of a live connection.
 
-The exact token shape can be a human-entered PIN or a longer copyable key. The
-procedure should prefer the easiest UX that still prevents accidental
-cross-profile/cross-browser host access. Tokens must be short-lived, generated
-fresh for pairing, and never require users to find or paste browser extension
-IDs.
+The ID may be displayed, copied, logged for local diagnostics, or regenerated
+when the user intentionally creates a new profile identity. It must not be
+called a password, key, token, credential, authentication secret, or trusted
+fingerprint.
 
-Initial implementation status:
+Current implementation status:
 
-- Extension stores the host pairing key in `chrome.storage.local` instead of
-  relying on a source-embedded default.
-- Extension commands wait for `AUTH` to succeed before sending workflow or
-  host-capability requests.
-- Sidebar exposes host auth status plus pairing-key Save, Generate, and Copy
-  controls.
-- Companion Pairing tab exposes pairing key, WebSocket port, Save, Generate,
-  Copy, and Unpair controls.
-- On successful auth, the host records the extension runtime ID internally as
-  the trusted extension fingerprint. This ID is no longer a manual user input.
-- A different extension instance with the right port but the wrong trust record
-  is refused with a clear not-paired diagnostic.
+- The source still uses a transitional pairing-key `AUTH` flow and browser
+  runtime ID. That implementation is not accepted and must be replaced.
+- No source-complete claim applies until generated per-profile IDs, explicit
+  Pair/Unpair, one-active-connection enforcement, and live connection reporting
+  have executable contract tests.
 
 ## Atomic Persistence
 
@@ -269,8 +278,10 @@ name, schema version, created/updated timestamps where available, revision,
 tags, and enabled state. A separate index database is not required for the
 first version.
 
-Compatibility requirement: existing filename-based v1/v2 JSON workflows must
-continue to load. New metadata is additive.
+The repository may enumerate and transport provisional v1/v2 JSON during
+foundation development, but that does not create a workflow-schema compatibility
+guarantee. The finalized node phase may rewrite or remove those schemas.
+Migration, if later required, is a separately approved feature.
 
 ## Approved Directory Service
 
@@ -302,8 +313,8 @@ approved canonical path.
 ## Host-Assisted Fallback
 
 Host-assisted input is the final fallback for visible user-style actions on a
-foreground browser window. It does not create DOM access and does not replace
-browser-native automation.
+verified foreground Chrome/Chromium window. It does not create DOM access and
+does not replace browser-native automation.
 
 First implementation action families:
 
@@ -338,9 +349,12 @@ Required flow:
 10. Logs record browser versus companion-host execution method, including
     whether coordinate or visual matching was used.
 
-Refuse host input when the browser window is not foregrounded, monitor mapping
-is stale, confidence is below threshold, secure desktop is active, the session
-is locked, or user presence is required.
+As a correctness rule, refuse host input when the intended Chrome/Chromium
+window cannot be identified as foreground, the coordinate or match is outside
+that window, monitor mapping is stale or unavailable, confidence is below the
+configured threshold, or Windows is not on the interactive unlocked desktop.
+These checks prevent accidental input to the wrong visible target; they are not
+a security guarantee against malicious local software.
 
 Visual-match fallback constraints:
 
@@ -348,17 +362,20 @@ Visual-match fallback constraints:
   screenshots unless explicitly required for matching context.
 - The companion must apply a confidence threshold and refuse ambiguous,
   off-window, off-screen, or multi-match results.
-- The host must not persist component screenshots by default; diagnostics should
-  store only bounded metadata unless the user enables screenshot diagnostics.
+- Current acceptance covers bounded metadata only. Screenshot-diagnostics
+  persistence is deferred; the existing setting must be implemented with clear
+  behavior or removed before source acceptance.
 - Visual matching remains a fallback tier, never a replacement for semantic DOM
   resolution or browser-native execution.
 
 ## Protocol Transition
 
-Keep these v1 commands available while the extension migrates:
+Keep the non-pairing v1 commands available while the extension migrates. The
+current key-based `AUTH` command is transitional and must be removed or
+reinterpreted as non-secret instance announcement before source acceptance:
 
 ```text
-AUTH
+AUTH (legacy transitional pairing-key flow; not accepted target behavior)
 OS_KEYSTROKE
 READ_FILE
 READ_DATA_SOURCE
@@ -372,7 +389,9 @@ UPGRADE_WORKFLOW
 SAVE_EXECUTION_LOG
 ```
 
-Introduce protocol v2 with a structured envelope:
+Introduce protocol v2 with a structured envelope. Before ordinary capability
+requests, the client announces its generated profile instance ID; this is a
+cooperative identity assertion, not authentication:
 
 ```json
 {
@@ -388,6 +407,9 @@ Introduce protocol v2 with a structured envelope:
 
 Capability families:
 
+- `companion.instance`
+- `companion.pair`
+- `companion.unpair`
 - `host.hello`
 - `workflow.*`
 - `directory.*`
@@ -395,6 +417,9 @@ Capability families:
 - `host.window`
 - `host.action`
 - `diagnostics.*`
+
+The host must advertise only capability names it actually routes. Each
+advertised v2 capability requires an executable transport-level contract test.
 
 ## Proposed Code Structure
 
@@ -437,7 +462,8 @@ breaks current extension behavior.
 - Add dependency manifest. **Implemented.**
 - Add tests for current workflow CRUD, config load/save, allowed-file
   resolution, data parsing, execution-log save, and protocol behavior.
-  **Implemented for current host services.**
+  **Unit coverage exists, but live WebSocket, pairing, permission-composition,
+  and visible-window refusal coverage remains open.**
 - Remove or isolate obsolete production-build files such as copied host source.
   **Obsolete copied host source was removed after user approval; defensive
   packaging exclusions remain.**
@@ -451,16 +477,19 @@ Exit: existing operations are testable without launching the UI.
 - Route config, workflow upgrade, normal workflow save, duplicate, rename, and
   logs through atomic I/O. **Implemented.**
 - Introduce settings schema versioning and migration. **Implemented with
-  schema v2 plus legacy compatibility aliases.**
+  schema v2 plus legacy compatibility aliases. Schema 3 cooperative pairing and
+  explicit-empty approved-directory migration remain open.**
 
-Exit: workflow saves are atomic and packaged builds resolve storage next to the
-executable.
+Exit: workflow saves are atomic and source-mode storage resolves through the
+shared application-path helper. Packaged-path acceptance remains deferred to
+Phase 7.
 
 ### Phase 2 - Workflow Repository
 
 - Move all workflow path validation and CRUD into `workflow_repository.py`.
   **Implemented.**
-- Return workflow summaries. **Implemented.**
+- Return workflow summaries. **Implemented in the repository; the WebSocket
+  list handler still returns filenames and must be aligned.**
 - Preserve v1 command compatibility. **Implemented for existing workflow
   commands.**
 - Add import/export foundations if package format is settled.
@@ -471,27 +500,30 @@ Exit: WebSocket handlers no longer write workflow files directly.
 
 - Add PySide6 app entry point and service lifecycle controller. **Implemented.**
 - Implement Status, Workflow Storage, Pairing, and Diagnostics first.
-  **Initial implementation complete; Pairing tab now has key, port, save,
-  regenerate, copy, and unpair controls.**
-- Add tray behavior and clean shutdown. **Implemented with configured autostart,
-  idempotent application shutdown, and Windows process-tree termination for the
-  packaged one-file host.**
-- Remove HTTP manager UI from production packaging. **Packaging targets
-  `app.py`; the old `host_ui.py` transitional artifact has been removed.**
-- Update PyInstaller entry point. **Implemented.**
+  **Shells exist. Pairing is transitional and live connection/version status,
+  Open Logs, Export Diagnostics, and screenshot-diagnostics behavior remain
+  open.**
+- Add tray behavior and clean shutdown. **Basic behavior exists; dynamic status,
+  Open Workflows Folder, and process-tree failure handling remain open.**
+- Remove HTTP manager UI from the desktop source path. **Implemented; release
+  packaging is deferred.**
+- Keep `app.py` as the internal test-artifact entry point. **Implemented.**
 
-Exit: packaged app opens a Windows companion app and can start/stop the
-WebSocket host.
+Exit: the source app opens a Windows companion and accurately starts, stops, and
+reports one managed WebSocket host. **Not yet accepted.**
 
 ### Phase 4 - User-Selectable Workflow Directory
 
 - Add current path, open folder, change location, and use default controls.
-  **Initial implementation complete.**
+  **Controls exist.**
 - Implement use-new, copy, and move migration options. **Implemented in
-  `workflow_location.py`.**
+  `workflow_location.py`, but live-host repository rebinding and failed-config
+  recovery are open.**
 - Verify target-folder write access before applying changes. **Implemented.**
 
-Exit: a user can move the active workflow library without hand-editing JSON.
+Exit: a user can move the active workflow library without hand-editing JSON,
+and the running extension and companion immediately use the same recoverable
+location. **Reopened.**
 
 ### Phase 5 - Approved Directory Registry
 
@@ -499,78 +531,73 @@ Exit: a user can move the active workflow library without hand-editing JSON.
   dedicated Approved Folders UI implemented.**
 - Migrate allowed roots to provisional aliases. **Implemented.**
 - Update file and data-source call paths to use alias plus relative path.
-  **Implemented for read/data-source paths.**
-- Add find/read/write behavior under configured permissions. **Implemented for
-  service behavior; read/local upload acceptance passed manually. Extension
-  workflow actions and `Approved Directory Acceptance` now cover find, write,
-  and export; manual acceptance passed.**
+  **Partially implemented; ordinary local upload still uses a raw path.**
+- Add find/read/write behavior under configured permissions. **Service paths
+  exist, but legacy raw paths can bypass per-alias read/recursive settings and
+  removing the final alias is not preserved. Acceptance is reopened.**
 
-Exit: normal file operations no longer require arbitrary raw filesystem paths.
+Exit: normal file operations use alias plus relative path, and every legacy path
+honors the same alias permission and recursive rules. **Reopened.**
 
 ### Phase 6 - Structured Host Fallback
 
 - Add `host.hello` and v2 capability reporting. **Initial implementation
-  complete; legacy command compatibility preserved.**
-- Add clean pairing/auth flow. **Initial source implementation complete:
-  extension-side key storage, auth gating before host commands, and host-side
-  trusted extension fingerprinting after key verification. Pairing now uses a
-  validated 128-bit key with grouped display; managed hosts restart on key,
-  port, regeneration, or unpair changes so old sessions are revoked. A shorter
-  PIN was intentionally rejected because it would weaken the secret.**
+  present, but the host advertises v2 capability names it does not route.**
+- Add cooperative profile pairing. **Reopened: replace the transitional key and
+  runtime-extension-ID flow with a generated per-profile non-secret instance
+  ID, explicit Pair/Unpair, one active connection, and live connection state.**
 - Implement `host.window` and `host.action`. **Initial service and extension
   bridge foundations implemented.**
-- Add foreground-window validation and coordinate conversion. **Initial
-  foreground title, confidence, screen-bound checks, and viewport-to-screen
-  conversion implemented; visible host fallback acceptance passed manually.**
+- Add foreground-window validation and coordinate conversion. **Partial checks
+  exist; the host can still accept missing window identity or coordinates
+  outside the foreground window, and multi-monitor/session correctness remains
+  open.**
 - Implement click, double-click, scroll, typing, key press, shortcut, and paste.
-  **Initial visible dispatch helpers implemented behind validation.**
+  **Dispatch helpers exist; acceptance depends on fail-closed window checks.**
 - Add Host Fallback companion UI and diagnostics. **Initial tab implemented
   with enable/threshold/screenshot settings, foreground status, supported
-  actions, and filtered capability activity.**
+  actions, and filtered capability activity. Screenshot diagnostics are not
+  implemented and the setting must be completed or removed.**
 - Integrate browser-runtime fallback only where a node explicitly allows it.
   **Initial opt-in integration implemented for click, double-click, and type,
   with content-side target preparation, post-action verification, and a live
-  acceptance workflow that passed manually.**
+  acceptance workflow. Prior manual results do not close the reopened host-side
+  correctness gaps.**
 - Add PyAutoGUI visual-match fallback after coordinate fallback: extension
   captures the resolved component image, companion matches it on the foreground
   browser window, clicks the matched center, and reports match confidence and
-  bounded diagnostics. **Initial opt-in implementation complete; manual
-  visual-match acceptance passed with Chrome side UI open. Matching is
-  now clips searches to the foreground browser window and returns bounded
-  search-region/duration diagnostics while preserving ambiguity checks within
-  that window.**
+  bounded diagnostics. **Initial opt-in implementation exists, but a missing
+  foreground region currently permits whole-screen matching. Acceptance is
+  reopened until that path fails closed and image decoding is bounded.**
 - Keep v1 `OS_KEYSTROKE` until migration is complete.
 
-Exit: browser-first nodes can request validated visible fallback and report the
-result clearly.
+Exit: browser-first nodes can request validated visible fallback, every action
+or match stays inside the verified foreground Chrome/Chromium window, and the
+extension reports and verifies the result. **Reopened.**
 
-### Phase 7 - Packaging and Release Cleanup
+### Phase 7 - Packaging and Release (Deferred)
 
-- Complete pre-shipping Sequential Studio UI and error-channel fixes before
-  packaging/install acceptance:
-  - display/view options scale the whole Sequential Studio UI, not only sidebar
-    widths;
-  - node/action and property panels collapse and restore main workspace room;
-  - Sequential Studio layout is cleaned up so the UI is not visually jumbled;
-  - extension panel errors are extension-level only, while node/workflow errors
-    stay in run diagnostics/logs.
-- Update PyInstaller entry point and hidden imports.
-  **Implemented: entry point remains `app.py`; hidden imports and packaging
-  excludes are centralized in `packaging_config.py`.**
-- Exclude caches, prior builds, sample logs, test recordings, and obsolete
-  copies from release archives. **Implemented for final release artifacts:
-  `release_builder.py` emits only `BRunner-extension.zip` and `BRunnerHost.exe`
-  at the top level. Extension dev/old files are excluded from the zip.**
-- Add setup, first-run, and troubleshooting docs. **Implemented for current
-  packaging flow.**
-- Verify install behavior outside the source checkout. **Packaged host service
-  smoke passed from `release/BRunnerHost.exe`. A non-GUI `--self-check` now
-  validates packaged writable config/workflow paths, and the release builder
-  validates the executable plus extension manifest and exact two-artifact
-  shape. Final manual GUI/extension install acceptance remains.**
+Current PyInstaller/archive scripts and generated ZIP/EXE files are internal
+test helpers and artifacts only. They are not a release pipeline and must not be
+described as final deliverables.
 
-Exit: packaged app behaves like source build and stores default workflows next
-to the executable.
+When release work resumes:
+
+- complete source correctness and manual source acceptance first;
+- define the supported Windows installation/distribution form;
+- update and lock dependencies, record provenance and dependency versions, and
+  validate bounded image handling;
+- stage artifacts in a temporary location and publish only after complete
+  validation;
+- validate executable structure and version rather than only an `MZ` prefix;
+- run `--self-check` from an isolated location and complete packaged GUI,
+  lifecycle, storage, pairing, approved-folder, and fallback acceptance;
+- decide and implement Windows signing and user-facing installation guidance;
+- ensure generated extension artifacts match the current source tree.
+
+Exit: a separately approved release plan produces current, attributable,
+validated, signed-as-decided artifacts that behave like the accepted source
+build. **Deferred.**
 
 ## Documentation Rule
 
@@ -578,51 +605,57 @@ When a phase or milestone is completed, accepted, or materially re-scoped, the
 implementing change must update this spec, the master roadmap, current handoff
 notes, and any affected user-facing guide before the next phase begins.
 
-### Mapper MapStore Adapter
+### Inactive Mapper Compatibility Adapter
 
-After the mapper's initial Chrome-storage implementation is stable, the
-companion app may provide filesystem persistence for workflow-scoped page maps
-behind the same `MapStore` contract. This must use the existing local service
-transport unless a separate product decision changes transport. Required
-behavior includes site-keyed JSON files, schema-version checks, atomic
-write/rename, bounded version retention, request timeouts, host-unavailable
-states, oversized-payload chunking where needed, and a multi-tab last-write-wins
-conflict rule with retained diff metadata.
-
-Initial source pass is present: the host has a workflow-root mapper repository
-and native mapper-state list/get/save/delete commands, and the extension has a
-`NativeMapStore` adapter. The hardening source pass is also present: mapper
-native requests use bounded timeouts, the native adapter exposes
-unavailable/timeout status, normal mapper state payloads are capped at 1 MB
-instead of chunked, and host-saved states carry revision plus bounded
-last-write-wins conflict metadata. Mapper persistence permanently remains in
-Chrome storage; the filesystem adapter is inactive because maps are disposable
-and recreated after loss.
+The repository contains a host mapper repository and `NativeMapStore` adapter
+from an earlier transition experiment. They are not part of the product path.
+Mapper persistence remains in Chrome storage; maps are disposable and recreated
+after loss. Do not harden, package, or reactivate the filesystem adapter unless
+a later product decision explicitly changes mapper storage.
 
 ## Acceptance Gates
 
 - No local browser management page is required for ordinary host management.
 - Launching BRunner opens a Windows desktop companion app.
 - Host service can run in tray and be managed from the app.
-- Default workflows live beside `BRunnerHost.exe`.
-- Users can change and restore workflow storage.
+- The companion targets the BRunner Chrome/Chromium extension on Windows.
+- Each extension profile has a generated non-secret instance ID; explicit Pair
+  stores one ID, Unpair clears it, and only one matching extension connection is
+  active at a time.
+- Pairing is described and tested as cooperative exclusivity, not
+  authentication, credential validation, or protection from malicious local
+  software.
+- Default workflows use the application directory when it is writable; an
+  unwritable location produces actionable UI.
+- Users can change and restore workflow storage while the running host and UI
+  remain on the same repository.
 - Every workflow save is atomic and failed saves preserve the prior file.
-- Existing v1/v2 workflows continue to load.
+- Workflow repository operations remain atomic and schema-neutral; provisional
+  v1/v2 compatibility is not an acceptance requirement.
 - Workflows use approved directory aliases for ordinary local file operations.
-- Host fallback refuses unsafe foreground/window/coordinate contexts.
-- Visual-match fallback refuses unsafe foreground/window, low-confidence,
-  ambiguous, off-screen, or multi-match contexts.
+- Approved-folder read, write, recursive, escape, unavailable, and final-removal
+  behavior is consistent on every compatibility path.
+- Host fallback refuses missing, stale, off-window, or otherwise invalid
+  foreground/window/coordinate contexts.
+- Visual-match fallback refuses missing foreground regions, low-confidence,
+  ambiguous, off-window, off-screen, or multi-match contexts and never expands
+  to the whole desktop.
 - Extension verification is required before fallback action counts as workflow
   success.
 - Existing v1 WebSocket commands continue during migration.
+- Release packaging is not an acceptance gate until deferred Phase 7 resumes.
 
 ## Non-Goals
 
 - A second workflow editor inside the Windows app.
 - Database-backed workflow catalog.
 - Multi-user or network host deployment.
-- Encryption at rest.
+- Authentication or authorization against malicious local clients.
+- Preventing deliberate local instance-ID spoofing.
+- Code Node design or broader workflow-code security.
+- Edge, Firefox, Safari, or non-Chromium browser support in this transition.
 - Hidden/background browser automation.
-- CAPTCHA, MFA, secure-desktop, or lock-screen bypasses.
 - Full general-purpose native-dialog automation.
 - Full version-control history for workflows.
+- User-facing release packaging, installation, signing, or distribution until
+  Phase 7 is explicitly resumed.

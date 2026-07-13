@@ -2,10 +2,12 @@
 
 ## Status
 
-Approved implementation specification. Functional Milestone 3 behavior is
-accepted and must be preserved. The user confirmed the interaction and
-persistence decisions on 2026-06-20. Slices 1–5 are implemented; Slice 6 is
-implemented at the shared-shell level. Live extension acceptance remains.
+Historical Studio refinement record plus reusable shell guidance. Generic
+build, layout, persistence, draft, and save behavior may be completed during
+the foundation phase. Node palettes, properties, validation, recording output,
+and compatibility behavior are provisional and are finalized only in the node
+phase. Polished Mapper Inspector/map-view UI is a separate V2 concern, not a V1
+Studio gate.
 
 Slice 1 delivered:
 
@@ -14,8 +16,8 @@ Slice 1 delivered:
 - versioned global Studio preferences with safe defaults, cross-tab density
   updates, and shared Compact/Comfortable/Large CSS tokens;
 - unchanged `icon2.png` manifest and current Studio identity wiring;
-- authenticated host-backed `.log` persistence with bounded allowlisted entries,
-  atomic writes, safe filenames, no returned paths, and deterministic tests.
+- host-backed `.log` persistence with bounded entries, atomic writes, filenames,
+  and deterministic tests. Logs are ordinary local user-managed data.
 
 ## Goal
 

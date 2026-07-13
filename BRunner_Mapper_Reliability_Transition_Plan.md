@@ -1,8 +1,16 @@
 # BRunner Mapper Reliability Transition Plan
 
+> **Historical transition record — superseded.** This plan predates the current
+> mapper implementation and confirmed phase boundary. Use
+> `docs/specs/08_MAPPER_RELIABILITY_TRANSITION.md` and
+> `docs/MAPPER_TODO_STATUS.md` instead. The current mapper milestone is a
+> node-neutral reliability engine; polished saved-map Inspector/Tree/Graph UI is
+> V2, mapper data is raw local user-managed data, and provisional nodes are not
+> retrofitted before the finalized node phase.
+
 **Purpose:** Replace BRunner’s current per-step locator recorder with a persistent, component-oriented DOM mapper that has the same *behavioral reliability* as the standalone mapper design on its supported scope.
 
-**Authoritative source for scope and sequencing:** the supplied Implementation & Tracking Document. The earlier design note is useful context, but this plan resolves the implementation choices that were left open there.
+**Original authority statement (historical):** the supplied Implementation & Tracking Document. This statement no longer grants current authority to this plan.
 
 **Supported-scope parity target:** static or bounded pages and **open Shadow DOM**. Dynamic regions, infinite/repeating feeds, and frame support are intentionally deferred. Closed Shadow DOM and inaccessible cross-origin frames remain hard limits.
 
@@ -924,4 +932,3 @@ Do not add these until the deferred milestone:
 8. Keep scoring constants deterministic and tested; defer automatic tuning.
 9. Ensure component naming and resolver logs use locked readable IDs.
 10. Keep the pure Mapper Core portable so a future standalone implementation can use the same scoring, naming, result states, and serialized map schema.
-

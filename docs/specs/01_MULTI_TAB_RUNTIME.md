@@ -1,5 +1,13 @@
 # Specification 01 — Multi-Tab Recording and Runtime State
 
+## Status
+
+Historical foundation reference. Tab/session lifecycle concepts may be reused by
+the final runtime, but the recorded-step shapes and current node integrations
+are provisional. Do not repair them for compatibility before the node phase.
+Current sequencing is defined by `../BRUNNER_MASTER_ROADMAP.md`; the finalized
+node contract is `../../workflow_nodes_implementation_blueprint.md`.
+
 ## Goal
 
 Finish the reliability foundation by recording intentional tab transitions and exposing one authoritative recording/execution state to every UI.

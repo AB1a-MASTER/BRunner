@@ -4,9 +4,10 @@
 
 Feasible and approved for the final node implementation phase. Deterministic
 semantic field-matching core is preparatory infrastructure only. Do not add the
-workflow node, content execution, registry entry, or Studio controls before
-Milestone 3.4 reaches the Phase 3 form-control nodes. The canonical node
-contract lives in `workflow_nodes_implementation_blueprint.md` section E10.
+workflow node, content execution, registry entry, or Studio controls during the
+current mapper-foundation phase. The canonical node contract lives in
+`../../workflow_nodes_implementation_blueprint.md` section E10 and is
+implemented only when that node is reached in the finalized node phase.
 
 ## Goal
 
@@ -35,7 +36,7 @@ Inputs:
 
 - object expression or current table-row expression;
 - optional field metadata containing title, description, aliases, type, and
-  required/secret policy;
+  required policy;
 - optional target form/region Component ID;
 - matching policy: strict by default, bounded minimum score and margin;
 - overwrite policy: empty only, always, or never;
@@ -48,7 +49,7 @@ Outputs:
 - unmatched data keys and controls;
 - ambiguous assignments;
 - filled, skipped, and verification-failed counts;
-- secret-safe structured diagnostics.
+- structured diagnostics containing the configured local workflow data.
 
 ## Matching Pipeline
 
@@ -69,15 +70,14 @@ Outputs:
 8. Read values/states back and report verification results.
 
 An external embedding or LLM service is not required for the initial release.
-Deterministic aliases and token matching are faster, private, testable, and work
+Deterministic aliases and token matching are faster, testable, and work
 offline. Embeddings may later suggest candidates only; deterministic type,
 scope, uniqueness, and margin gates must still approve execution.
 
-## Safety and Privacy
+## Correctness rules
 
-- Password controls accept only explicitly password-classified data keys.
-- Raw field values, passwords, tokens, and message bodies stay out of logs and
-  persisted mapper records.
+- Password controls are ordinary compatible controls. The user owns the data
+  supplied to them and any resulting logs or outputs.
 - Hidden, disabled, readonly, unsupported, or ambiguous controls are skipped.
 - A data key maps to at most one control and a control receives at most one key.
 - Submit buttons are never activated by this node.
@@ -109,8 +109,11 @@ the current mapper phase.
 - Handles text, textarea, select, checkbox/radio/switch, and supported ARIA
   controls through their native action contracts.
 - Refuses duplicate `Email` or `Address` controls without enough form context.
-- Never fills a password from a generic text/message field.
+- Fills password controls only when deterministic semantics and type
+  compatibility identify the intended field; no masking or secret treatment is
+  implied.
 - Does not submit the form.
-- Publishes useful mappings and unmatched diagnostics without raw secret values.
+- Publishes useful mappings and unmatched diagnostics using ordinary local
+  workflow data.
 - Replays deterministically across layout, generated-ID, and non-semantic class
   changes.

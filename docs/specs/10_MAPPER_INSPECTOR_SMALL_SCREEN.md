@@ -1,95 +1,70 @@
-# Specification 10 - Mapper Inspector Small-Screen App Layout
+# Specification 10 - Mapper Viewer Small-Screen Layout (V2 Deferred)
 
 ## Status
 
-Source implementation complete. Viewport metadata, stacked collapsed-panel
-behavior, mobile touch target minimums, detail text wrapping, and mobile graph
-control wrapping are in source. At phone width the Graph canvas becomes a
-compact selectable region/component hierarchy list while desktop/tablet retain
-pan and zoom. Live visual acceptance is still required in a narrow desktop
-window and browser mobile emulation.
+Deferred to the V2 saved-map explorer/Mapper Inspector product phase.
 
-The Inspector is not a marketing website. Small screens should prioritize fast
-inspection, readable hierarchy, tappable controls, and predictable panel
-navigation over decorative layout.
+The current mapper phase accepts the engine: discovery, contextual hierarchy,
+ComponentRef stability, resolution, revalidation, refresh, reconciliation, and
+bounded persistence. A polished saved-map viewer is not required for that gate.
+Existing Inspector HTML/CSS/JS is a developer prototype and may be used to
+exercise the engine, but its layout is not an accepted product contract.
 
-## Goals
+## V2 Goal
 
-- Use a real mobile viewport so the app is not scaled down as a desktop page.
-- Stack major panels instead of keeping desktop side rails on narrow screens.
-- Render collapsed Websites and Details as horizontal disclosure bars, not
-  vertical rail text.
-- Keep common controls at tappable sizes on small screens.
-- Avoid horizontal clipping in Page/Version selectors, filters, legends, Tree
-  rows, Graph controls, and details sections.
-- Preserve all desktop capabilities: saved site/page/version selection, delete
-  site/page/version, Tree/Graph switching, live checks, highlighting, policy,
-  Review Queue, and Component details.
+When the saved-map explorer becomes a product surface, small screens should
+prioritize fast inspection, readable hierarchy, tappable controls, and
+predictable navigation over decorative layout.
 
-## Layout Rules
+## Retained V2 Requirements
 
-### Desktop
+- Use a real mobile viewport.
+- Stack major panels instead of preserving desktop side rails.
+- Render collapsed panels as horizontal disclosure bars at narrow widths.
+- Keep controls at least 36 CSS pixels high where touch use is supported.
+- Avoid document-level horizontal clipping.
+- Preserve site/page/version selection, search, filters, map details, and live
+  engine checks in a compact navigation model.
+- Provide a non-canvas hierarchy fallback when graph pan/zoom is unsuitable.
+- Support keyboard navigation, visible focus, accessible names, reduced motion,
+  and screen-reader state for tabs, trees, disclosure controls, and resizers.
 
-Use the three-pane workbench:
+## Candidate Layouts
+
+Desktop:
 
 ```text
-Websites | Tree/Graph | Details
+Saved Maps | Map View | Details
 ```
 
-Collapsed Websites/Details may be vertical rails because there is enough height
-and the layout is spatially stable.
-
-### Narrow Desktop and Tablet
-
-Stack the major panels:
+Narrow desktop/tablet:
 
 ```text
-Header
-Websites
-Tree/Graph
+Header and navigation
+Saved Maps
+Map View
 Details
 ```
 
-Collapsed Websites/Details become horizontal bars with readable labels and a
-single expand affordance. Page/Version controls and filters wrap to available
-width.
+Phone:
 
-### Phone-Width Viewports
+```text
+Header
+Page/version navigation
+Selectable hierarchy list
+Selected component details
+```
 
-Use app-density controls:
+## Deferred Acceptance
 
-- minimum 36px interactive control height;
-- full-width or two-column button groups only where labels still fit;
-- horizontal collapsed panel labels;
-- normal text wrapping for map title/subtitle;
-- bounded scroll areas for Tree, Graph, legend, policy, review, and component
-  detail content;
-- no reliance on hover-only controls.
+Do not run or report small-screen viewer acceptance as part of mapper engine
+completion. During V2, validate at 320/375, 768, 1024, and desktop widths plus
+short-height windows, and cover:
 
-## Implementation Plan
-
-1. Done: add viewport metadata to `mapper-inspector/index.html`.
-2. Done: override desktop vertical collapsed rails below the stacked-layout
-   breakpoint.
-3. Done: increase mobile touch target minimums for inputs, selects, toggles,
-   and icon buttons.
-4. Done: add source-level wrapping for Tree labels, Graph controls, detail
-   cards, badges, and saved-site rows.
-5. Done: add source guards for viewport metadata, mobile collapsed-panel
-   behavior, graph control wrapping, and mobile label wrapping.
-6. Next: run live acceptance in browser mobile emulation and in a narrow
-   desktop window.
-7. Done: add a phone-specific selectable Graph hierarchy list fallback.
-
-## Acceptance
-
-1. Open the Inspector at desktop width and confirm the three-pane workbench is
-   unchanged.
-2. Resize below the stacked-layout breakpoint and collapse Websites/Details.
-   Confirm each collapsed panel is a readable horizontal bar.
-3. Use mobile emulation. Confirm the UI uses the device width rather than a
-   scaled desktop canvas.
-4. Confirm Page/Version selectors, delete buttons, Tree/Graph tabs, filters,
-   and Check live remain tappable and do not clip.
-5. Confirm Tree rows, Graph controls, legends, Review Queue, and Component
-   details remain readable without horizontal scrolling of the whole page.
+1. no page-level horizontal scroll;
+2. readable collapsed-panel labels;
+3. usable page/version/filter controls;
+4. equivalent keyboard and touch access;
+5. bounded Tree/Graph/list/detail scrolling;
+6. no hover-only functionality;
+7. stable selection and engine-check state while layouts change.

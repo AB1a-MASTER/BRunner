@@ -1,24 +1,21 @@
-# Specification 04 — Phased Node Catalogue
+# Specification 04 — Superseded Provisional Node Catalogue
 
 ## Purpose
 
-Define the supported automation vocabulary before implementation. Nodes must be added through the canonical registry and must not introduce one-off Studio forms.
+Preserve the development history of the provisional registry and early node
+experiments. This file does not define supported or final nodes.
 
 ## Forward status
 
-This file records the implemented and previously planned catalog for the
-current runtime. The finalized future node inventory, shared node contracts, and
-domain-by-domain implementation order now live in the root-level
+This file records the provisional implemented and previously planned catalog.
+The finalized node inventory, shared node contracts, and domain-by-domain
+implementation order live only in the root-level
 `workflow_nodes_implementation_blueprint.md`.
 
-Do not start the final node expansion from this older phase list. First complete
-the Windows companion app transition in
-[07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md), then complete the
-mapper reliability transition in
-[08_MAPPER_RELIABILITY_TRANSITION.md](08_MAPPER_RELIABILITY_TRANSITION.md).
-After those foundations are accepted, implement nodes from the blueprint using
-shared target-resolution, text-matching, output, logging, retry, and
-host-fallback adapters.
+Do not repair, preserve, or expand the nodes below before the node phase merely
+because they already exist. After the foundation gates pass, process every
+finalized blueprint node one by one and upgrade, rewrite, add, or remove the
+provisional code. Provisional workflows have no compatibility guarantee.
 
 ## Implemented foundation
 

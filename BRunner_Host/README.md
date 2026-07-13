@@ -1,94 +1,143 @@
-# BRunner Host Companion
+# BRunner Windows Companion
 
-## Setup
+BRunner Host is a Windows-local companion for the BRunner Chrome/Chromium
+extension. The extension owns workflow execution, DOM resolution, page/tab
+context, and browser-native actions. The companion owns approved local storage,
+approved-folder operations, service diagnostics, and explicitly enabled visible
+foreground input.
 
-Install the host dependencies from this folder:
+The companion is under active source development. Current ZIP and EXE outputs
+are test artifacts, not supported user releases. Release packaging and
+distribution are deferred until the open items in
+`docs/COMPANION_TODO_STATUS.md` are complete.
+
+## Development Setup
+
+Install dependencies from this folder:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-Run from source:
+Run the companion from source:
 
 ```powershell
 python app.py
 ```
 
-Build the Windows companion executable:
+The PySide6 entry point is `app.py`. It can start the local WebSocket service as
+a managed child process, and the same entry point supports the internal
+`--serve-host` mode.
+
+## Pairing Model
+
+Pairing is cooperative selection of one Chrome/Chromium profile. It is not
+authentication, a credential system, or a defense against malicious local
+software.
+
+The target pairing flow is:
+
+1. Each extension profile generates and stores a stable, non-secret instance
+   ID in that profile's local extension storage.
+2. The user explicitly pairs the current profile in the extension/companion UI.
+3. The host stores one paired instance ID and permits one active paired
+   extension connection at a time.
+4. Unpair clears the stored ID. The user can then explicitly pair another
+   profile.
+
+The instance ID may be displayed or copied for diagnostics; it is not a secret.
+Accidental use by a second profile should be declined clearly. Deliberate local
+spoofing is outside the product boundary.
+
+The current source still contains transitional pairing-key controls and must not
+be treated as the accepted implementation. Replacing those controls and their
+protocol path is an open source task.
+
+## Storage and Approved Folders
+
+The intended first-run layout is beside the application directory:
+
+```text
+brunner_config.json
+Workflows\
+Logs\
+AllowedFiles\
+```
+
+In a future packaged build, persistent paths must resolve from the directory
+containing `BRunnerHost.exe`, not PyInstaller's temporary extraction directory.
+If that location is not writable, the app must show an actionable folder-choice
+or configuration-recovery flow rather than exit silently.
+
+Workflow Storage supports a default folder and a user-selected folder with
+use-new, copy, move, and restore-default choices. A location change is complete
+only when the running host and companion use the same repository and a failed
+transition remains recoverable.
+
+Approved Folders provide an alias, path, read/write permissions, and a recursive
+policy. Workflow file operations should use the alias plus a relative path.
+These checks are correctness boundaries: path escape, read/write denial,
+non-recursive child access, final-alias removal, and unavailable folders must
+all behave consistently.
+
+## Visible Host Fallback
+
+Visible host fallback is an explicitly enabled last resort for compatible
+browser-first nodes. The extension resolves the target and attempts the
+browser-native action first. The companion may issue visible input only after it
+has established the intended foreground Chrome/Chromium window and valid
+display/coordinate context. The extension must verify the resulting page state
+before the workflow treats the action as successful.
+
+Visual matching is an additional opt-in recovery tier. It must search only a
+bounded region inside the verified foreground Chrome/Chromium window, refuse
+missing or ambiguous matches, and never fall back to a whole-desktop search when
+window context is unavailable.
+
+Approved-folder enforcement and visible-fallback checks are product correctness
+requirements. They are not claims that the local companion protects against
+malicious software running as the same Windows user.
+
+## Internal Test Artifacts
+
+The repository currently contains development helpers:
 
 ```powershell
 python build_host_ui.py
-```
-
-Stage an archive-ready release folder after the executable exists:
-
-```powershell
 python release_packager.py --version 0.1.0
+python ..\release_builder.py
 ```
 
-For the final user-facing release, run this from the repository root instead:
+These commands may produce `BRunnerHost.exe` and `BRunner-extension.zip` for
+internal testing. They do not constitute a release process, installer,
+provenance check, signature check, or shipping approval. Do not distribute an
+artifact merely because the current validation script accepts it.
 
-```powershell
-python release_builder.py
-```
+`BRunnerHost.exe --self-check` is an internal packaged-path diagnostic. Before
+release work resumes it must be part of an isolated validation gate together
+with dependency/version recording and full packaged integration acceptance.
 
-That top-level command emits exactly two deliverables:
-`release\BRunner-extension.zip` and `release\BRunnerHost.exe`.
+## Development Troubleshooting
 
-The PyInstaller entry point is `app.py`, which opens the PySide6 companion UI.
-The same executable can start the embedded websocket service with
-`--serve-host`.
-Run a non-GUI packaged-path check with:
+- If the extension cannot connect, confirm that the companion host is running
+  on the configured loopback port and that the profile is explicitly paired by
+  instance ID.
+- If startup reports that port 8999 is already in use, stop the existing BRunner
+  host or choose another configured port before starting another instance.
+- If a workflow-location change appears only in the companion or only in the
+  extension, restart the host while the live repository-rebind work remains
+  open.
+- If an approved file is unexpectedly allowed or denied, check the alias's
+  read/write/recursive settings and report the case against the companion TODO.
+- If visible fallback is refused, keep Chrome/Chromium foregrounded and inspect
+  the Host Fallback diagnostics. A missing window/search region must be treated
+  as refusal.
+- Packaging configuration remains centralized in `packaging_config.py`, but
+  packaging correctness and release validation are deferred work.
 
-```powershell
-.\BRunnerHost.exe --self-check
-```
+## Scope
 
-Exit code `0` confirms that configuration and the active workflow directory
-can be created and written beside the installed executable.
-The host-only staging helper copies `BRunnerHost.exe`, companion docs, and a
-manifest for internal inspection. Runtime folders such as `Workflows`,
-`AllowedFiles`, `Logs`, local configuration, build caches, and obsolete source
-copies are excluded from release output.
-
-## First Run
-
-On first launch, the companion creates `brunner_config.json`, `Workflows`, and
-`Logs` beside the application directory. In a packaged build, that means beside
-`BRunnerHost.exe`, not inside PyInstaller's temporary extraction folder.
-
-Use the Workflow Storage tab to choose a different workflow directory. Use the
-Approved Folders tab to add aliases for files or data sources the extension may
-read or write.
-
-Use the Pairing tab to match the host with the intended extension instance. In
-the extension sidebar, generate or enter a pairing key, copy it, paste it into
-the host Pairing tab, confirm the WebSocket port, and save. The extension must
-authenticate before workflow storage or host capability requests are accepted.
-After a successful auth, the host remembers that extension instance internally;
-use Unpair or Generate Host Key when switching browser profiles.
-Pairing keys retain 128 bits of entropy and are displayed in readable groups;
-hyphens are optional when pasting. Changing, regenerating, or revoking pairing
-restarts a host managed by the companion so an authenticated old session cannot
-remain active.
-
-The Status tab controls whether the host starts with the companion. Closing the
-window keeps the app in the tray. Tray **Exit** stops the managed host and exits
-the application, including the packaged one-file child process.
-
-## Troubleshooting
-
-- If the extension cannot connect, confirm the companion is running and the port
-  in `brunner_config.json` matches the extension.
-- If startup reports that port 8999 is already in use, another BRunner host is
-  already running. Stop the existing host from the companion app or change the
-  configured port before starting a second copy.
-- If visible host fallback is refused, keep Chrome foregrounded and check the
-  Host Fallback tab for the expected window title and confidence threshold.
-- Visual matching searches only the clipped foreground browser window and logs
-  its search region and duration. Keep it opt-in for workflows that need
-  OS-level fallback.
-- If packaging misses a module, add it once to `packaging_config.py`; both the
-  `.spec` file and `build_host_ui.py` read from that shared list.
-- If release staging fails, build the executable first and confirm
-  `dist\BRunnerHost.exe` exists.
+The companion does not own a workflow editor, DOM automation, hidden browser
+control, or general native-dialog automation. Code Node design and broader
+workflow-code security are separate project topics and are not part of this
+companion document.

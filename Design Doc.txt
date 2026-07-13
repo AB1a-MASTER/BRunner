@@ -1,3 +1,15 @@
+DOCUMENT STATUS: HISTORICAL DESIGN RECORD — NOT CURRENT REQUIREMENTS
+
+This document preserves early architecture ideas. It does not describe the
+current supported product, mapper model, companion profile lock, phase order,
+or finalized node catalog. Current authority is README.md, the master roadmap,
+the companion/mapper status documents, Specs 07-11, and
+workflow_nodes_implementation_blueprint.md. In particular, enterprise,
+cross-platform, headless, pairing-key, controlsTree/ctrlHash, and provisional
+node statements below are not current commitments.
+
+---
+
 BRunner System Design Document — Unified Version
 Overview
 BRunner is an enterprise-grade, event-driven browser automation engine designed for robust, cross-platform, and context-aware browser manipulation. It operates across four isolated subsystems connected through an asynchronous event-driven pipeline. The system supports visual workflow creation, DOM-aware execution, resilient macro recording, cross-tab orchestration, native OS integration, and future-ready headless deployment.

@@ -1,5 +1,13 @@
 # Specification 02 — Data and Node Engine
 
+## Status
+
+Historical/provisional implementation reference. The registry and nodes named
+below are not the final supported catalog. Reuse useful variable, expression,
+and runtime ideas during the node phase, but implement only the nodes and
+contracts finalized in `../../workflow_nodes_implementation_blueprint.md`.
+Compatibility with the provisional registry is not required.
+
 ## Goal
 
 Make node behavior declarative and allow data to flow reliably across steps, pages, and tabs.
@@ -49,7 +57,9 @@ The first implementation establishes runtime behavior, not the final authoring e
 - Conditional configuration fields, stronger validation, empty-result policy, and clearer selector guidance.
 - Copy/export controls for scalar, object, list, and table values.
 
-These refinements must preserve the current node schemas or include explicit migrations.
+This historical preservation requirement no longer applies. Final node schemas
+come from `../../workflow_nodes_implementation_blueprint.md`; provisional
+schemas may be rewritten or removed without migration.
 
 ## Managed Data panel follow-up
 

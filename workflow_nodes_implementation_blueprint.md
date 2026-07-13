@@ -1,22 +1,38 @@
 # Workflow Nodes Implementation Blueprint
 
-**Status:** Current implementation specification  
-**Scope:** Node implementation only. The base workflow runtime, execution engine, internal DOM map / element resolver, Windows companion app, workflow persistence, and controlled-directory service are assumed to already exist.  
-**Purpose:** Implement the current agreed node set in a consistent, testable order.
+**Status:** Finalized node catalog and implementation contract
+
+**Authority:** This is the sole source of truth for which nodes BRunner will implement. Existing registry entries, executors, workflows, and older node catalogs are provisional development scaffolding and do not override this document.
+
+**Scope:** Node implementation only. The mapper engine, node-neutral ComponentRef/resolver API, base runtime services, Windows companion, persistence, and approved-directory service must pass their foundation gates before this phase begins.
+
+**Purpose:** Implement the finalized node set in a consistent, testable order by upgrading, rewriting, adding, or removing provisional code.
 
 ---
 
 ## 1. How to use this document
 
-Implement the node layer in the order shown in **Section 8**. For every node:
+Implement the node layer in the order shown in **Section 8**. Work through the
+catalog one node at a time. The current implementation is useful only as source
+material; preserving its behavior is not a goal.
 
-1. Register its metadata, configuration schema, ports, and capability tags.
-2. Implement its executor using the shared contracts in Sections 3–7.
-3. Implement structured outputs, warnings, errors, and run-log entries.
-4. Add unit tests and browser/host integration tests listed in the node card.
-5. Mark the node complete only when it meets the shared done criteria in Section 2.
+For every finalized node:
 
-This document intentionally does **not** redesign the base runtime. It tells the node layer how to use the existing runtime services.
+1. Locate any provisional equivalent and record a disposition: upgrade,
+   rewrite, add, or remove.
+2. Register the finalized metadata, configuration schema, ports, and capability
+   tags.
+3. Implement its executor using the shared contracts in Sections 3–7.
+4. Implement structured outputs, warnings, errors, and run-log entries.
+5. Add the unit, browser, host, and acceptance tests listed in the node card.
+6. Remove provisional node types and handlers absent from this catalog.
+7. Mark the node complete only when it meets the shared done criteria in
+   Section 2.
+
+This document intentionally does **not** require compatibility with provisional
+workflows or node types. If workflow migration is later required, implement it
+as a separate feature. Shared foundation work should not retrofit provisional
+nodes before this phase unless a provisional handler blocks foundation testing.
 
 ---
 
@@ -30,7 +46,8 @@ A node is complete only when it has all of the following:
 - `enabled` / bypass behavior.
 - Retry behavior where retrying is safe or explicitly configured.
 - Structured logs for inputs, outputs, warnings, errors, retries, duration, and execution method.
-- Sensitive-value exclusion from persistent run history and previews.
+- Local run-history and preview behavior documented without redaction or
+  secret-handling guarantees.
 - Correct interaction with node outputs, Workflow Clipboard, and System Clipboard when relevant.
 - Correct use of the element resolver when a page target is involved.
 - Correct use of companion-host fallback when the node supports it.
@@ -88,7 +105,7 @@ Every node receives these baseline properties.
 | `onError` | Yes | Fail, continue with warning, skip, route to error port, or node-specific behavior. |
 | `saveOutputAs` | Optional | Friendly alias for downstream data access. |
 | `saveToWorkflowClipboard` | Optional | Off, replace entry, append entry, or create version. |
-| `logLevel` | Optional | Normal or verbose. Sensitive data remains excluded. |
+| `logLevel` | Optional | Normal or verbose. Logs may contain the node's local input and output data. |
 
 ### 3.2 Disabled / bypass behavior
 
@@ -127,13 +144,14 @@ Rules:
 - A node cannot access output from a node that has not completed.
 - A downstream dependency waits automatically for required output.
 - Outputs are structured objects, not only text.
-- Sensitive values are usable in memory but excluded from persistent run history and output previews.
+- Values are ordinary local workflow data and may appear in persistent run
+  history, output previews, clipboard history, or debug exports.
 
 ### 3.4 Logging and run history
 
-Every workflow stores a non-sensitive history of its runs. Each node logs:
+Every workflow may store a local history of its runs. Each node logs:
 
-- Resolved non-sensitive inputs.
+- Resolved inputs according to the node's logging level.
 - Outputs and output summary.
 - Warnings and errors.
 - Start/end timestamps and duration.
@@ -142,13 +160,9 @@ Every workflow stores a non-sensitive history of its runs. Each node logs:
 - Host fallback attempt/result where applicable.
 - Optional screenshot/artifact references when enabled.
 
-Never persist sensitive values in:
-
-- Node logs.
-- Workflow run history.
-- Workflow Clipboard history.
-- Debug exports.
-- Output previews.
+BRunner does not detect, redact, mask, encrypt, or specially store sensitive
+values. Workflow authors are responsible for the data they place in workflows,
+logs, history, clipboard entries, previews, files, and reports.
 
 ### 3.5 Clipboard model
 
@@ -194,9 +208,11 @@ Default for user-facing text: **exact + case-insensitive + normalized whitespace
 
 All DOM-targeting nodes use the shared target configuration.
 
-#### User-provided identifier is always Priority 1
+#### ComponentRef and mapper resolution are authoritative
 
-The user may provide any supported identifier:
+DOM-targeting nodes store a mapper `ComponentRef`. A user may start from any
+supported identifier, but the mapper converts that input into a component
+record and owns later revalidation and reconciliation:
 
 - CSS selector
 - XPath
@@ -214,15 +230,18 @@ The user may provide any supported identifier:
 Resolution order:
 
 ```text
-1. Try the exact user-provided identifier.
-2. If it returns zero matches or is unusable, consult stored internal-map fallbacks.
-3. Reconcile against the current page when required.
-4. Verify candidate against the component fingerprint.
-5. Apply ambiguity and confidence policy.
-6. Perform the node action or extraction.
+1. Validate the ComponentRef against the current tab, page, origin, and frame.
+2. Try its stored primary evidence.
+3. Try ordered mapper-owned fallback evidence.
+4. Refresh or reconcile the affected map region when required.
+5. Verify the candidate against current component identity and state.
+6. Reject materially ambiguous candidates.
+7. Perform the node action or extraction only after a unique usable resolution.
 ```
 
-The internal map supplements the user identifier; it never silently replaces a valid primary match.
+Manual CSS, XPath, text, role, label, attribute, and coordinate inputs are
+authoring inputs, not a second independent resolver. The mapper records and
+revalidates the resulting component identity.
 
 #### Shared target settings
 
@@ -235,7 +254,7 @@ The internal map supplements the user identifier; it never silently replaces a v
 | `targetState` | Any, visible, interactable |
 | `mapFreshness` | Use cache, revalidate if stale, refresh before resolution |
 | `fallbackPolicy` | Disabled, semantic only, all verified internal-map fallbacks |
-| `ambiguityPolicy` | Fail, highest confidence, first, ask user |
+| `ambiguityPolicy` | Fail or explicit user review; never silently choose first |
 | `minimumConfidence` | Minimum confidence for fallback/reconciliation result |
 | `tabSource` | Current, active, saved tab reference, previous-node tab |
 
@@ -315,6 +334,8 @@ Physical-system input requires the correct tab active, browser window visible, f
 - Function Node output is mandatory.
 - Code Node output is optional.
 - Only work represented by the returned Promise is awaited. Fire-and-forget operations are not considered complete.
+- Code Node is intentionally unrestricted. BRunner does not sandbox its code or
+  protect the local user from code they choose to run.
 
 ---
 
@@ -329,7 +350,7 @@ nodes/
       definition.ts        # metadata, ports, config schema
       executor.ts          # implementation
       validators.ts        # config and output validation
-      outputs.ts           # output builder and masking rules
+      outputs.ts           # output builder and serialization rules
       ui.ts                # editor form/help/advanced settings
       tests.unit.ts
       tests.integration.ts
@@ -369,7 +390,6 @@ Use capability tags consistently in the editor and runtime.
 | `host-required` | Cannot operate without companion app service |
 | `foreground-required` | Requires active visible tab/window |
 | `file-access` | Uses approved-directory file service |
-| `sensitive-input` | Can accept secrets/sensitive values |
 | `side-effect` | Can modify external state |
 | `retry-safe` | Usually safe to retry |
 | `manual-gate` | Requires user participation or approval |
@@ -527,7 +547,7 @@ CANCELLED
 86. Get Element Count
 87. Read Selected Text
 
-### Output and reporting (initial node set)
+### Output and reporting
 
 88. Save Data
 89. Export Data
@@ -661,7 +681,7 @@ The base runtime exists. Implement only the node-layer dependencies shown here.
 84. Log Message.
 85. Create Run Report.
 
-**Gate:** Every major workflow can save results, notify the user, and generate a non-sensitive run artifact.
+**Gate:** Every major workflow can save results, notify the user, and generate a local run artifact.
 
 ---
 
@@ -1011,7 +1031,6 @@ The following cards define the required node-level behavior. All cards inherit S
 - preserve existing value
 - trigger events: input/change/blur/Enter/custom
 - focus/scroll behavior
-- secret flag
 - multiline handling
 - rich-text mode
 - host fallback
@@ -1019,9 +1038,11 @@ The following cards define the required node-level behavior. All cards inherit S
 
 **Retry:** Replace/set may retry after reading current value. Append/insert/sequential/paste default `0` to avoid duplication.
 
-**Outputs:** operation, character count, target resolution, verification. Never persist secret text.
+**Outputs:** operation, character count, target resolution, verification. Text
+is ordinary local workflow data and may be persisted by configured logs or
+outputs.
 
-**Tests:** replace, append, clear, sequential fixed delay, sequential random range, multiline, secret masking, rich-text, host fallback.
+**Tests:** replace, append, clear, sequential fixed delay, sequential random range, multiline, password input, rich-text, host fallback.
 
 ---
 
@@ -1054,14 +1075,13 @@ The following cards define the required node-level behavior. All cards inherit S
 - replace/append/version behavior
 - clipboard method: browser API, keyboard copy, host
 - restore previous system clipboard where host supports it
-- mask/exclude sensitive data
 - verify write
 
 **Outputs:** formats/destinations, item label/version, character count, execution method.
 
 **Retry:** Safe.
 
-**Tests:** system default, workflow-only, both, structured serialization, sensitive exclusion, browser API denied host fallback.
+**Tests:** system default, workflow-only, both, structured serialization, arbitrary local data, browser API denied host fallback.
 
 ---
 
@@ -1221,9 +1241,9 @@ The following cards define the required node-level behavior. All cards inherit S
 
 **Retry:** Native reset default `1` after verification.
 
-**Outputs:** controls reset, preserved controls, safe before/after summary.
+**Outputs:** controls reset, preserved controls, bounded before/after summary.
 
-**Tests:** native reset, custom reset, preserve list, sensitive values excluded.
+**Tests:** native reset, custom reset, preserve list, password and ordinary values.
 
 ---
 
@@ -1238,7 +1258,7 @@ to record one Enter Text, Select, or Toggle node per field.
 **Core config:** object/table-row expression, optional field metadata and
 aliases, optional form/region target, strict score and winner-margin policy,
 overwrite mode (`empty only`, `always`, `never`), unmatched-field policy,
-verification mode, output alias, and sensitive-field policy.
+verification mode, and output alias.
 
 **Matching evidence:** data key/title/description/aliases against mapper
 Component ID and display semantics, associated label, accessible name,
@@ -1252,13 +1272,12 @@ Select Dropdown Option, Set Checkbox/Toggle, Select Radio Option, Date/Time,
 and autocomplete action contracts; read values/states back after filling. Never
 submit the form.
 
-**Outputs:** matched fields with Component IDs and safe score/margin evidence,
+**Outputs:** matched fields with Component IDs and score/margin evidence,
 unmatched data keys and controls, ambiguous assignments, filled/skipped/failed
-counts, verification results, and target-resolution summaries. Raw secret values
-must not appear in logs or persisted map data.
+counts, verification results, and target-resolution summaries. Values are
+ordinary local workflow data and may appear in logs or persisted outputs.
 
-**Safety:** password controls accept only explicitly password-classified data;
-hidden, disabled, readonly, or unsupported controls are skipped; each key and
+**Correctness:** hidden, disabled, readonly, or unsupported controls are skipped; each key and
 control is used at most once; live mapper ambiguity prevents interaction for
 that assignment. External embeddings may suggest candidates later but cannot
 bypass deterministic scope, type, uniqueness, score, or margin gates.
@@ -1266,9 +1285,9 @@ bypass deterministic scope, type, uniqueness, score, or margin gates.
 **Tests:** contact/address aliases, field metadata descriptions, text/textarea,
 select, checkbox/radio/switch, date, autocomplete, repeated labels in different
 forms, duplicate labels in one form, hidden/disabled/readonly fields, password
-guard, empty-only overwrite, verification failure, dynamic replacement between
+input, empty-only overwrite, verification failure, dynamic replacement between
 preflight and execution, table-row iteration, no-submit guarantee, and
-secret-safe logs.
+configured logging.
 
 ---
 
@@ -1312,9 +1331,9 @@ secret-safe logs.
 
 **Limits:** Does not handle OS permission prompts, secure desktop, CAPTCHA, biometric, or browser-owned security UI.
 
-**Outputs:** type/message safe summary, action, expected-dialog flag.
+**Outputs:** type/message summary, action, expected-dialog flag.
 
-**Tests:** alert, confirm accept/dismiss, prompt secret value, no-dialog branch.
+**Tests:** alert, confirm accept/dismiss, arbitrary prompt value, no-dialog branch.
 
 ---
 
@@ -1326,7 +1345,7 @@ secret-safe logs.
 
 **Core config:** source, expected name/mime/extension, wait timeout, save behavior/destination, filename template, collision policy, verification, output alias.
 
-**Outputs:** controlled file reference, safe metadata, save destination, verification.
+**Outputs:** controlled file reference, metadata, save destination, verification.
 
 **Retry:** Safe for waiting; not for retriggering download.
 
@@ -1348,7 +1367,7 @@ secret-safe logs.
 
 **Retry:** Safe.
 
-**Tests:** viewport, whole page, element, protected page host capture, sensitive evidence suppression.
+**Tests:** viewport, whole page, element, protected page host capture, configured artifact persistence.
 
 ---
 
@@ -1546,7 +1565,7 @@ All file nodes use controlled file references, not raw unrestricted paths.
 
 **Outputs:** rendered text, variables used, missing warnings, length.
 
-**Tests:** nested references, missing default, HTML/URL/JSON escaping, sensitive input exclusion.
+**Tests:** nested references, missing default, HTML/URL/JSON escaping, arbitrary local input.
 
 ---
 
@@ -1750,20 +1769,24 @@ All file nodes use controlled file references, not raw unrestricted paths.
 
 **Purpose:** Advanced unrestricted custom logic node.
 
-**Capabilities:** browser actions, target resolution, host actions, controlled files, workflow clipboard, variables, outputs, optional no-output execution.
+**Capabilities:** browser actions, target resolution, host actions, local files,
+workflow clipboard, variables, outputs, optional no-output execution, and other
+APIs available to the chosen execution environment.
 
-**Core config:** explicit inputs/optional context, code, browser API on/off, host API on/off, file API approved directories only, timeout, permissions summary, output mode, error behavior, test mode.
+**Core config:** explicit inputs/optional context, code, timeout, output mode,
+error behavior, and test mode.
 
 **Rules:**
 
 - Returned Promise is awaited.
 - Browser action calls should use the same resolver/fallback/verification services as visual nodes when possible.
-- Sensitive data must still be excluded from persistent run history.
 - Host status shown when host APIs enabled.
+- Code is intentionally not sandboxed by BRunner. The local user is responsible
+  for what it reads, changes, sends, stores, or executes.
 
-**Outputs:** optional returned value, action summary, duration, safe console log, permission use summary.
+**Outputs:** optional returned value, action summary, duration, and console log.
 
-**Tests:** browser action, host action, file API scope denial, async wait, optional output, timeout/cancel, sensitive exclusion.
+**Tests:** browser action, host action, local file access, async wait, optional output, timeout/cancel, and arbitrary local data.
 
 ---
 
@@ -1907,15 +1930,15 @@ All file nodes use controlled file references, not raw unrestricted paths.
 
 ### I11. Manual Confirmation
 
-**Purpose:** Require approval/rejection before a sensitive step.
+**Purpose:** Require approval/rejection before a consequential or destructive step.
 
 **Ports:** `Approved`, `Rejected`, `Timed Out`, `Cancelled`.
 
-**Config:** title/message, non-sensitive data preview, labels, timeout, typed confirmation, notification method.
+**Config:** title/message, data preview, labels, timeout, typed confirmation, notification method.
 
-**Outputs:** decision, timestamp, optional safe note.
+**Outputs:** decision, timestamp, optional note.
 
-**Tests:** approve, reject, timeout, typed phrase, sensitive preview exclusion.
+**Tests:** approve, reject, timeout, typed phrase, and arbitrary preview data.
 
 ---
 
@@ -1951,7 +1974,7 @@ All file nodes use controlled file references, not raw unrestricted paths.
 
 ### Shared extraction contract
 
-Common config: target scope, output format, no-match behavior, multiple-match behavior, visibility filter, output alias/Workflow Clipboard, sensitive handling.
+Common config: target scope, output format, no-match behavior, multiple-match behavior, visibility filter, and output alias/Workflow Clipboard.
 
 ### J1. Extract Text
 
@@ -1981,11 +2004,11 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Purpose:** Read input/control value and state.
 
-**Config:** target, value type auto/explicit, include display/raw/state, sensitive masking.
+**Config:** target, value type auto/explicit, include display/raw/state.
 
 **Outputs:** value, label, control state, metadata.
 
-**Tests:** text, checkbox, select, slider, date, contenteditable, sensitive value exclusion.
+**Tests:** text, checkbox, select, slider, date, contenteditable, and password value.
 
 ---
 
@@ -2053,13 +2076,13 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 ### J9. Extract Form Data
 
-**Purpose:** Capture form state safely.
+**Purpose:** Capture form state.
 
-**Config:** form target, fields selection, metadata, values, sensitive field exclusion, output shape, empty behavior.
+**Config:** form target, fields selection, metadata, values, output shape, empty behavior.
 
-**Outputs:** form data, metadata, validation summary, excluded sensitive count.
+**Outputs:** form data, metadata, and validation summary.
 
-**Tests:** text/select/check state, disabled fields, named structure, secret exclusion.
+**Tests:** text/select/check state, disabled fields, named structure, and password values.
 
 ---
 
@@ -2127,13 +2150,13 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 ### K1. Save Data
 
-**Purpose:** Persist non-sensitive workflow output to the configured workflow storage/dataset destination.
+**Purpose:** Persist workflow output to the configured workflow storage/dataset destination.
 
-**Config:** input data, destination/data set name, write mode (replace/append/upsert), key field, schema validation, sensitive exclusion, output alias.
+**Config:** input data, destination/data set name, write mode (replace/append/upsert), key field, schema validation, and output alias.
 
 **Outputs:** saved reference, count, write mode, validation warnings.
 
-**Tests:** append/upsert/replace, schema failure, sensitive field exclusion.
+**Tests:** append/upsert/replace, schema failure, and arbitrary local data.
 
 ---
 
@@ -2143,11 +2166,11 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Formats:** CSV, JSON, TXT, XLSX, HTML/Markdown where supported.
 
-**Config:** input data, format, field selection/order, formatting, approved output directory, file name template, collision policy, sensitive exclusion, host-required status.
+**Config:** input data, format, field selection/order, formatting, approved output directory, file name template, collision policy, and host-required status.
 
-**Outputs:** file reference, safe metadata, record count, destination.
+**Outputs:** file reference, metadata, record count, destination.
 
-**Tests:** CSV/JSON/XLSX, collision handling, selected fields, sensitive exclusion.
+**Tests:** CSV/JSON/XLSX, collision handling, selected fields, and arbitrary local data.
 
 ---
 
@@ -2159,7 +2182,7 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Outputs:** shown status, notification id/surface.
 
-**Tests:** success/warning/error, template interpolation, sensitive text exclusion.
+**Tests:** success/warning/error, template interpolation, and arbitrary local text.
 
 ---
 
@@ -2171,7 +2194,7 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Outputs:** message id, display timestamp.
 
-**Tests:** info/warn/error, safe preview, no-sensitive output.
+**Tests:** info/warn/error, data preview, and arbitrary local output.
 
 ---
 
@@ -2179,11 +2202,11 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Purpose:** Produce readable summary from selected node outputs/data.
 
-**Config:** input data, summary template or automatic rules, grouping, maximum length, output format, sensitive exclusion.
+**Config:** input data, summary template or automatic rules, grouping, maximum length, and output format.
 
 **Outputs:** summary text/object, source references.
 
-**Tests:** table summary, empty input, truncation, sensitive exclusion.
+**Tests:** table summary, empty input, truncation, and arbitrary local data.
 
 ---
 
@@ -2191,23 +2214,23 @@ Common config: target scope, output format, no-match behavior, multiple-match be
 
 **Purpose:** Add deliberate debug/info/warning/audit event to workflow run log.
 
-**Config:** level, message/template, selected safe data fields, persist mode.
+**Config:** level, message/template, selected data fields, persist mode.
 
 **Outputs:** log event id/timestamp.
 
-**Tests:** template variables, redaction, verbose-only details.
+**Tests:** template variables, arbitrary local data, and verbose-only details.
 
 ---
 
 ### K7. Create Run Report
 
-**Purpose:** Generate an exportable non-sensitive report for one workflow run.
+**Purpose:** Generate an exportable report for one workflow run.
 
-**Config:** run source, included sections, format (JSON/text/HTML/PDF later), evidence policy, destination, sensitive exclusion fixed.
+**Config:** run source, included sections, format (JSON/text/HTML/PDF later), evidence policy, and destination.
 
 **Outputs:** report file/reference, included sections, generation status.
 
-**Tests:** success run, failed run, evidence errors-only, no sensitive values.
+**Tests:** success run, failed run, errors-only evidence, and arbitrary local values.
 
 ---
 
@@ -2223,7 +2246,7 @@ Every browser node should have these test classes where relevant:
 6. Disabled/bypass result.
 7. Retry behavior.
 8. Timeout behavior.
-9. Sensitive input/output exclusion.
+9. Arbitrary local input/output handling.
 10. Output available to downstream node.
 11. Run-log completeness.
 12. Host fallback disabled.
@@ -2240,7 +2263,7 @@ Every data node should have these test classes where relevant:
 5. Case-sensitive/insensitive text matching.
 6. Wildcard/regex matching.
 7. No match / multiple match policy.
-8. Sensitive file/data exclusion.
+8. Arbitrary local file/data content.
 9. Output binding into later transform node.
 
 Every control node should have:
@@ -2255,7 +2278,8 @@ Every control node should have:
 
 ## 11. Cross-node acceptance workflows
 
-Use these integration workflows as release gates.
+Use these integration workflows as source/integrated acceptance gates. They may
+be reused later during a separately approved release milestone.
 
 ### Workflow A — Search and extract
 
@@ -2270,18 +2294,18 @@ Navigate
 
 Validates navigation, text input, keypress, wait, extraction, data export.
 
-### Workflow B — Login with host fallback
+### Workflow B — Login-form data with host fallback
 
 ```text
 Navigate
 → Enter Text (username)
-→ Enter Text (password/secret)
+→ Enter Text (password value)
 → Click (browser-first, host fallback on)
 → Wait for URL
 → Extract Page Information
 ```
 
-Validates secrets exclusion, browser action, host fallback, and output publication.
+Validates arbitrary local text, browser action, host fallback, and output publication.
 
 ### Workflow C — Upload from approved directory
 
@@ -2335,14 +2359,14 @@ Validates user intervention, safe final action, and reporting.
 
 ---
 
-## 12. Deferred items / do not block current node implementation
+## 12. Deferred items / do not block the finalized node phase
 
-These are compatible with the node contracts but are not required to implement the current node set:
+These are compatible with the node contracts but are not required to implement the finalized node set:
 
-- Advanced internal-map pattern matching for infinite feeds and highly dynamic pages.
-- Dedicated manual map-refresh/diagnostics node.
+- Polished saved-map Tree/Graph explorer and dedicated Mapper Inspector window.
+- Dedicated manual map-refresh/diagnostics node, unless the finalized catalog is
+  amended explicitly.
 - Deliberate long-running background tasks from Code Node plus future Await Task node.
-- Broader network/API access inside Code Node.
 - Persistent workflow state beyond explicit approved storage behavior.
 - Rich visual element matching beyond the internal map/fingerprint strategy.
 - Advanced OCR/image analysis beyond metadata and OCR text extraction.
@@ -2364,6 +2388,6 @@ validate config
 → verify expected result where configured
 → host fallback only when supported and enabled
 → publish output
-→ persist non-sensitive logs
+→ persist configured local logs
 → route through success/failure ports
 ```

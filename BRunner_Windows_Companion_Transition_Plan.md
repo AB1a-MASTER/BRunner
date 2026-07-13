@@ -1,6 +1,13 @@
 # BRunner Windows Companion App - Transition Plan
 
-**Status:** Proposed implementation plan  
+> **Historical transition record — superseded.** Use
+> `docs/specs/07_WINDOWS_COMPANION_APP.md` and
+> `docs/COMPANION_TODO_STATUS.md` for current requirements. Pairing keys and
+> authentication language below are obsolete: the confirmed product uses a
+> cooperative non-secret per-profile instance lock. Release packaging is
+> deferred, and local data/redaction/security guarantees are out of scope.
+
+**Status:** Historical proposed implementation plan
 **Date:** June 30, 2026  
 **Purpose:** Move the existing localhost-managed Python host into a purpose-built Windows companion application while preserving the working workflow, file, and WebSocket foundations.
 
