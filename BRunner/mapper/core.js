@@ -10,6 +10,11 @@ export const MapperCaptureModes = Object.freeze({
   StaticBounded: "static_bounded",
 });
 
+export const MapperComponentLayers = Object.freeze({
+  Static: "static",
+  Dynamic: "dynamic",
+});
+
 export const MapperShadowDomModes = Object.freeze({
   OpenOnly: "open_only",
 });
@@ -225,43 +230,81 @@ export function buildStaticPageMap({
     .map((fact, index) => normalizeComponentFact(fact, index))
     .filter(Boolean);
   const orderedFacts = sortComponentFactsByVisualOrder(usableFacts);
+  const layerFacts = partitionComponentFactsByLayer(orderedFacts);
+  const staticFacts = layerFacts[MapperComponentLayers.Static];
+  const dynamicFacts = layerFacts[MapperComponentLayers.Dynamic];
   const materialMutationCount = Math.max(Number(page.materialMutationCount) || 0, 0);
   const platformProfile = normalizePlatformProfile(page.platformProfile);
   const frameSummary = normalizeFrameSummary(page.frameSummary);
-  const dynamic = materialMutationCount > policy.materialMutationLimit;
-  const overLimit = orderedFacts.length > policy.maxComponents;
-  const dynamicRegionCount = orderedFacts.filter((fact) => {
-    return ["dynamic", "loaded_window", "ephemeral_context"].includes(
-      fact.fingerprint?.structural?.regionDynamics?.classification,
-    );
-  }).length;
-  const hasBoundedDynamicRegions = dynamicRegionCount > 0;
-  const classification = overLimit
-    ? MapperPageClassifications.DynamicDeferred
-    : dynamic && hasBoundedDynamicRegions
-      ? MapperPageClassifications.HybridDynamic
-      : dynamic
-        ? MapperPageClassifications.DynamicDeferred
-        : MapperPageClassifications.Static;
-  const supportedClassification = [
-    MapperPageClassifications.Static,
-    MapperPageClassifications.HybridDynamic,
-  ].includes(classification);
-  const componentResult = supportedClassification
+  const pageMutationOverLimit = materialMutationCount > policy.materialMutationLimit;
+  const staticOverLimit = staticFacts.length > policy.maxComponents;
+  const dynamicOverLimit = dynamicFacts.length > policy.maxComponents;
+  const dynamicRegionCount = dynamicFacts.length;
+  const hasBoundedDynamicRegions = dynamicFacts.length > 0;
+  const staticBlockedByUnboundedMutation = pageMutationOverLimit && !hasBoundedDynamicRegions;
+  const hasPreviousStaticComponents = previousMapHasLayerComponents(previousMap, MapperComponentLayers.Static);
+  const hasPreviousDynamicComponents = previousMapHasLayerComponents(previousMap, MapperComponentLayers.Dynamic);
+  const staticSupported = (staticFacts.length > 0 || hasPreviousStaticComponents) &&
+    !staticOverLimit &&
+    !staticBlockedByUnboundedMutation;
+  const dynamicSupported = (dynamicFacts.length > 0 || hasPreviousDynamicComponents) &&
+    !dynamicOverLimit;
+  const staticResult = staticSupported
     ? createComponentRecords({
-        facts: orderedFacts,
+        facts: staticFacts,
         profile,
         previousMap,
         now,
+        layer: MapperComponentLayers.Static,
       })
     : {
         components: [],
         reconciliation: createEmptyReconciliation(previousMap),
       };
+  const staticComponentIds = reservedStaticComponentIds(previousMap, staticResult.components);
+  const dynamicResult = dynamicSupported
+    ? createComponentRecords({
+        facts: dynamicFacts,
+        profile,
+        previousMap,
+        now,
+        layer: MapperComponentLayers.Dynamic,
+        reservedComponentIds: staticComponentIds,
+      })
+    : {
+        components: [],
+        reconciliation: createEmptyReconciliation(previousMap),
+      };
+  const components = sortComponentsByVisualOrder(staticResult.components.concat(dynamicResult.components));
+  const hasMappedComponents = components.some((component) => {
+    return component.status !== MapperComponentStatuses.Removed;
+  });
+  const classification = !hasMappedComponents && (
+    staticOverLimit ||
+    dynamicOverLimit ||
+    pageMutationOverLimit
+  )
+    ? MapperPageClassifications.DynamicDeferred
+    : hasBoundedDynamicRegions || pageMutationOverLimit
+      ? MapperPageClassifications.HybridDynamic
+      : MapperPageClassifications.Static;
+  const reconciliation = summarizeReconciliation(previousMap, components);
   const fingerprintDigest = digestSerializable(orderedFacts.map((fact) => fact.fingerprint));
   const refreshed = Boolean(previousMap?.mapVersionId) &&
     previousMap.fingerprintDigest &&
     previousMap.fingerprintDigest !== fingerprintDigest;
+  const status = hasMappedComponents
+    ? refreshed
+      ? MapperMapStatuses.Refreshed
+      : MapperMapStatuses.Ready
+    : MapperMapStatuses.Unsupported;
+  const reason = createMapClassificationReason({
+    pageMutationOverLimit,
+    hasBoundedDynamicRegions,
+    staticOverLimit,
+    dynamicOverLimit,
+    hasMappedComponents,
+  });
 
   return {
     schemaVersion: MapperSchemaVersion,
@@ -269,36 +312,238 @@ export function buildStaticPageMap({
     siteKey: profile.siteKey,
     pageProfileKey: profile.pageKey,
     createdAt: now,
-    status: supportedClassification
-      ? refreshed
-        ? MapperMapStatuses.Refreshed
-        : MapperMapStatuses.Ready
-      : MapperMapStatuses.Unsupported,
+    status,
     classification,
+    architecture: {
+      version: "mapper.architecture.v1",
+      primaryLayer: MapperComponentLayers.Static,
+      dynamicLayer: MapperComponentLayers.Dynamic,
+      isolatedLayerReconciliation: true,
+    },
     platformProfile,
-    componentCount: componentResult.components.filter((component) => {
+    platformStructure: summarizePlatformStructure(components, platformProfile),
+    componentCount: components.filter((component) => {
       return component.status !== MapperComponentStatuses.Removed;
     }).length,
     fingerprintDigest,
-    components: componentResult.components,
-    reconciliation: componentResult.reconciliation,
-    reliabilityMetrics: componentResult.reconciliation.reliabilityMetrics,
+    components,
+    layers: {
+      [MapperComponentLayers.Static]: createMapLayerSummary({
+        layer: MapperComponentLayers.Static,
+        facts: staticFacts,
+        components: staticResult.components,
+        overLimit: staticOverLimit,
+        blockedByUnboundedMutation: staticBlockedByUnboundedMutation,
+      }),
+      [MapperComponentLayers.Dynamic]: createMapLayerSummary({
+        layer: MapperComponentLayers.Dynamic,
+        facts: dynamicFacts,
+        components: dynamicResult.components,
+        overLimit: dynamicOverLimit,
+        blockedByUnboundedMutation: false,
+      }),
+    },
+    reconciliation,
+    reliabilityMetrics: reconciliation.reliabilityMetrics,
     diagnostics: {
       scoringProfile: MapperScoringProfile.version,
       materialMutationCount,
       maxComponents: policy.maxComponents,
       platformProfileFamily: platformProfile.family,
       frameSummary,
+      staticComponentCount: staticFacts.length,
+      dynamicComponentCount: dynamicFacts.length,
       dynamicRegionCount,
       loadedContentOnly: classification === MapperPageClassifications.HybridDynamic,
-      reason: dynamic
-        ? hasBoundedDynamicRegions && !overLimit
-          ? "bounded_dynamic_regions"
-          : "material_mutation_limit_exceeded"
-        : overLimit
-          ? "component_limit_exceeded"
-          : "",
+      reason,
     },
+  };
+}
+
+function partitionComponentFactsByLayer(facts = []) {
+  return facts.reduce((layers, fact) => {
+    const layer = normalizeComponentLayer(fact.mappingLayer);
+    layers[layer].push(fact);
+    return layers;
+  }, {
+    [MapperComponentLayers.Static]: [],
+    [MapperComponentLayers.Dynamic]: [],
+  });
+}
+
+function reservedStaticComponentIds(previousMap = null, currentStaticComponents = []) {
+  const reserved = new Set(currentStaticComponents
+    .map((component) => component.componentId)
+    .filter(Boolean));
+  (Array.isArray(previousMap?.components) ? previousMap.components : [])
+    .filter((component) => componentMappingLayer(component) === MapperComponentLayers.Static)
+    .forEach((component) => {
+      if (component.componentId) reserved.add(component.componentId);
+    });
+  return reserved;
+}
+
+function previousMapHasLayerComponents(previousMap = null, layer = MapperComponentLayers.Static) {
+  return (Array.isArray(previousMap?.components) ? previousMap.components : [])
+    .some((component) => {
+      return component.status !== MapperComponentStatuses.Removed &&
+        componentMappingLayer(component) === layer;
+    });
+}
+
+function createMapLayerSummary({
+  layer = MapperComponentLayers.Static,
+  facts = [],
+  components = [],
+  overLimit = false,
+  blockedByUnboundedMutation = false,
+} = {}) {
+  const liveComponents = components.filter((component) => {
+    return component.status !== MapperComponentStatuses.Removed;
+  });
+  return {
+    version: "mapper.layer.v1",
+    layer,
+    status: facts.length
+      ? overLimit
+        ? "deferred"
+        : blockedByUnboundedMutation
+          ? "deferred"
+          : "ready"
+      : "empty",
+    reason: overLimit
+      ? `${layer}_component_limit_exceeded`
+      : blockedByUnboundedMutation
+        ? "unbounded_page_mutation"
+        : "",
+    factCount: facts.length,
+    componentCount: liveComponents.length,
+    removedCount: components.length - liveComponents.length,
+  };
+}
+
+function createMapClassificationReason({
+  pageMutationOverLimit = false,
+  hasBoundedDynamicRegions = false,
+  staticOverLimit = false,
+  dynamicOverLimit = false,
+  hasMappedComponents = false,
+} = {}) {
+  if (staticOverLimit && !hasMappedComponents) return "static_component_limit_exceeded";
+  if (dynamicOverLimit && !hasMappedComponents) return "dynamic_component_limit_exceeded";
+  if (pageMutationOverLimit && !hasBoundedDynamicRegions && !hasMappedComponents) {
+    return "material_mutation_limit_exceeded";
+  }
+  if (pageMutationOverLimit && hasBoundedDynamicRegions) return "bounded_dynamic_regions";
+  if (dynamicOverLimit) return "dynamic_component_limit_exceeded";
+  if (staticOverLimit) return "static_component_limit_exceeded";
+  return "";
+}
+
+function normalizeComponentLayer(value = "") {
+  return value === MapperComponentLayers.Dynamic
+    ? MapperComponentLayers.Dynamic
+    : MapperComponentLayers.Static;
+}
+
+function componentMappingLayer(record = {}) {
+  return normalizeComponentLayer(
+    record.mappingLayer ||
+      record.mapperLayer ||
+      inferComponentLayerFromFingerprint(record.fingerprint || record),
+  );
+}
+
+function inferComponentLayerFromFingerprint(fingerprint = {}) {
+  const structural = fingerprint?.structural || {};
+  const region = structural.regionDynamics || fingerprint.regionDynamics || {};
+  const repeat = structural.repeatScope || fingerprint.repeatScope || {};
+  const scope = structural.platformScope || fingerprint.platformScope || {};
+  const classification = cleanToken(region.classification);
+  if (["dynamic", "loaded_window", "ephemeral_context"].includes(classification)) {
+    return MapperComponentLayers.Dynamic;
+  }
+  if (repeat.loadedContentOnly === true) return MapperComponentLayers.Dynamic;
+  if (["loaded_window", "ephemeral"].includes(cleanToken(scope.durability))) {
+    return MapperComponentLayers.Dynamic;
+  }
+  if (cleanToken(scope.dynamicKind)) return MapperComponentLayers.Dynamic;
+  return MapperComponentLayers.Static;
+}
+
+function componentLayersCompatible(expected = {}, actual = {}) {
+  return componentMappingLayer(expected) === componentMappingLayer(actual);
+}
+
+function summarizePlatformStructure(components = [], profile = {}) {
+  const liveComponents = sortComponentsByVisualOrder(components).filter((component) => {
+    return component.status !== MapperComponentStatuses.Removed;
+  });
+  const scopedFamily = liveComponents
+    .map((component) => component.fingerprint?.structural?.platformScope?.family)
+    .find((family) => family && family !== "generic");
+  const family = profile?.family && profile.family !== "generic" ? profile.family : scopedFamily;
+  if (!family) return null;
+  const majorMap = new Map();
+
+  liveComponents.forEach((component) => {
+    const scope = component.fingerprint?.structural?.platformScope || {};
+    if (!scope.majorRegion) return;
+    if (!majorMap.has(scope.majorRegion)) {
+      majorMap.set(scope.majorRegion, {
+        id: scope.majorRegion,
+        path: scope.majorRegionPath || "",
+        componentCount: 0,
+        subregions: new Map(),
+      });
+    }
+    const major = majorMap.get(scope.majorRegion);
+    major.componentCount += 1;
+    const subregionId = scope.subregion || scope.region || "content";
+    if (!major.subregions.has(subregionId)) {
+      major.subregions.set(subregionId, {
+        id: subregionId,
+        path: scope.subregionPath || "",
+        componentCount: 0,
+        templates: new Map(),
+      });
+    }
+    const subregion = major.subregions.get(subregionId);
+    subregion.componentCount += 1;
+    if (!scope.templateKind) return;
+    const templateId = `${scope.templateKind}:${scope.templatePart || "content"}`;
+    if (!subregion.templates.has(templateId)) {
+      subregion.templates.set(templateId, {
+        kind: scope.templateKind,
+        part: scope.templatePart || "content",
+        componentCount: 0,
+        records: new Set(),
+      });
+    }
+    const template = subregion.templates.get(templateId);
+    template.componentCount += 1;
+    template.records.add(scope.containerId || scope.loadedWindowIndex || "pattern");
+  });
+
+  return {
+    version: "mapper.platform_structure.v1",
+    family,
+    majorRegions: Array.from(majorMap.values()).map((major) => ({
+      id: major.id,
+      path: major.path,
+      componentCount: major.componentCount,
+      subregions: Array.from(major.subregions.values()).map((subregion) => ({
+        id: subregion.id,
+        path: subregion.path,
+        componentCount: subregion.componentCount,
+        templates: Array.from(subregion.templates.values()).map((template) => ({
+          kind: template.kind,
+          part: template.part,
+          componentCount: template.componentCount,
+          recordCount: template.records.size,
+        })),
+      })),
+    })),
   };
 }
 
@@ -307,6 +552,7 @@ export function createComponentRefFromRecord(component = {}) {
     mapperSchemaVersion: MapperSchemaVersion,
     componentId: String(component.componentId || ""),
     componentUid: String(component.componentUid || ""),
+    mappingLayer: componentMappingLayer(component),
     siteKey: String(component.siteKey || ""),
     pageProfileKey: String(component.pageProfileKey || ""),
     capturedMapVersionId: String(component.capturedMapVersionId || ""),
@@ -347,7 +593,8 @@ export function resolveMappedComponent(component = {}, candidateFacts = [], opti
     .map((fact, index) => normalizeComponentFact(fact, index))
     .filter((fact) => isActionCompatible(fact.expectedCapabilities, action));
   const candidates = actionCandidates.filter((candidate) => {
-    return repeatScopesCompatible(
+    return componentLayersCompatible(component, candidate) &&
+      repeatScopesCompatible(
       component.fingerprint?.structural?.repeatScope,
       candidate.fingerprint?.structural?.repeatScope,
     ) && frameScopesCompatible(
@@ -460,6 +707,15 @@ export function scoreCandidateAgainstComponent(component = {}, candidate = {}) {
   const evidence = [];
   let score = 0;
 
+  if (!componentLayersCompatible(component, candidate)) {
+    return {
+      score: 0,
+      evidence: ["mapping_layer_contradiction"],
+      disqualified: true,
+      reason: "mapping_layer_mismatch",
+    };
+  }
+
   if (!platformScopesCompatible(
     expected.structural?.platformScope,
     actual.structural?.platformScope,
@@ -547,15 +803,26 @@ export function scoreCandidateAgainstComponent(component = {}, candidate = {}) {
   };
 }
 
-function createComponentRecords({ facts, profile, previousMap, now }) {
+function createComponentRecords({
+  facts,
+  profile,
+  previousMap,
+  now,
+  layer = MapperComponentLayers.Static,
+  reservedComponentIds = new Set(),
+}) {
   const previousComponents = Array.isArray(previousMap?.components)
     ? previousMap.components.filter((component) => {
-        return component.status !== MapperComponentStatuses.Removed;
+        return component.status !== MapperComponentStatuses.Removed &&
+          componentMappingLayer(component) === layer;
       })
     : [];
   const previousByUid = new Map(previousComponents
     .map((component) => [component.componentUid, component]));
-  const names = allocateComponentNames(facts, profile);
+  const names = allocateComponentNames(facts, profile, {
+    reservedNames: reservedComponentIds,
+    collisionSuffix: layer === MapperComponentLayers.Dynamic ? "dynamic" : "",
+  });
   const usedPreviousUids = new Set();
   const mapVersionId = createMapVersionId(profile, now, facts);
 
@@ -572,7 +839,10 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
     const previous = match.previous;
     if (previous?.componentUid) usedPreviousUids.add(previous.componentUid);
 
-    const componentId = previous?.componentId || names[index];
+    const previousComponentId = previous?.componentId || "";
+    const componentId = previousComponentId && !reservedComponentIds.has(previousComponentId)
+      ? previousComponentId
+      : names[index];
     const primaryLocator = selectPrimaryLocator(fact);
     const fallbackLocators = fact.locators.filter((locator) => locator !== primaryLocator);
     const status = match.status;
@@ -588,6 +858,7 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
       mapperSchemaVersion: MapperSchemaVersion,
       componentId,
       componentUid,
+      mappingLayer: layer,
       displayName: createDisplayName(fact),
       siteKey: profile.siteKey,
       pageProfileKey: profile.pageKey,
@@ -625,6 +896,7 @@ function createComponentRecords({ facts, profile, previousMap, now }) {
     .filter((component) => !usedPreviousUids.has(component.componentUid))
     .map((component) => ({
       ...structuredClone(component),
+      mappingLayer: layer,
       capturedMapVersionId: mapVersionId,
       updatedAt: now,
       status: MapperComponentStatuses.Removed,
@@ -797,6 +1069,7 @@ function selectPreviousComponentMatch({
 function factToCandidate(componentUid, fact = {}) {
   return {
     componentUid,
+    mappingLayer: fact.mappingLayer || inferComponentLayerFromFingerprint(fact.fingerprint || fact),
     locators: fact.locators || [],
     fingerprint: fact.fingerprint || {},
     expectedCapabilities: fact.expectedCapabilities || [],
@@ -1130,6 +1403,7 @@ function normalizeComponentFact(fact = {}, index = 0) {
     action: String(fact.action || ""),
     componentId: cleanValue(fact.componentId),
     componentUid: cleanValue(fact.componentUid),
+    mappingLayer: normalizeComponentLayer(fact.mappingLayer || fact.mapperLayer || inferComponentLayerFromFingerprint(fingerprint)),
     locators,
     fingerprint: {
       ...fingerprint,
@@ -1175,6 +1449,16 @@ function normalizePlatformScope(scope = {}) {
       version: "mapper.platform_scope.v1",
       family: "",
       region: "",
+      majorRegion: "",
+      subregion: "",
+      templateKind: "",
+      templatePart: "",
+      majorRegionPath: "",
+      subregionPath: "",
+      repeatedRecordPath: "",
+      majorRegionDepth: null,
+      subregionDepth: null,
+      repeatedRecordDepth: null,
       containerId: "",
       threadId: "",
       repeatedKind: "",
@@ -1191,6 +1475,22 @@ function normalizePlatformScope(scope = {}) {
     version: cleanValue(scope?.version || "mapper.platform_scope.v1").slice(0, 80),
     family,
     region: cleanToken(scope?.region).slice(0, 80),
+    majorRegion: cleanToken(scope?.majorRegion).slice(0, 80),
+    subregion: cleanToken(scope?.subregion || scope?.region).slice(0, 80),
+    templateKind: cleanToken(scope?.templateKind || scope?.repeatedKind).slice(0, 80),
+    templatePart: cleanToken(scope?.templatePart).slice(0, 80),
+    majorRegionPath: cleanValue(scope?.majorRegionPath).slice(0, 480),
+    subregionPath: cleanValue(scope?.subregionPath).slice(0, 480),
+    repeatedRecordPath: cleanValue(scope?.repeatedRecordPath).slice(0, 480),
+    majorRegionDepth: scope?.majorRegionDepth === undefined || scope?.majorRegionDepth === null
+      ? null
+      : clampInteger(scope.majorRegionDepth, 0, 40, 0),
+    subregionDepth: scope?.subregionDepth === undefined || scope?.subregionDepth === null
+      ? null
+      : clampInteger(scope.subregionDepth, 0, 40, 0),
+    repeatedRecordDepth: scope?.repeatedRecordDepth === undefined || scope?.repeatedRecordDepth === null
+      ? null
+      : clampInteger(scope.repeatedRecordDepth, 0, 40, 0),
     containerId: cleanToken(scope?.containerId).slice(0, 120),
     threadId: cleanToken(scope?.threadId).slice(0, 120),
     repeatedKind: cleanToken(scope?.repeatedKind).slice(0, 80),
@@ -1359,13 +1659,17 @@ function inferCapabilities(fingerprint = {}) {
   return capabilities;
 }
 
-function allocateComponentNames(facts, profile) {
+function allocateComponentNames(facts, profile, options = {}) {
+  const reservedNames = options.reservedNames instanceof Set
+    ? options.reservedNames
+    : new Set(options.reservedNames || []);
+  const collisionSuffix = toIdentifier(options.collisionSuffix || "");
   const baseCounts = new Map();
   const nameParts = facts.map((fact) => ({
     site: profile.siteKey || "site",
     page: pageNameFromProfile(profile),
     component: toIdentifier(componentSeed(fact)) || "component",
-    context: collectStructuralTokens(fact.fingerprint.structural)
+    context: componentNamingContextTokens(fact.fingerprint.structural)
       .map(toIdentifier)
       .filter(Boolean)
       .slice(0, 2)
@@ -1387,8 +1691,18 @@ function allocateComponentNames(facts, profile) {
   });
 
   const used = new Map();
+  reservedNames.forEach((name) => {
+    if (name) used.set(name, Math.max(used.get(name) || 0, 1));
+  });
   return contextualNames.map((name) => {
     const count = (used.get(name) || 0) + 1;
+    if (count > 1 && collisionSuffix) {
+      const suffixed = `${name}_${collisionSuffix}`;
+      const suffixCount = (used.get(suffixed) || 0) + 1;
+      used.set(suffixed, suffixCount);
+      used.set(name, count);
+      return suffixCount === 1 ? suffixed : `${suffixed}_${suffixCount}`;
+    }
     used.set(name, count);
     return count === 1 ? name : `${name}_${count}`;
   });
@@ -1633,11 +1947,30 @@ function pageNameFromPath(path = "/") {
   return toIdentifier(value.replace(/^\/+|\/+$/g, "").replace(/\//g, "_")) || "page";
 }
 
+function componentNamingContextTokens(structural = {}) {
+  const scope = structural.platformScope || {};
+  if (scope.family && scope.region) {
+    return [
+      `${scope.family} ${scope.subregion || scope.region}`,
+      scope.containerId
+        ? `${scope.family} container ${scope.containerId}`
+        : scope.threadId
+          ? `${scope.family} thread ${scope.threadId}`
+          : scope.majorRegion
+            ? `${scope.family} ${scope.majorRegion}`
+            : "",
+    ].filter(Boolean);
+  }
+  return collectStructuralTokens(structural);
+}
+
 function collectStructuralTokens(structural = {}) {
   const scope = structural.platformScope || {};
   const repeat = structural.repeatScope || {};
   return [
-    scope.family && scope.region ? `${scope.family} ${scope.region}` : "",
+    scope.family && scope.majorRegion ? `${scope.family} ${scope.majorRegion}` : "",
+    scope.family && (scope.subregion || scope.region) ? `${scope.family} ${scope.subregion || scope.region}` : "",
+    scope.templateKind ? `${scope.family} template ${scope.templateKind}` : "",
     scope.threadId ? `${scope.family} thread ${scope.threadId}` : "",
     scope.containerId ? `${scope.family} container ${scope.containerId}` : "",
     repeat.kind ? `repeat ${repeat.kind}` : "",
@@ -1657,7 +1990,7 @@ function platformScopesCompatible(expected = {}, actual = {}) {
   if (actualFamily !== expectedFamily) return false;
   if (cleanToken(actual?.region) !== cleanToken(expected?.region)) return false;
 
-  for (const field of ["threadId", "containerId", "repeatedKind"]) {
+  for (const field of ["majorRegion", "threadId", "containerId", "repeatedKind"]) {
     const expectedValue = cleanToken(expected?.[field]);
     if (expectedValue && cleanToken(actual?.[field]) !== expectedValue) return false;
   }

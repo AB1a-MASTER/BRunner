@@ -513,9 +513,9 @@ export async function loadNativePairing(storage = globalThis.chrome?.storage?.lo
 }
 
 export async function saveNativePairing(pairing = {}, storage = globalThis.chrome?.storage?.local) {
-  const key = String(pairing.key || "").trim();
-  if (!key) {
-    throw new Error("Pairing key is required.");
+  const key = normalizeNativePairingKey(pairing.key);
+  if (!/^[0-9a-f]{32}$/.test(key)) {
+    throw new Error("Pairing key must contain 32 hexadecimal characters.");
   }
   if (!storage) {
     throw new Error("Extension storage is unavailable.");
@@ -531,6 +531,13 @@ export function generateNativePairingKey() {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizeNativePairingKey(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/[\s-]+/g, "")
+    .toLowerCase();
 }
 
 function delay(ms) {

@@ -1,1 +1,0 @@
-in the mapper. when we click elements on a tree only the final element is highlight able. we should actually be able to highlight container also. i.e., if a div has 5 element we should also be able to highlight the whole div instead of elements only that helps a ton when manually navigation the map.

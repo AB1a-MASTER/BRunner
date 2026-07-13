@@ -1,5 +1,5 @@
 BRunner - Latest Development Handoff
-Updated: 2026-07-09
+Updated: 2026-07-12
 
 PURPOSE
 This is the starting point for the next development chat. Read this file, then
@@ -22,8 +22,10 @@ CURRENT MILESTONE
 Windows companion transition Phase 6 is functionally accepted. Approved
 directory find/write/export workflows pass, visible host fallback passes, and
 opt-in PyAutoGUI visual-match fallback passed manual acceptance with Chrome side
-UI open. The side-UI visual path is functional but slow. The current
-implementation phase is Phase 7 packaging and release cleanup. The
+UI open. Visual search is now clipped to the foreground browser window and
+reports bounded timing/region diagnostics. Companion source and Phase 7
+packaging/release cleanup are complete; packaged GUI/extension acceptance is
+the remaining user-run gate. The
 pre-shipping Sequential Studio UI/error-channel code pass is implemented.
 Graph Studio view-setting refinement is also implemented so command controls,
 panels, nodes, inspector forms, canvas tools, and execution logs scale from the
@@ -480,8 +482,9 @@ Completed companion foundation slices:
     status through `MapStoreUnavailableError` and `getStatus()`, mapper states
     retain storage metadata, host saves stamp native revisions, oversized
     normal payloads are capped at 1 MB, and stale saves retain bounded
-    last-write-wins conflict metadata. Chrome storage remains the default until
-    filesystem-backed persistence is explicitly accepted.
+    last-write-wins conflict metadata. Chrome storage is the final active
+    mapper store; page maps are disposable and recreated after loss, so the
+    native adapter remains inactive and no periodic snapshots are planned.
 42. Added Mapper Inspector component filtering for the stress-page/manual
     acceptance slice. Tree, Graph, and Review Queue now share component
     search/status filters covering Component ID, alias, display name, role/type,
@@ -753,23 +756,86 @@ Completed companion foundation slices:
     realm-safe structural traversal, and visible-host coordinate fallback is
     explicitly blocked for nested frames until frame-to-screen translation is
     supported. Normal browser mapper execution remains frame-routed.
+92. Added selectable Structure containers in Mapper Inspector. Intermediate DOM
+    rows carry exact shadow/frame-aware paths and highlight the complete live
+    container while the chevron independently controls tree disclosure.
+93. Finalized mapper persistence as Chrome-storage-only and disposable by
+    design. Approved legacy source/test/icon artifacts were removed; defensive
+    release exclusions remain to prevent accidental reintroduction.
+94. Closed the remaining companion source tasks: 128-bit pairing keys now have
+    grouped display and strict host/extension validation, pairing changes
+    restart managed hosts to revoke old sessions, configured autostart and
+    idempotent tray/application shutdown are wired, and Windows child-host
+    startup is hidden. Managed stop terminates the full packaged PyInstaller
+    process tree so its extracted child cannot remain listening.
+95. Optimized visual-match fallback by clipping PyAutoGUI search to the visible
+    foreground browser window while retaining two-match ambiguity protection;
+    results and logs now include bounded search region and duration.
+96. Added packaged `BRunnerHost.exe --self-check`, strict executable/extension
+    release validation, and `docs/COMPANION_TODO_STATUS.md`. Companion source is
+    complete; only user-run packaged GUI/extension acceptance remains.
+97. Replaced flat chat/social mapper grouping with a top-down platform
+    hierarchy. Component scopes and saved `mapper.platform_structure.v1`
+    summaries now preserve application shell, major pane, subregion, repeated
+    template/part, and redacted record boundaries. Inspector Structure exposes
+    highlightable pane containers; Graph uses one lane per major pane and
+    aggregates repeated contacts, messages, and posts instead of drawing giant
+    lists. The local fixture now models chat navigation, contacts/search/list,
+    thread header/history/composer, plus social navigation/feed/right rail.
+98. Fixed Inspector highlighting across reloads by replacing reset-prone local
+    request counters with session-safe monotonic request IDs. Chat/social Tree
+    templates now contain numbered contact/message/post records with their own
+    live DOM paths; social post parts stay under one feed record, and exact
+    duplicate Component IDs are suppressed in the viewer.
+99. Consolidated repeated Graph templates across content/media/action parts so
+    each template is rendered exactly once with aggregate record/part/element
+    counts. Upgraded Structure container targets to v2: each target anchors to
+    a mapped descendant, resolves that descendant live, and walks the composed
+    light/shadow DOM ancestry before using the old exact path fallback.
+100. Split mapper records into explicit static and dynamic lanes. Mapper Core
+    now stores `architecture.isolatedLayerReconciliation = true` and per-layer
+    `layers.static` / `layers.dynamic` summaries. Static remains the primary
+    workflow execution lane; dynamic, loaded-window, ephemeral, and loaded-only
+    repeat records reconcile only against dynamic history. Dynamic component
+    limits can defer the dynamic lane without erasing ready static components,
+    and dynamic records cannot inherit static Component IDs when text, locator,
+    or UID evidence overlaps. Content runtime and coordinator matching now also
+    reject static/dynamic layer crossings. The Inspector Policy rail now shows
+    a compact **Map Layers** diagnostic with static/dynamic counts, lane state,
+    removed records, and deferred dynamic reasons.
+101. Fixed Inspector Structure hierarchy for same-origin frames. Structure mode
+    now prefixes non-top DOM paths with a virtual frame grouping row, so iframe
+    `body/main/form` branches no longer merge into top-page `body/main/form`
+    branches. Stored DOM paths and resolver/highlight payloads remain
+    unchanged; only Inspector tree keys/labels are frame-aware, and actual
+    DOM/container rows below the frame group stay highlightable.
+102. Fixed explicit chat/social fixture platform scoping. When local profile
+    roots exist, generic page chrome/results outside those roots no longer
+    receive inferred chat/social scope, and fixture controls inside a profile
+    root but outside the actual app shell are grouped as shell/profile controls
+    instead of being folded into Thread Header, Chat Pane, or Feed Pane.
+103. Unified Inspector structural rendering. Tree Structure, desktop Graph, and
+    mobile Graph now build from the same DOM-path structure root, so platform
+    pages keep their real `body > main > section > app shell` hierarchy instead
+    of switching to a separate platform-only hierarchy. Status/log/pre/output
+    text containers are now passive text candidates, so visible event-log text
+    such as `Ready.` is included when it is mappable.
 
 Next isolated implementation slice:
-1. Continue Mapper Inspector manual stress-page testing, especially grouped-site
+1. User: complete packaged companion acceptance from
+   `docs/COMPANION_TODO_STATUS.md` and Mapper Inspector manual stress-page
+   testing, especially grouped-site
    page/version selection, dynamic DOM Refresh Map behavior, full rail collapse,
    right-section resizing, compact icon/tooltips, color legend, direct
    site/page/version deletion, responsive widths, live highlight behavior, and
    Review Queue candidate-link flows.
-2. Decide, after live/manual acceptance, whether to switch mapper persistence
-   default from Chrome storage to the filesystem-backed native adapter.
-3. Ask the user before removing old source artifacts. Current cleanup
-   candidates are `BRunner/New folder/`, `BRunner/todo`, `BRunner/test.html`,
-   unused icon alternates `BRunner/icons/icon1.jfif`, `icon3.jfif`, `icon4.jfif`,
-   transitional `BRunner_Host/host_ui.py`, and `BRunner_Host/brunner_host copy.py`.
+2. Verify intermediate Structure-container highlighting in light DOM, open
+   Shadow DOM, and same-origin frame fixtures. Chrome storage remains the final
+   mapper store; filesystem persistence and periodic snapshots are closed.
 
 After the companion app is accepted:
-- implement the mapper reliability transition from
-  `docs/specs/08_MAPPER_RELIABILITY_TRANSITION.md`;
+- complete the remaining live mapper acceptance in
+  `docs/MAPPER_TODO_STATUS.md`;
 - implement the finalized node set from
   `workflow_nodes_implementation_blueprint.md`;
 - keep graph control flow tied to graph traversal, branch handles, cycle

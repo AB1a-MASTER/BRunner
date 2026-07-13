@@ -144,12 +144,12 @@ clipboard, download wait, HTTP request, data inspector, screenshot capture, and
 visible host fallback. Final release packaging now emits two user-facing
 artifacts: the extension zip and the Windows host executable.
 
-Pairing follow-up: initial source implementation replaced manual extension-ID
-entry with a clean key-based flow. The extension stores/generates/shows the key
-near host status, the companion Pairing tab accepts the key and configures the
-WebSocket port, and successful auth stores the extension runtime ID internally
-as the trusted fingerprint. Final manual acceptance and any shorter PIN polish
-remain.
+Pairing source is complete: manual extension-ID entry was replaced with a clean
+key-based flow. The extension stores/generates/shows a validated 128-bit key,
+the companion displays it in readable groups, successful auth stores the
+extension runtime ID as the trusted fingerprint, and pairing changes restart a
+managed host to revoke old sessions. A shorter PIN was intentionally rejected
+to preserve entropy. Final manual packaged acceptance remains.
 
 Implementation phases:
 
@@ -165,11 +165,11 @@ Implementation phases:
    auth gating before host commands.**
 5. User-selectable workflow directory with use-new, copy, and move migration
    choices. **Implemented.**
-6. Approved directory registry and alias-based file/data access. **Partially
-   implemented: schema, read/data-source aliases, folder-management UI, and
+6. Approved directory registry and alias-based file/data access. **Implemented:
+   schema, read/data-source aliases, folder-management UI, and
    find/write/export service behavior and approved-directory workflow
    acceptance are in.**
-7. Versioned protocol v2 and structured visible host fallback. **Started:
+7. Versioned protocol v2 and structured visible host fallback. **Source complete:
    initial `host.hello`, `host.window`, `host.action`, and
    `host.visual_match` service/bridge
    foundations are in, and the Host Fallback companion tab plus diagnostics are
@@ -177,7 +177,8 @@ Implementation phases:
    type is in with refreshed host-served manual acceptance workflow coverage
    passing; initial opt-in PyAutoGUI visual-match recovery is implemented
    after coordinate/debugger recovery and has passed manual acceptance with
-   Chrome side UI open, though that path is currently slower than desired.**
+   Chrome side UI open. Visual search is now clipped to the foreground browser
+   window and reports bounded search-region/timing diagnostics.**
    This visual fallback remains opt-in, foreground-window
    gated, confidence-thresholded, and verified by extension-side post-action
    checks before the step counts as successful.
@@ -185,7 +186,8 @@ Implementation phases:
    PyInstaller hidden imports/excludes are centralized, runtime/development
    outputs are ignored for release hygiene, `release_builder.py` emits exactly
    `BRunner-extension.zip` and `BRunnerHost.exe`, and the packaged host service
-   smoke passes from the final release directory.**
+   smoke passes from the final release directory. Packaged `--self-check` and
+   strict release archive/executable validation are included.**
 
 Pre-shipping blocker status before packaging/install acceptance:
 
@@ -201,8 +203,10 @@ Pre-shipping blocker status before packaging/install acceptance:
 - Implemented in code: Graph Studio display/view settings now scale command
   controls, panels, nodes, inspector forms, canvas tools, and execution logs
   through shared density-derived Graph tokens.
+- Source gate complete: configured host autostart, idempotent shutdown,
+  packaged self-check, strict release validation, and exact two-artifact output.
 - Remaining gate: final manual install/load acceptance with the two release
-  artifacts and companion GUI start/stop path.
+  artifacts and companion GUI/tray path.
 
 **Gate:** the packaged app opens as a Windows companion, no production browser
 manager page is needed, workflows are saved atomically beside the executable by
@@ -279,7 +283,10 @@ Implementation phases:
    and count-only redacted reliability metrics. Runtime mapper resolution now
    feeds fallback/ambiguous/not-found counters and bounded redacted attempts
    back into the saved page map. The Mapper Inspector surfaces those counters
-   and attempts as compact redacted app telemetry.**
+   and attempts as compact redacted app telemetry. Static and dynamic mapper
+   lanes are now explicit: static remains the primary execution/reconciliation
+   path, dynamic/loaded-window records reconcile only against dynamic history,
+   and deferred dynamic limits no longer erase ready static records.**
 4. Dedicated Mapper Inspector window with map browsing, live resolution checks,
    highlight, Review Queue, aliases, sensitive-site badges, and effective policy
    view. The Inspector must expose a saved-map website list plus Tree and Graph
@@ -331,14 +338,19 @@ Implementation phases:
    the workflow storage root, and a `NativeMapStore` adapter behind the same
    extension contract. Native mapper calls now have bounded request timeouts,
    unavailable/timeout status reporting, a 1 MB normal payload cap, native
-   revision stamps, and retained last-write-wins conflict metadata. Chrome
-   storage remains the default until the product switch to filesystem-backed
-   persistence is explicitly accepted.**
+   revision stamps, and retained last-write-wins conflict metadata. The final
+   product decision keeps Chrome storage as the mapper store: page maps are
+   disposable and should be recreated after loss. The native adapter remains
+   inactive and no periodic filesystem snapshots will be added.**
 6. Dynamic, feed, same-origin frame, and platform-specific app profile work
    after static/open-shadow reliability tests are stable. Bounded region
    dynamics, loaded-window behavior, same-origin frame path routing, known-host
    profile inference, and conservative repeated-row/card protection are now in
-   source. Chat and
+   source. Chat/social profiles now map top-down from the application shell to
+   major panes, semantic subregions, repeated templates, and leaf components.
+   Saved maps retain a redacted platform-structure summary; Inspector Structure
+   exposes highlightable pane boundaries and Graph renders compact pane lanes
+   instead of flat repeated-component columns. Chat and
    social media products such as WhatsApp Web, Facebook, Instagram, and Reddit
    need their own mapper profile track for virtualized feeds, repeated cards,
    conversation/thread regions, composers, action bars, unread badges, and

@@ -12,6 +12,7 @@ const state = {
   siteGroups: [],
   selectedEntryId: "",
   selectedComponentId: "",
+  selectedContainerKey: "",
   activeView: "tree",
   treeMode: "structure",
   treeCollapsed: {},
@@ -35,6 +36,7 @@ const state = {
   highlightRequestId: 0,
   activeResolutionKey: "",
   graphView: {
+    orientation: "vertical",
     scale: 0.86,
     panX: 18,
     panY: 18,
@@ -154,6 +156,7 @@ async function loadStates() {
     if (!state.entries.some((entry) => entry.id === state.selectedEntryId)) {
       state.selectedEntryId = state.siteGroups[0]?.latest?.id || state.entries[0]?.id || "";
       state.selectedComponentId = "";
+      state.selectedContainerKey = "";
       resetGraphView();
     }
     renderAll();
@@ -179,6 +182,7 @@ async function mapActivePage() {
     if (response.workflowId) els.workflowId.value = response.workflowId;
     state.selectedEntryId = entryId(response.workflowId, response.pageMap);
     state.selectedComponentId = "";
+    state.selectedContainerKey = "";
     resetGraphView();
     await loadStates();
     setStatus(response.deferred
@@ -210,6 +214,7 @@ async function refreshSelectedPageMap() {
 
     state.selectedEntryId = entryId(response.workflowId, response.pageMap);
     state.selectedComponentId = previousComponentId;
+    state.selectedContainerKey = "";
     resetGraphView();
     await loadStates();
     if (!selectedComponent()) {
@@ -411,7 +416,7 @@ function selectedFilteredComponents() {
 }
 
 function filterComponents(entry = null, options = {}) {
-  const components = sortComponentsByVisualOrder(entry?.pageMap?.components || []);
+  const components = uniqueInspectorComponents(sortComponentsByVisualOrder(entry?.pageMap?.components || []));
   const query = normalizeText(state.componentQuery);
   const statusFilter = normalizeText(state.componentStatusFilter);
   const includeRemoved = options.includeRemoved === true;
@@ -437,11 +442,34 @@ function filterComponents(entry = null, options = {}) {
   });
 }
 
+function uniqueInspectorComponents(components = []) {
+  const seen = new Set();
+  return components.filter((component, index) => {
+    const layer = componentMappingLayer(component);
+    const identity = component.componentId || component.componentUid ||
+      `${component.fingerprint?.structural?.frameScope?.path || "top"}:${component.fingerprint?.technical?.domPath || index}`;
+    const key = `${layer}:${identity}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function componentMappingLayer(component = {}) {
+  return component.mappingLayer === "dynamic" || componentIsDynamicContext(component)
+    ? "dynamic"
+    : "static";
+}
+
 function sortComponentsByVisualOrder(components = []) {
   return components.slice().sort(compareComponentsByVisualOrder);
 }
 
 function compareComponentsByVisualOrder(a = {}, b = {}) {
+  const aRemoved = a.status === "removed";
+  const bRemoved = b.status === "removed";
+  if (aRemoved !== bRemoved) return aRemoved ? 1 : -1;
+
   const aBounds = visualOrderBounds(a);
   const bBounds = visualOrderBounds(b);
   if (aBounds.hasPosition && bBounds.hasPosition) {
@@ -499,6 +527,7 @@ function componentSearchText(component = {}) {
     componentShortName(component),
     componentIsHidden(component) ? "hidden invisible not visible" : "",
     componentIsDynamicContext(component) ? "dynamic context loaded window ephemeral" : "",
+    component.mappingLayer,
     component.status,
     component.reviewRequired ? "review required" : "",
     semantic.role,
@@ -731,6 +760,7 @@ function renderSites() {
       void clearWebsiteHighlight(previousEntry);
       state.selectedEntryId = group?.latest?.id || "";
       state.selectedComponentId = "";
+      state.selectedContainerKey = "";
       resetGraphView();
       renderAll();
       void checkSelectedPageLiveStatus();
@@ -868,6 +898,7 @@ function renderVersionTools(entry) {
     void clearWebsiteHighlight(previousEntry);
     state.selectedEntryId = pageGroup?.latest?.id || "";
     state.selectedComponentId = "";
+    state.selectedContainerKey = "";
     resetGraphView();
     renderAll();
     void checkSelectedPageLiveStatus();
@@ -878,6 +909,7 @@ function renderVersionTools(entry) {
     void clearWebsiteHighlight(previousEntry);
     state.selectedEntryId = event.target.value;
     state.selectedComponentId = "";
+    state.selectedContainerKey = "";
     resetGraphView();
     renderAll();
     void checkSelectedPageLiveStatus();
@@ -964,6 +996,7 @@ async function deleteSelectedPageGroup() {
       ? nextEntryId
       : state.siteGroups[0]?.latest?.id || state.entries[0]?.id || "";
     state.selectedComponentId = "";
+    state.selectedContainerKey = "";
     resetGraphView();
     renderAll();
     setStatus(nextEntryId ? "Saved mapper page deleted." : "Saved mapper page deleted. No saved maps remain.");
@@ -1013,6 +1046,7 @@ async function deleteSiteGroup(siteKey = "") {
     pruneInspectorResolutionState();
     state.selectedEntryId = state.siteGroups[0]?.latest?.id || state.entries[0]?.id || "";
     state.selectedComponentId = "";
+    state.selectedContainerKey = "";
     resetGraphView();
     renderAll();
     setStatus(state.selectedEntryId ? "Saved mapper site deleted." : "Saved mapper site deleted. No saved maps remain.");
@@ -1105,6 +1139,7 @@ function renderPolicyPanel() {
   els.policy.innerHTML = `
     ${renderPlatformProfileSummary(map)}
     ${renderFrameSummary(map)}
+    ${renderMapLayerSummary(map)}
     ${renderReliabilitySummary(entry)}
     <div class="policy-grid">
       <div>
@@ -1275,17 +1310,35 @@ function renderGroupedComponentTree(components = [], groupNameFn, groupIcon = "r
 }
 
 function renderStructureTree(components = [], parentKey = "") {
-  const root = createStructureNode("document", "document", 1);
-  sortComponentsByVisualOrder(components).forEach((component) => insertComponentIntoStructure(root, component));
+  const root = buildInspectorStructureRoot(components);
   return root.children.map((node) => structureNodeHtml(node, 2, parentKey)).join("");
 }
 
+function buildInspectorStructureRoot(components = []) {
+  const root = createStructureNode("document", "document", 1);
+  uniqueInspectorComponents(sortComponentsByVisualOrder(components))
+    .forEach((component) => insertComponentIntoStructure(root, component));
+  return root;
+}
+
+function frameStructurePart(frameScope = {}) {
+  if (!frameScope.path || frameScope.path === "top") return "";
+  return `frame:${frameScope.access || "same_origin"}:${frameScope.path}`;
+}
+
 function renderGraph(entry, filteredComponents = filterComponents(entry)) {
-  const graph = buildInspectorGraph(entry, filteredComponents);
+  const graph = orientInspectorGraph(buildInspectorGraph(entry, filteredComponents));
+  const nextOrientation = graph.orientation === "horizontal" ? "vertical" : "horizontal";
 
   els.views.graph.innerHTML = `
-    <div class="graph-shell">
+    <div class="graph-shell graph-layout-${escapeAttr(graph.orientation)}">
       <div class="graph-controls">
+        ${iconButtonHtml({
+          icon: `layout-${nextOrientation}`,
+          label: `Use ${nextOrientation} graph layout`,
+          className: "icon-button",
+          attrs: `data-graph-action="toggle-orientation" aria-pressed="${graph.orientation === "horizontal"}"`,
+        })}
         ${iconButtonHtml({ icon: "fit", label: "Fit graph", className: "icon-button", attrs: `data-graph-action="fit"` })}
         ${iconButtonHtml({ icon: "reset", label: "Reset graph pan and zoom", className: "icon-button", attrs: `data-graph-action="reset"` })}
         ${iconButtonHtml({ icon: "minus", label: "Zoom out", className: "icon-button", attrs: `data-graph-action="zoom-out"` })}
@@ -1302,7 +1355,7 @@ function renderGraph(entry, filteredComponents = filterComponents(entry)) {
           ${graph.nodes.map(graphNodeHtml).join("")}
         </div>
       </div>
-      ${renderMobileGraphList(filteredComponents)}
+      ${renderMobileGraphList(filteredComponents, entry.pageMap)}
     </div>
   `;
 
@@ -1310,23 +1363,42 @@ function renderGraph(entry, filteredComponents = filterComponents(entry)) {
   wireGraphCanvas(els.views.graph, graph);
 }
 
-function renderMobileGraphList(components = []) {
-  const groups = Object.entries(groupBy(sortComponentsByVisualOrder(components), componentRegionName));
+function renderMobileGraphList(components = [], map = {}) {
+  const root = buildInspectorStructureRoot(components);
   return `
     <div class="graph-mobile-list" aria-label="Graph hierarchy list">
-      ${groups.map(([region, group]) => `
-        <section class="graph-mobile-region">
-          <h3>${escapeHtml(region)} <span>${group.length}</span></h3>
-          ${group.map((component) => `
-            <button class="component-row selectable ${component.componentId === state.selectedComponentId ? "active" : ""} ${componentIsHidden(component) ? "hidden-component" : ""}"
-              data-component-id="${escapeAttr(component.componentId)}" type="button">
-              <span class="row-title">${escapeHtml(componentShortName(component))}</span>
-              <span class="row-meta">${componentStatusLineHtml(component)}</span>
-            </button>
-          `).join("")}
-        </section>
-      `).join("") || `<div class="empty-state">No components match the current filter.</div>`}
+      ${root.children.map((node) => structureMobileGraphNodeHtml(node, 0)).join("") ||
+        `<div class="empty-state">No components match the current filter.</div>`}
     </div>
+  `;
+}
+
+function structureMobileGraphNodeHtml(node = {}, level = 0) {
+  const nodeKey = treeNodeKey("mobile-graph-structure", node.key);
+  const containerTarget = node.containerTarget
+    ? encodeURIComponent(JSON.stringify(node.containerTarget))
+    : "";
+  return `
+    <section class="graph-mobile-region" style="--level: ${Number(level) || 0};">
+      <h3>
+        ${containerTarget ? `
+          <button class="inline-container-button" data-graph-container-target="${escapeAttr(containerTarget)}"
+            data-container-key="${escapeAttr(nodeKey)}" type="button">
+            ${escapeHtml(node.title)}
+          </button>
+        ` : escapeHtml(node.title)}
+        <span>${countStructureComponents(node)}</span>
+      </h3>
+      ${sortComponentsByVisualOrder(node.components || []).map((component) => `
+        <button class="component-row selectable ${component.componentId === state.selectedComponentId ? "active" : ""} ${componentIsHidden(component) ? "hidden-component" : ""}"
+          data-component-id="${escapeAttr(component.componentId)}" type="button">
+          <span class="row-title">${escapeHtml(componentShortName(component))}</span>
+          <span class="row-meta">${componentStatusLineHtml(component)}</span>
+        </button>
+      `).join("")}
+      ${(node.children || []).slice().sort(compareStructureNodesByVisualOrder)
+        .map((child) => structureMobileGraphNodeHtml(child, level + 1)).join("")}
+    </section>
   `;
 }
 
@@ -1334,120 +1406,219 @@ function buildInspectorGraph(entry, filteredComponents = null) {
   const map = entry.pageMap || {};
   const allComponents = sortComponentsByVisualOrder(map.components || []);
   const components = sortComponentsByVisualOrder(filteredComponents || allComponents);
-  const regionGroups = Object.entries(groupBy(components, componentRegionName));
+  return buildStructuralInspectorGraph(entry, components, allComponents);
+}
+
+function buildStructuralInspectorGraph(entry, components = [], allComponents = []) {
+  const map = entry.pageMap || {};
+  const structureRoot = buildInspectorStructureRoot(components);
   const nodes = [];
   const edges = [];
-  const nodeById = new Map();
   const size = {
     site: { width: 240, height: 64 },
     page: { width: 240, height: 64 },
-    region: { width: 210, height: 58 },
+    region: { width: 220, height: 58 },
+    subregion: { width: 220, height: 56 },
+    template: { width: 220, height: 56 },
     component: { width: 250, height: 70 },
   };
-  const gapX = 52;
-  const gapY = 28;
-  const top = 48;
-  const pageY = top + size.site.height + 48;
-  const regionY = pageY + size.page.height + 58;
-  const componentY = regionY + size.region.height + gapY;
+  const paddingX = 48;
+  const paddingY = 42;
+  const gapX = 34;
+  const gapY = 38;
+  const levelHeight = 102;
+  const leafWidth = 284;
 
-  const addNode = (node) => {
-    nodes.push(node);
-    nodeById.set(node.id, node);
-    return node;
-  };
-  const addEdge = (fromId, toId) => {
-    const from = nodeById.get(fromId);
-    const to = nodeById.get(toId);
-    if (from && to) edges.push({ from, to });
-  };
-
-  const componentNodesByRegion = regionGroups.map(([region, group], index) => {
-    const groupWidth = Math.max(size.region.width, size.component.width);
-    const groupX = 48 + index * (groupWidth + gapX);
-    const componentX = groupX + Math.round((groupWidth - size.component.width) / 2);
-    const regionX = groupX + Math.round((groupWidth - size.region.width) / 2);
-    const regionNode = addNode({
-      id: `region:${index}`,
-      kind: "region",
-      x: regionX,
-      y: regionY,
-      ...size.region,
-      title: region,
-      meta: `${group.length} element(s)`,
-    });
-    const componentNodes = group.map((component, componentIndex) => {
-      const node = addNode({
-        id: `component:${component.componentId}`,
-        kind: "component",
-        x: componentX,
-        y: componentY + componentIndex * (size.component.height + gapY),
-        ...size.component,
-        title: componentShortName(component),
-        meta: `${component.status || "unknown"} | ${component.componentId || ""}`,
-        status: component.status || "unknown",
-        reviewRequired: component.reviewRequired === true,
-        hidden: componentIsHidden(component),
-        componentId: component.componentId,
-      });
-      return node;
-    });
-    return { regionNode, componentNodes };
-  });
-
-  const longestRegion = Math.max(0, ...regionGroups.map(([, group]) => group.length));
-  const regionCount = Math.max(regionGroups.length, 1);
-  const totalWidth = Math.max(
-    720,
-    96 + regionCount * Math.max(size.region.width, size.component.width) + Math.max(0, regionCount - 1) * gapX,
-  );
-  const totalHeight = Math.max(
-    420,
-    componentY + longestRegion * (size.component.height + gapY) + 48,
-  );
-  const centerX = Math.round(totalWidth / 2);
-  const siteNode = addNode({
+  const graphTree = {
     id: "site",
     kind: "site",
-    x: centerX - Math.round(size.site.width / 2),
-    y: top,
-    ...size.site,
     title: map.hostname || map.siteKey || "Website",
     meta: entry.workflowId || "",
-  });
-  const pageNode = addNode({
-    id: "page",
-    kind: "page",
-    x: centerX - Math.round(size.page.width / 2),
-    y: pageY,
-    ...size.page,
-    title: map.path || "/",
-    meta: `${map.status || "unknown"} | ${map.classification || "page"}`,
-  });
+    children: [{
+      id: "page",
+      kind: "page",
+      title: map.path || "/",
+      meta: `${map.status || "unknown"} | ${map.classification || "page"}`,
+      children: structureRoot.children.map((node) => structureNodeToGraphTree(node)),
+    }],
+  };
 
-  addEdge(siteNode.id, pageNode.id);
-  componentNodesByRegion.forEach(({ regionNode, componentNodes }) => {
-    addEdge(pageNode.id, regionNode.id);
-    componentNodes.forEach((componentNode) => addEdge(regionNode.id, componentNode.id));
+  const measureLeaves = (node) => {
+    node.children = Array.isArray(node.children) ? node.children : [];
+    if (!node.children.length) {
+      node.leafCount = 1;
+      return node.leafCount;
+    }
+    node.leafCount = node.children.reduce((total, child) => total + measureLeaves(child), 0);
+    return node.leafCount;
+  };
+  measureLeaves(graphTree);
+
+  let maxDepth = 0;
+  const laidOut = [];
+  const layoutNode = (node, depth, startLeaf) => {
+    maxDepth = Math.max(maxDepth, depth);
+    const nodeSize = size[node.kind] || size.region;
+    const span = Math.max(1, node.leafCount || 1);
+    const centerLeaf = startLeaf + (span - 1) / 2;
+    const graphNode = {
+      id: node.id,
+      kind: node.kind,
+      x: Math.round(paddingX + centerLeaf * leafWidth),
+      y: Math.round(paddingY + depth * levelHeight),
+      ...nodeSize,
+      title: node.title,
+      meta: node.meta,
+      status: node.status || "",
+      reviewRequired: node.reviewRequired === true,
+      hidden: node.hidden === true,
+      componentId: node.componentId || "",
+      containerTarget: node.containerTarget || null,
+      containerKey: node.containerKey || "",
+    };
+    laidOut.push(graphNode);
+    let cursor = startLeaf;
+    node.children.forEach((child) => {
+      const childGraphNode = layoutNode(child, depth + 1, cursor);
+      edges.push({ from: graphNode, to: childGraphNode });
+      cursor += child.leafCount || 1;
+    });
+    return graphNode;
+  };
+  layoutNode(graphTree, 0, 0);
+
+  laidOut.forEach((node) => {
+    const centeredX = node.x - Math.round(node.width / 2);
+    nodes.push({ ...node, x: centeredX });
   });
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const graphEdges = edges.map((edge) => ({
+    from: nodeById.get(edge.from.id),
+    to: nodeById.get(edge.to.id),
+  })).filter((edge) => edge.from && edge.to);
+  const rightEdge = Math.max(0, ...nodes.map((node) => node.x + node.width));
+  const bottomEdge = Math.max(0, ...nodes.map((node) => node.y + node.height));
 
   return {
     nodes,
-    edges,
-    width: totalWidth,
-    height: totalHeight,
+    edges: graphEdges,
+    width: Math.max(760, rightEdge + paddingX),
+    height: Math.max(500, bottomEdge + paddingY),
     componentCount: components.length,
     totalComponentCount: allComponents.length,
     reviewCount: components.filter((component) => component.reviewRequired).length,
   };
 }
 
+function structureNodeToGraphTree(node = {}) {
+  const children = [
+    ...sortComponentsByVisualOrder(node.components || []).map(componentToGraphTree),
+    ...(node.children || []).slice().sort(compareStructureNodesByVisualOrder).map(structureNodeToGraphTree),
+  ];
+  return {
+    id: `structure:${node.key}`,
+    kind: graphKindForStructureNode(node),
+    title: node.title || "element",
+    meta: `${countStructureComponents(node)} mapped element(s)`,
+    containerTarget: node.containerTarget || null,
+    containerKey: treeNodeKey("graph-structure", node.key),
+    children,
+  };
+}
+
+function componentToGraphTree(component = {}) {
+  return {
+    id: `component:${component.componentId}`,
+    kind: "component",
+    title: componentShortName(component),
+    meta: `${component.status || "unknown"} | ${component.componentId || ""}`,
+    status: component.status || "unknown",
+    reviewRequired: component.reviewRequired === true,
+    hidden: componentIsHidden(component),
+    componentId: component.componentId,
+    children: [],
+  };
+}
+
+function graphKindForStructureNode(node = {}) {
+  const title = normalizeIdentifier(node.title || "");
+  if (["body", "main", "header", "footer", "nav", "section", "article", "aside"].includes(title)) {
+    return "region";
+  }
+  if (["form", "div", "ul", "ol", "table", "tbody", "tr"].includes(title)) {
+    return "subregion";
+  }
+  return "template";
+}
+
+function humanizeScopeToken(value = "") {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .trim() || "Content";
+}
+
+function orientInspectorGraph(graph = {}) {
+  const orientation = state.graphView.orientation === "horizontal" ? "horizontal" : "vertical";
+  if (orientation === "vertical") return { ...graph, orientation };
+
+  const paddingX = 48;
+  const paddingY = 42;
+  const gapX = 72;
+  const gapY = 24;
+  const depthById = new Map((graph.nodes || []).map((node) => [node.id, 0]));
+  (graph.edges || []).forEach((edge) => {
+    depthById.set(edge.to.id, Math.max(
+      depthById.get(edge.to.id) || 0,
+      (depthById.get(edge.from.id) || 0) + 1,
+    ));
+  });
+  const layers = Object.entries(groupBy(graph.nodes || [], (node) => depthById.get(node.id) || 0))
+    .sort(([a], [b]) => Number(a) - Number(b));
+  const layerHeights = layers.map(([, layerNodes]) => {
+    return layerNodes.reduce((height, node) => height + node.height, 0) + Math.max(0, layerNodes.length - 1) * gapY;
+  });
+  const contentHeight = Math.max(0, ...layerHeights);
+  const nodes = [];
+  let cursorX = paddingX;
+  layers.forEach(([, layerNodes], layerIndex) => {
+    const layerWidth = Math.max(0, ...layerNodes.map((node) => node.width));
+    let cursorY = paddingY + Math.round((contentHeight - layerHeights[layerIndex]) / 2);
+    layerNodes.forEach((node) => {
+      nodes.push({
+        ...node,
+        x: Math.round(cursorX + (layerWidth - node.width) / 2),
+        y: cursorY,
+      });
+      cursorY += node.height + gapY;
+    });
+    cursorX += layerWidth + gapX;
+  });
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const edges = (graph.edges || []).map((edge) => ({
+    from: nodeById.get(edge.from.id),
+    to: nodeById.get(edge.to.id),
+  })).filter((edge) => edge.from && edge.to);
+
+  return {
+    ...graph,
+    nodes,
+    edges,
+    orientation,
+    width: Math.max(760, cursorX - gapX + paddingX),
+    height: Math.max(500, contentHeight + paddingY * 2),
+  };
+}
+
 function graphNodeHtml(node) {
-  const active = node.componentId === state.selectedComponentId;
+  const active = node.componentId
+    ? node.componentId === state.selectedComponentId
+    : node.containerKey && node.containerKey === state.selectedContainerKey;
   const classes = [
     "graph-node",
     `graph-node-${node.kind}`,
-    node.componentId ? "selectable" : "",
+    node.componentId || node.containerTarget ? "selectable" : "",
+    node.containerTarget ? "container-highlightable" : "",
     active ? "active" : "",
     node.reviewRequired ? "review-required" : "",
     node.hidden ? "hidden-component" : "",
@@ -1468,10 +1639,31 @@ function graphNodeHtml(node) {
     `;
   }
 
+  if (node.containerTarget) {
+    const containerTarget = encodeURIComponent(JSON.stringify(node.containerTarget));
+    return `
+      <button class="${classes}" style="${style}"
+        data-container-key="${escapeAttr(node.containerKey || node.id)}"
+        data-graph-container-target="${escapeAttr(containerTarget)}"
+        title="Highlight container" type="button">
+        ${body}
+      </button>
+    `;
+  }
+
   return `<div class="${classes}" style="${style}">${body}</div>`;
 }
 
 function graphEdgeHtml(edge) {
+  if (state.graphView.orientation === "horizontal") {
+    const startX = edge.from.x + edge.from.width;
+    const startY = edge.from.y + edge.from.height / 2;
+    const endX = edge.to.x;
+    const endY = edge.to.y + edge.to.height / 2;
+    const midX = Math.round(startX + Math.max(26, (endX - startX) / 2));
+    const path = `M ${startX} ${startY} H ${midX} V ${endY} H ${endX}`;
+    return `<path class="graph-edge" d="${path}"></path>`;
+  }
   const startX = edge.from.x + edge.from.width / 2;
   const startY = edge.from.y + edge.from.height;
   const endX = edge.to.x + edge.to.width / 2;
@@ -1486,6 +1678,12 @@ function wireGraphCanvas(root, graph) {
   root.querySelectorAll("[data-graph-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.graphAction;
+      if (action === "toggle-orientation") {
+        state.graphView.orientation = state.graphView.orientation === "horizontal" ? "vertical" : "horizontal";
+        resetGraphView();
+        renderGraph(selectedEntry(), selectedFilteredComponents());
+        return;
+      }
       if (action === "fit") fitGraphToViewport(root, graph);
       if (action === "reset") {
         resetGraphView();
@@ -1599,11 +1797,16 @@ function createStructureNode(key, title, depth = 0) {
     children: [],
     childByKey: new Map(),
     components: [],
+    containerTarget: null,
   };
 }
 
 function insertComponentIntoStructure(root, component = {}) {
-  const parts = componentStructurePath(component);
+  const domPath = String(component.fingerprint?.technical?.domPath || "");
+  const domSegments = frameAwareDomPathSegments(component, domPath);
+  const parts = domSegments.length
+    ? domSegments.map((segment) => segment.part)
+    : componentStructurePath(component);
   let current = root;
   parts.forEach((part, index) => {
     const key = parts.slice(0, index + 1).join("/");
@@ -1613,22 +1816,65 @@ function insertComponentIntoStructure(root, component = {}) {
       current.children.push(node);
     }
     current = current.childByKey.get(key);
+    if (domSegments[index] && !domSegments[index].frameOnly && !current.containerTarget) {
+      current.containerTarget = createContainerTarget(
+        domSegments[index].path,
+        component,
+        structurePartLabel(part),
+      );
+    }
   });
   current.components.push(component);
 }
 
+function frameAwareDomPathSegments(component = {}, domPath = "") {
+  const frameScope = component.fingerprint?.structural?.frameScope || {};
+  const domSegments = mapperDomPathSegments(domPath);
+  if (!domSegments.length) return [];
+  if (!frameScope.path || frameScope.path === "top") return domSegments;
+  return [
+    {
+      part: `frame:${frameScope.access || "same_origin"}:${frameScope.path}`,
+      path: "",
+      frameOnly: true,
+    },
+    ...domSegments,
+  ];
+}
+
+function createContainerTarget(domPath = "", component = {}, label = "container", capturedDepth = null) {
+  const componentPath = component.fingerprint?.technical?.domPath || "";
+  const calculatedDepth = Math.max(0, mapperDomPathDepth(componentPath) - mapperDomPathDepth(domPath));
+  const ancestorDepth = capturedDepth !== null && capturedDepth !== undefined && Number.isFinite(Number(capturedDepth))
+    ? Math.max(0, Number(capturedDepth))
+    : calculatedDepth;
+  return {
+    version: "mapper.container_target.v2",
+    domPath,
+    frameScope: component.fingerprint?.structural?.frameScope || null,
+    label,
+    anchorComponentId: component.componentId || "",
+    ancestorDepth,
+  };
+}
+
+function mapperDomPathDepth(domPath = "") {
+  return String(domPath || "")
+    .split("::shadow::")
+    .flatMap((root) => root.split("/"))
+    .filter(Boolean)
+    .length;
+}
+
 function componentStructurePath(component = {}) {
+  const domPath = component.fingerprint?.technical?.domPath || "";
+  const parts = frameAwareDomPathSegments(component, domPath).map((segment) => segment.part);
+  if (parts.length) return parts;
+
   const scopePath = componentPlatformScopePath(component);
   if (scopePath.length) return scopePath;
   const repeatPath = componentRepeatScopePath(component);
   if (repeatPath.length) return repeatPath;
-
-  const domPath = component.fingerprint?.technical?.domPath || "";
-  const parts = String(domPath || "")
-    .split("/")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length) return parts;
 
   const structural = component.fingerprint?.structural || {};
   const ancestors = Array.isArray(structural.ancestorTokens)
@@ -1638,6 +1884,28 @@ function componentStructurePath(component = {}) {
     ...ancestors.slice().reverse().map((item) => `section:${normalizeIdentifier(item) || "ancestor"}`),
     `${component.fingerprint?.technical?.tag || "element"}:${structural.relativeIndex ?? 0}`,
   ];
+}
+
+function mapperDomPathSegments(domPath = "") {
+  const roots = String(domPath || "")
+    .split("::shadow::")
+    .map((root) => root.split("/").map((part) => part.trim()).filter(Boolean))
+    .filter((root) => root.length);
+  const segments = [];
+  let path = "";
+
+  roots.forEach((root, rootIndex) => {
+    root.forEach((part, partIndex) => {
+      const separator = !path
+        ? ""
+        : rootIndex > 0 && partIndex === 0
+          ? "::shadow::"
+          : "/";
+      path += `${separator}${part}`;
+      segments.push({ part, path });
+    });
+  });
+  return segments;
 }
 
 function componentRepeatScopePath(component = {}) {
@@ -1655,7 +1923,10 @@ function componentPlatformScopePath(component = {}) {
   if (!scope.family || !scope.region) return [];
   return [
     `profile:${scope.family}`,
-    `region:${scope.region}`,
+    scope.majorRegion ? `major:${scope.majorRegion}` : "",
+    `region:${scope.subregion || scope.region}`,
+    scope.templateKind ? `template:${scope.templateKind}` : "",
+    scope.templatePart ? `part:${scope.templatePart}` : "",
     scope.threadId ? `thread:${scope.threadId}` : "",
     scope.containerId ? `container:${scope.containerId}` : "",
     scope.repeatedKind ? `repeat:${scope.repeatedKind}` : "",
@@ -1663,11 +1934,21 @@ function componentPlatformScopePath(component = {}) {
 }
 
 function structurePartLabel(part = "") {
+  if (String(part).startsWith("frame:")) return frameStructureLabel(part);
   const [tag, index] = String(part).split(":");
   const cleanTag = normalizeIdentifier(tag || "element") || "element";
   return index === undefined || index === ""
     ? cleanTag
     : `${cleanTag}[${index}]`;
+}
+
+function frameStructureLabel(part = "") {
+  const [, access = "same_origin", path = "frame"] = String(part).split(":");
+  const leaf = String(path || "")
+    .split("/")
+    .filter(Boolean)
+    .at(-1) || "frame";
+  return `${access === "cross_origin" ? "protected" : "frame"} ${leaf}`;
 }
 
 function structureNodeHtml(node, level = 0, parentKey = "") {
@@ -1683,6 +1964,8 @@ function structureNodeHtml(node, level = 0, parentKey = "") {
       meta: `${componentCount} mapped element(s)`,
       icon: structureIconType(node.title),
       collapsible: true,
+      containerTarget: node.containerTarget,
+      active: nodeKey === state.selectedContainerKey,
     })}
     ${treeChildrenHtml(nodeKey, `
       ${components.map((component) => componentTreeRowHtml(component, level + 1)).join("")}
@@ -1720,7 +2003,8 @@ function treeNodeHtml(node = {}) {
   const icon = node.icon || "element";
   const classes = [
     "tree-row",
-    node.componentId ? "tree-row-button selectable" : "",
+    node.componentId || node.containerTarget ? "tree-row-button selectable" : "",
+    node.containerTarget ? "container-highlightable" : "",
     node.collapsible ? "tree-toggle" : "",
     collapsed ? "collapsed" : "",
     node.active ? "active" : "",
@@ -1729,6 +2013,9 @@ function treeNodeHtml(node = {}) {
     node.status ? `tree-status-${normalizeIdentifier(node.status)}` : "",
   ].filter(Boolean).join(" ");
   const style = `--level: ${Number(node.level) || 0}; --type-color: ${componentTypeColor(icon)};`;
+  const containerTarget = node.containerTarget
+    ? encodeURIComponent(JSON.stringify(node.containerTarget))
+    : "";
   const body = `
     <span class="tree-chevron">${node.collapsible ? treeIconSvg("chevron") : ""}</span>
     <span class="tree-icon tree-icon-${escapeAttr(icon)}">${treeIconSvg(icon)}</span>
@@ -1749,6 +2036,7 @@ function treeNodeHtml(node = {}) {
 
   return `
     <button class="${classes}" style="${style}" data-tree-node="${escapeAttr(node.key || "")}"
+      ${containerTarget ? `data-container-target="${escapeAttr(containerTarget)}" title="Highlight container; use the chevron to expand or collapse"` : ""}
       type="button" role="treeitem" aria-expanded="${collapsed ? "false" : "true"}">
       ${body}
     </button>
@@ -1762,13 +2050,52 @@ function treeChildrenHtml(parentKey = "", content = "") {
 
 function wireTreeToggles(root) {
   root.querySelectorAll("[data-tree-node]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       const key = button.dataset.treeNode || "";
       if (!key) return;
+      if (button.dataset.containerTarget && !event.target.closest(".tree-chevron")) {
+        void selectContainerTarget(key, button.dataset.containerTarget);
+        return;
+      }
       state.treeCollapsed[key] = !isTreeNodeCollapsed(key);
       renderSelectedMap();
     });
   });
+}
+
+async function selectContainerTarget(key = "", encodedTarget = "") {
+  let containerTarget;
+  try {
+    containerTarget = JSON.parse(decodeURIComponent(encodedTarget));
+  } catch {
+    setStatus("Container highlight target is invalid.", true);
+    return;
+  }
+  const entry = selectedEntry();
+  if (!entry || !containerTarget?.domPath) return;
+
+  cancelHoverPreview();
+  clearHoverRestoreTimer();
+  state.selectedComponentId = "";
+  state.selectedContainerKey = key;
+  renderSelectedMap();
+  renderReviewQueue();
+  renderDetail();
+  if (!els.highlightEnabled.checked) return;
+
+  const highlightRequestId = nextHighlightRequestId();
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.HighlightMapperComponent,
+      pageMap: entry.pageMap,
+      containerTarget,
+      highlightRequestId,
+    });
+    if (response?.ok === false) throw new Error(response.error || "Container highlight failed.");
+    setStatus(`Container highlight: ${response.mapperState || "unknown"} (${response.mapperReason || "no reason"})`);
+  } catch (error) {
+    setStatus(`Container highlight failed: ${error.message || error}`, true);
+  }
 }
 
 function isTreeNodeCollapsed(key = "") {
@@ -1956,6 +2283,7 @@ function renderLiveCandidateLinks(resolution = {}, component = {}) {
 
 function renderPlatformProfileSummary(map = {}) {
   const profile = map.platformProfile || {};
+  const structure = map.platformStructure || {};
   if (!profile.family || profile.family === "generic") return "";
   const signals = profile.signals || {};
   const loaded = profile.loadedWindowHints || {};
@@ -1966,6 +2294,7 @@ function renderPlatformProfileSummary(map = {}) {
         ${metricPillHtml("Family", profile.family)}
         ${profile.product ? metricPillHtml("Product", profile.product) : ""}
         ${metricPillHtml("Confidence", `${Number(profile.confidence) || 0}%`)}
+        ${Array.isArray(structure.majorRegions) ? metricPillHtml("Major panes", structure.majorRegions.length) : ""}
         ${profile.detectionSource ? metricPillHtml("Detected", profile.detectionSource) : ""}
         ${metricPillHtml("Chat signals", Number(signals.chat) || 0)}
         ${metricPillHtml("Social signals", Number(signals.social) || 0)}
@@ -1992,6 +2321,74 @@ function renderFrameSummary(map = {}) {
       <div class="metric-footnote">Same-origin frames are mapped by stable frame path; cross-origin frames stay protected.</div>
     </div>
   `;
+}
+
+function renderMapLayerSummary(map = {}) {
+  const summary = mapLayerSummary(map);
+  if (!summary.hasLayerData) return "";
+  const architecture = map.architecture || {};
+  return `
+    <div class="detail-block reliability-panel map-layer-panel">
+      <h3>Map Layers</h3>
+      <div class="metric-grid">
+        ${metricPillHtml("Static", `${summary.static.componentCount}/${summary.static.factCount}`)}
+        ${metricPillHtml("Static state", summary.static.status)}
+        ${summary.static.removedCount ? metricPillHtml("Static removed", summary.static.removedCount) : ""}
+        ${metricPillHtml("Dynamic", `${summary.dynamic.componentCount}/${summary.dynamic.factCount}`)}
+        ${metricPillHtml("Dynamic state", summary.dynamic.status)}
+        ${summary.dynamic.removedCount ? metricPillHtml("Dynamic removed", summary.dynamic.removedCount) : ""}
+        ${summary.dynamic.reason ? metricPillHtml("Dynamic reason", summary.dynamic.reason) : ""}
+      </div>
+      <div class="metric-footnote">
+        ${architecture.isolatedLayerReconciliation ? "Static and dynamic history are isolated." : "Layer counts inferred from saved component facts."}
+      </div>
+    </div>
+  `;
+}
+
+function mapLayerSummary(map = {}) {
+  const existing = map.layers || {};
+  const staticLayer = existing.static || null;
+  const dynamicLayer = existing.dynamic || null;
+  if (staticLayer || dynamicLayer) {
+    return {
+      hasLayerData: true,
+      static: normalizeLayerSummary(staticLayer, "static"),
+      dynamic: normalizeLayerSummary(dynamicLayer, "dynamic"),
+    };
+  }
+
+  const components = Array.isArray(map.components) ? map.components : [];
+  if (!components.length) return { hasLayerData: false };
+  const groups = groupBy(components, componentMappingLayer);
+  return {
+    hasLayerData: true,
+    static: derivedLayerSummary(groups.static || [], "static"),
+    dynamic: derivedLayerSummary(groups.dynamic || [], "dynamic"),
+  };
+}
+
+function normalizeLayerSummary(layer = null, fallbackLayer = "static") {
+  return {
+    layer: layer?.layer || fallbackLayer,
+    status: layer?.status || "empty",
+    reason: layer?.reason || "",
+    factCount: Number(layer?.factCount) || 0,
+    componentCount: Number(layer?.componentCount) || 0,
+    removedCount: Number(layer?.removedCount) || 0,
+  };
+}
+
+function derivedLayerSummary(components = [], layer = "static") {
+  const removedCount = components.filter((component) => component.status === "removed").length;
+  return {
+    layer,
+    status: components.length ? "derived" : "empty",
+    reason: "",
+    factCount: components.length,
+    componentCount: components.length - removedCount,
+    removedCount,
+  };
 }
 
 function renderComponentFrameScope(component = {}) {
@@ -2036,7 +2433,10 @@ function renderComponentPlatformScope(component = {}) {
       <h3>Platform Scope</h3>
       <div class="metric-grid">
         ${metricPillHtml("Family", scope.family)}
-        ${metricPillHtml("Region", scope.region)}
+        ${scope.majorRegion ? metricPillHtml("Pane", humanizeScopeToken(scope.majorRegion)) : ""}
+        ${metricPillHtml("Region", humanizeScopeToken(scope.subregion || scope.region))}
+        ${scope.templateKind ? metricPillHtml("Template", humanizeScopeToken(scope.templateKind)) : ""}
+        ${scope.templatePart ? metricPillHtml("Part", humanizeScopeToken(scope.templatePart)) : ""}
         ${scope.durability ? metricPillHtml("Durability", scope.durability) : ""}
         ${scope.threadId ? metricPillHtml("Thread", scope.threadId) : ""}
         ${scope.containerId ? metricPillHtml("Container", scope.containerId) : ""}
@@ -2198,6 +2598,11 @@ function wireComponentRows(root) {
     button.addEventListener("mouseleave", () => cancelHoverPreview({ restoreSelection: true }));
     button.addEventListener("focusout", () => cancelHoverPreview({ restoreSelection: true }));
   });
+  root.querySelectorAll("[data-graph-container-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void selectContainerTarget(button.dataset.containerKey || "", button.dataset.graphContainerTarget || "");
+    });
+  });
 }
 
 function componentShortName(component = {}) {
@@ -2242,10 +2647,8 @@ function repeatScopeRegionLabel(scope = {}) {
 function platformScopeRegionLabel(scope = {}) {
   if (!scope.family || !scope.region) return "";
   const parts = [
-    scope.family,
-    scope.region,
-    scope.threadId ? `thread ${scope.threadId}` : "",
-    scope.containerId && !scope.threadId ? scope.containerId : "",
+    scope.majorRegion || scope.family,
+    scope.subregion || scope.region,
   ].filter(Boolean);
   return parts.join(" / ");
 }
@@ -2318,6 +2721,8 @@ function iconSvg(type = "element") {
     reset: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0113-6"/><path d="M17 3v5h-5"/><path d="M20 12a8 8 0 01-13 6"/><path d="M7 21v-5h5"/></svg>`,
     plus: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
     minus: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>`,
+    "layout-horizontal": `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="6" height="14" rx="1.5"/><rect x="15" y="5" width="6" height="14" rx="1.5"/><path d="M10.5 12h3M12 10.5l1.5 1.5-1.5 1.5"/></svg>`,
+    "layout-vertical": `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="6" rx="1.5"/><rect x="5" y="15" width="14" height="6" rx="1.5"/><path d="M12 10.5v3M10.5 12l1.5 1.5 1.5-1.5"/></svg>`,
     chevron: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 4 4-4"/></svg>`,
     element: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 9-9 9-9-9z"/></svg>`,
   };
@@ -2337,6 +2742,7 @@ async function selectComponent(componentId) {
   cancelHoverPreview();
   clearHoverRestoreTimer();
   state.selectedComponentId = componentId;
+  state.selectedContainerKey = "";
   renderSelectedMap();
   renderReviewQueue();
   renderDetail();
@@ -2376,7 +2782,6 @@ async function checkLiveResolution() {
 
 async function previewComponentHighlight(componentId) {
   if (!els.highlightEnabled.checked || !els.highlightHoverEnabled.checked) return;
-  if (componentId === state.selectedComponentId) return;
   clearHoverRestoreTimer();
   const entry = selectedEntry();
   const component = (entry?.pageMap?.components || []).find((item) => {
@@ -2411,7 +2816,7 @@ function clearHoverRestoreTimer() {
 }
 
 async function highlightComponent(entry, component, requestId = null, options = {}) {
-  const highlightRequestId = ++state.highlightRequestId;
+  const highlightRequestId = nextHighlightRequestId();
   const targetKey = componentResolutionKey(entry, component);
   try {
     const response = await chrome.runtime.sendMessage({
@@ -2425,6 +2830,10 @@ async function highlightComponent(entry, component, requestId = null, options = 
     if (response?.mapperState === "stale") return;
 
     state.lastResolutionByTarget[targetKey] = response;
+    if (requestId !== null) {
+      setStatus(`${options.statusPrefix || "Preview"}: ${response.mapperState || "unknown"} (${response.mapperReason || "no reason"})`);
+      return;
+    }
     if (selectedResolutionKey() !== targetKey) return;
 
     renderSelectedMap();
@@ -2440,7 +2849,7 @@ async function highlightComponent(entry, component, requestId = null, options = 
 
 async function clearWebsiteHighlight(entry = selectedEntry()) {
   if (!entry) return;
-  const highlightRequestId = ++state.highlightRequestId;
+  const highlightRequestId = nextHighlightRequestId();
   try {
     await chrome.runtime.sendMessage({
       type: Messages.HighlightMapperComponent,
@@ -2451,6 +2860,12 @@ async function clearWebsiteHighlight(entry = selectedEntry()) {
   } catch {
     // Clearing an inspection-only overlay should never interrupt navigation.
   }
+}
+
+function nextHighlightRequestId() {
+  const sessionFloor = Date.now() * 1000;
+  state.highlightRequestId = Math.max(sessionFloor, state.highlightRequestId + 1);
+  return state.highlightRequestId;
 }
 
 async function saveComponentAlias() {
@@ -2696,6 +3111,7 @@ async function updateSelectedWorkflowState(updater, selection = {}) {
     ? selectedEntryId
     : state.siteGroups[0]?.latest?.id || state.entries[0]?.id || "";
   state.selectedComponentId = state.selectedEntryId ? selectedComponentId : "";
+  state.selectedContainerKey = "";
   renderAll();
 }
 

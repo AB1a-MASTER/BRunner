@@ -29,7 +29,11 @@
     button { cursor: pointer; font-weight: 700; }
     button:hover { border-color: #2563eb; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
-    .app-shell { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); min-height: 520px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .app-shell { display: grid; grid-template-columns: 72px minmax(210px, 280px) minmax(0, 1fr); min-height: 520px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .account-navigation { display: grid; align-content: start; gap: 8px; padding: 10px; border-right: 1px solid #cbd5e1; background: #e2e8f0; }
+    .account-navigation button { min-width: 0; padding: 7px 4px; font-size: 11px; }
+    .contacts-pane { border-right: 1px solid #cbd5e1; background: #fff; }
+    .search-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 8px; border-bottom: 1px solid #e2e8f0; }
     .rail { border-right: 1px solid #cbd5e1; background: #fff; }
     .rail h3, .pane h3 { margin: 0; padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 16px; }
     .thread-row, .profile-tab { width: 100%; display: grid; gap: 4px; padding: 10px 12px; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; text-align: left; background: transparent; }
@@ -43,13 +47,14 @@
     .message-actions, .card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .composer, .comment-composer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 12px; border-top: 1px solid #cbd5e1; background: #fff; }
     .composer textarea, .comment-composer textarea { resize: vertical; min-height: 38px; }
-    .social-shell { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); min-height: 560px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .social-shell { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) minmax(160px, 210px); min-height: 560px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .right-rail { padding: 12px; border-left: 1px solid #cbd5e1; background: #fff; }
     .card-header { display: flex; justify-content: space-between; gap: 12px; }
     .dynamic-note { color: #64748b; font-size: 12px; }
     #platform-event-log { min-height: 120px; max-height: 240px; overflow: auto; white-space: pre-wrap; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #0f172a; color: #dbeafe; font-family: Consolas, monospace; font-size: 12px; }
     @media (max-width: 760px) {
       .app-shell, .social-shell { grid-template-columns: 1fr; }
-      .rail { border-right: 0; border-bottom: 1px solid #cbd5e1; }
+      .rail, .account-navigation, .contacts-pane, .right-rail { border-right: 0; border-left: 0; border-bottom: 1px solid #cbd5e1; }
       .message-row { max-width: 100%; }
       .composer, .comment-composer { grid-template-columns: 1fr; }
     }
@@ -69,19 +74,34 @@
         <button id="tick-chat-ephemeral" type="button">Tick Chat Ephemeral Data</button>
       </div>
       <div class="app-shell" data-testid="chat-app-shell" aria-label="Chat application shell">
-        <aside class="rail" data-testid="conversation-list" aria-label="Conversation list">
+        <nav class="account-navigation" data-testid="account-navigation" data-chat-region="navigation" aria-label="Account and application navigation">
+          <button data-testid="nav-chats" type="button">Chats</button>
+          <button data-testid="nav-status" type="button">Status</button>
+          <button data-testid="nav-settings" type="button">Settings</button>
+        </nav>
+        <aside class="contacts-pane" data-testid="contacts-pane" data-chat-region="contacts" aria-label="Contacts and conversations pane">
           <h3>Conversations</h3>
-          <button class="thread-row active" data-thread-id="alpha" data-testid="thread-alpha" type="button">
-            <strong>Project Alpha</strong>
-            <span>Reusable row shell <span class="unread-badge" data-testid="thread-alpha-unread">2</span></span>
-          </button>
-          <button class="thread-row" data-thread-id="beta" data-testid="thread-beta" type="button">
-            <strong>Project Beta</strong>
-            <span>Same controls, different thread <span class="unread-badge" data-testid="thread-beta-unread">0</span></span>
-          </button>
+          <div class="search-filters" data-testid="chat-search-filters" data-chat-region="search-filters" role="search">
+            <input type="search" data-testid="chat-search" aria-label="Search conversations" placeholder="Search chats">
+            <button data-testid="chat-filter" type="button">Unread</button>
+          </div>
+          <div data-testid="conversation-list" aria-label="Conversation list" role="list">
+            <button class="thread-row active" data-thread-id="alpha" data-testid="thread-alpha" type="button" role="listitem">
+              <strong>Project Alpha</strong>
+              <span>Reusable row shell <span class="unread-badge" data-testid="thread-alpha-unread">2</span></span>
+            </button>
+            <button class="thread-row" data-thread-id="beta" data-testid="thread-beta" type="button" role="listitem">
+              <strong>Project Beta</strong>
+              <span>Same controls, different thread <span class="unread-badge" data-testid="thread-beta-unread">0</span></span>
+            </button>
+          </div>
         </aside>
         <article class="pane" data-testid="active-thread-region" aria-label="Active conversation thread" data-active-thread="alpha">
-          <h3 id="active-thread-title">Project Alpha</h3>
+          <header data-testid="thread-header" data-chat-region="thread-header">
+            <h3 id="active-thread-title">Project Alpha</h3>
+            <button data-testid="thread-search" type="button">Search thread</button>
+            <button data-testid="thread-menu" type="button">Thread menu</button>
+          </header>
           <div id="message-window" class="message-window" data-testid="message-loaded-window" aria-label="Loaded message window"></div>
           <form class="composer" data-testid="message-composer" aria-label="Message composer">
             <button id="chat-attach" data-testid="chat-attach" type="button">Attach</button>
@@ -99,7 +119,7 @@
         <button id="tick-social-ephemeral" type="button">Tick Social Ephemeral Data</button>
       </div>
       <div class="social-shell" data-testid="social-app-shell" aria-label="Social application shell">
-        <nav class="rail" data-testid="profile-tabs" aria-label="Profile and feed tabs">
+        <nav class="rail" data-testid="profile-tabs" data-social-region="navigation" aria-label="Profile and feed tabs">
           <h3>Tabs</h3>
           <button class="profile-tab active" data-testid="tab-home" type="button">Home feed</button>
           <button class="profile-tab" data-testid="tab-profile" type="button">Profile</button>
@@ -114,6 +134,11 @@
             <button id="social-post" data-testid="social-post" type="button">Post</button>
           </form>
         </article>
+        <aside class="right-rail" data-testid="social-right-rail" data-social-region="right-rail" aria-label="Social recommendations">
+          <h3>Recommended</h3>
+          <button data-testid="recommendation-one" type="button">Suggested profile</button>
+          <button data-testid="recommendation-two" type="button">Suggested community</button>
+        </aside>
       </div>
     </section>
 

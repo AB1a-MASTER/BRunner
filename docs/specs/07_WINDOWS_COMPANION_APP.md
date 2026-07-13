@@ -439,8 +439,8 @@ breaks current extension behavior.
   resolution, data parsing, execution-log save, and protocol behavior.
   **Implemented for current host services.**
 - Remove or isolate obsolete production-build files such as copied host source.
-  **Isolated from final release packaging; ask the user before removing source
-  copies.**
+  **Obsolete copied host source was removed after user approval; defensive
+  packaging exclusions remain.**
 
 Exit: existing operations are testable without launching the UI.
 
@@ -473,9 +473,11 @@ Exit: WebSocket handlers no longer write workflow files directly.
 - Implement Status, Workflow Storage, Pairing, and Diagnostics first.
   **Initial implementation complete; Pairing tab now has key, port, save,
   regenerate, copy, and unpair controls.**
-- Add tray behavior and clean shutdown. **Initial implementation complete.**
-- Remove HTTP manager UI from production packaging. **Packaging now targets
-  `app.py`; old `host_ui.py` remains as a transitional artifact.**
+- Add tray behavior and clean shutdown. **Implemented with configured autostart,
+  idempotent application shutdown, and Windows process-tree termination for the
+  packaged one-file host.**
+- Remove HTTP manager UI from production packaging. **Packaging targets
+  `app.py`; the old `host_ui.py` transitional artifact has been removed.**
 - Update PyInstaller entry point. **Implemented.**
 
 Exit: packaged app opens a Windows companion app and can start/stop the
@@ -511,7 +513,10 @@ Exit: normal file operations no longer require arbitrary raw filesystem paths.
   complete; legacy command compatibility preserved.**
 - Add clean pairing/auth flow. **Initial source implementation complete:
   extension-side key storage, auth gating before host commands, and host-side
-  trusted extension fingerprinting after key verification.**
+  trusted extension fingerprinting after key verification. Pairing now uses a
+  validated 128-bit key with grouped display; managed hosts restart on key,
+  port, regeneration, or unpair changes so old sessions are revoked. A shorter
+  PIN was intentionally rejected because it would weaken the secret.**
 - Implement `host.window` and `host.action`. **Initial service and extension
   bridge foundations implemented.**
 - Add foreground-window validation and coordinate conversion. **Initial
@@ -531,8 +536,9 @@ Exit: normal file operations no longer require arbitrary raw filesystem paths.
   browser window, clicks the matched center, and reports match confidence and
   bounded diagnostics. **Initial opt-in implementation complete; manual
   visual-match acceptance passed with Chrome side UI open. Matching is
-  functional but slow in side-UI cases, so crop/search performance remains a
-  follow-up.**
+  now clips searches to the foreground browser window and returns bounded
+  search-region/duration diagnostics while preserving ambiguity checks within
+  that window.**
 - Keep v1 `OS_KEYSTROKE` until migration is complete.
 
 Exit: browser-first nodes can request validated visible fallback and report the
@@ -558,8 +564,10 @@ result clearly.
 - Add setup, first-run, and troubleshooting docs. **Implemented for current
   packaging flow.**
 - Verify install behavior outside the source checkout. **Packaged host service
-  smoke passed from `release/BRunnerHost.exe`; final manual GUI/extension
-  install acceptance remains.**
+  smoke passed from `release/BRunnerHost.exe`. A non-GUI `--self-check` now
+  validates packaged writable config/workflow paths, and the release builder
+  validates the executable plus extension manifest and exact two-artifact
+  shape. Final manual GUI/extension install acceptance remains.**
 
 Exit: packaged app behaves like source build and stores default workflows next
 to the executable.
@@ -587,8 +595,9 @@ and native mapper-state list/get/save/delete commands, and the extension has a
 native requests use bounded timeouts, the native adapter exposes
 unavailable/timeout status, normal mapper state payloads are capped at 1 MB
 instead of chunked, and host-saved states carry revision plus bounded
-last-write-wins conflict metadata. Default persistence remains Chrome storage
-until switching to the filesystem-backed adapter is explicitly accepted.
+last-write-wins conflict metadata. Mapper persistence permanently remains in
+Chrome storage; the filesystem adapter is inactive because maps are disposable
+and recreated after loss.
 
 ## Acceptance Gates
 

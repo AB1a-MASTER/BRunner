@@ -9,10 +9,41 @@ SCHEMA_VERSION = 2
 DEFAULT_PORT = 8999
 DEFAULT_ALLOWED_ROOTS = ["AllowedFiles"]
 DEFAULT_COORDINATE_CONFIDENCE = 0.9
+PAIRING_KEY_BYTES = 16
+PAIRING_KEY_HEX_LENGTH = PAIRING_KEY_BYTES * 2
+
+
+def generate_pairing_key():
+    return secrets.token_hex(PAIRING_KEY_BYTES)
+
+
+def normalize_pairing_key(value):
+    text = str(value or "").strip()
+    compact = re.sub(r"[\s-]+", "", text)
+    if re.fullmatch(rf"[0-9A-Fa-f]{{{PAIRING_KEY_HEX_LENGTH}}}", compact):
+        return compact.lower()
+    return text
+
+
+def is_strong_pairing_key(value):
+    return bool(re.fullmatch(
+        rf"[0-9a-f]{{{PAIRING_KEY_HEX_LENGTH}}}",
+        normalize_pairing_key(value),
+    ))
+
+
+def format_pairing_key(value):
+    normalized = normalize_pairing_key(value)
+    if not is_strong_pairing_key(normalized):
+        return normalized
+    return "-".join(
+        normalized[index:index + 4]
+        for index in range(0, len(normalized), 4)
+    )
 
 
 def create_default_config(pairing_key=None):
-    key = pairing_key or secrets.token_hex(16)
+    key = normalize_pairing_key(pairing_key) or generate_pairing_key()
     config = {
         "schemaVersion": SCHEMA_VERSION,
         "pairingKey": key,
@@ -65,7 +96,9 @@ def save_config(config_file, config):
 def normalize_config(config, base_dir=None):
     source = config if isinstance(config, dict) else {}
     defaults = create_default_config()
-    pairing_key = str(source.get("pairingKey") or source.get("pairing_key") or "").strip()
+    pairing_key = normalize_pairing_key(
+        source.get("pairingKey") or source.get("pairing_key") or ""
+    )
     paired_extension_id = source.get("pairedExtensionId", source.get("paired_extension_id"))
     host = source.get("host") if isinstance(source.get("host"), dict) else {}
     workflow_storage = (

@@ -634,6 +634,7 @@ async function highlightMapperComponentForInspector(request = {}, sender = null)
     return await sendInspectorMapperMessage(tab, {
       type: Messages.HighlightMapperComponent,
       component: request.component,
+      containerTarget: request.containerTarget || null,
       pageMap: request.pageMap,
       highlightRequestId: request.highlightRequestId,
     });
@@ -646,7 +647,16 @@ async function highlightMapperComponentForInspector(request = {}, sender = null)
 }
 
 async function sendInspectorMapperMessage(tab = {}, payload = {}) {
-  const frameId = await resolveMapperFrameId(tab.id, payload.component);
+  const frameComponent = payload.component || (payload.containerTarget?.frameScope
+    ? {
+        fingerprint: {
+          structural: {
+            frameScope: payload.containerTarget.frameScope,
+          },
+        },
+      }
+    : null);
+  const frameId = await resolveMapperFrameId(tab.id, frameComponent);
   try {
     return await chrome.tabs.sendMessage(tab.id, payload, { frameId });
   } catch (error) {

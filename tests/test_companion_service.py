@@ -1,3 +1,4 @@
+import os
 import sys
 import subprocess
 import tempfile
@@ -159,6 +160,27 @@ class HostServiceControllerTests(unittest.TestCase):
         self.assertTrue(controller.stop(timeout=0.01))
         self.assertTrue(popen.processes[0].killed)
         self.assertFalse(controller.is_running())
+
+    def test_windows_tree_stop_targets_managed_launcher_pid(self):
+        calls = []
+
+        class Process:
+            pid = 4321
+
+        controller = HostServiceController(
+            self.base_dir,
+            self.host_script,
+            popen_factory=self.popen,
+            run_factory=lambda command, **kwargs: calls.append((command, kwargs)),
+        )
+        original_os_name = os.name
+        try:
+            os.name = "nt"
+            self.assertTrue(controller.stop_windows_process_tree(Process()))
+        finally:
+            os.name = original_os_name
+
+        self.assertEqual(calls[0][0], ["taskkill", "/PID", "4321", "/T", "/F"])
 
 
 if __name__ == "__main__":

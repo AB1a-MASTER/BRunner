@@ -8,6 +8,7 @@ import {
   createPlaceholderComponentRef,
   deserializeWorkflowMapperState,
   isComponentRef,
+  MapperComponentLayers,
   MapperComponentStatuses,
   MapperPageClassifications,
   MapperResolverStates,
@@ -218,6 +219,16 @@ test("static page map uses platform scope as structural identity context", () =>
         platformScope: {
           family: "chat",
           region: "message_row",
+          majorRegion: "chat_pane",
+          subregion: "message_row",
+          templateKind: "message",
+          templatePart: "actions",
+          majorRegionPath: "body:0/div:1/main:0",
+          subregionPath: "body:0/div:1/main:0/div:2/article:0",
+          repeatedRecordPath: "body:0/div:1/main:0/div:2/article:0",
+          majorRegionDepth: 4,
+          subregionDepth: 1,
+          repeatedRecordDepth: 0,
           threadId: "alpha",
           containerId: "message-alpha-1",
           repeatedKind: "message_row",
@@ -233,6 +244,15 @@ test("static page map uses platform scope as structural identity context", () =>
         platformScope: {
           family: "chat",
           region: "message_row",
+          majorRegion: "chat_pane",
+          subregion: "message_row",
+          templateKind: "message",
+          templatePart: "actions",
+          majorRegionPath: "body:0/div:1/main:0",
+          subregionPath: "body:0/div:1/main:0/div:2/article:1",
+          majorRegionDepth: 4,
+          subregionDepth: 1,
+          repeatedRecordDepth: 0,
           threadId: "beta",
           containerId: "message-beta-1",
           repeatedKind: "message_row",
@@ -245,12 +265,23 @@ test("static page map uses platform scope as structural identity context", () =>
   });
 
   assert.deepEqual(pageMap.components.map((component) => component.componentId), [
-    "example_com_chat_chat_message_row_chat_thread_alpha_reply_button",
-    "example_com_chat_chat_message_row_chat_thread_beta_reply_button",
+    "example_com_chat_chat_message_row_chat_container_message_alpha_1_reply_button",
+    "example_com_chat_chat_message_row_chat_container_message_beta_1_reply_button",
   ]);
   assert.equal(pageMap.components[0].fingerprint.structural.platformScope.family, "chat");
   assert.equal(pageMap.components[0].fingerprint.structural.platformScope.threadId, "alpha");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.majorRegion, "chat_pane");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.templateKind, "message");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.templatePart, "actions");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.majorRegionPath, "body:0/div:1/main:0");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.repeatedRecordPath, "body:0/div:1/main:0/div:2/article:0");
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.majorRegionDepth, 4);
+  assert.equal(pageMap.components[0].fingerprint.structural.platformScope.subregionDepth, 1);
   assert.equal(pageMap.components[0].fingerprint.structural.platformScope.repeatedKind, "message_row");
+  assert.equal(pageMap.platformStructure.version, "mapper.platform_structure.v1");
+  assert.equal(pageMap.platformStructure.majorRegions[0].id, "chat_pane");
+  assert.equal(pageMap.platformStructure.majorRegions[0].subregions[0].templates[0].kind, "message");
+  assert.equal(pageMap.platformStructure.majorRegions[0].subregions[0].templates[0].recordCount, 2);
   assert.equal(Object.hasOwn(pageMap.components[0].fingerprint.structural.platformScope, "rawText"), false);
 });
 
@@ -331,6 +362,92 @@ test("bounded dynamic regions remain mapped as loaded-content-only", () => {
     pageMap.components[0].fingerprint.structural.regionDynamics.classification,
     "loaded_window",
   );
+});
+
+test("static and dynamic map layers reconcile independently", () => {
+  const previous = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    componentFacts: [componentFact({
+      componentUid: "shared-uid",
+      accessibleName: "Open",
+      role: "button",
+      locator: { strategy: "css_selector", value: "#open-static", reliability: 95 },
+    })],
+    now: "2026-07-04T00:00:00.000Z",
+  });
+
+  const refreshed = buildStaticPageMap({
+    page: { url: "https://example.com/feed" },
+    previousMap: previous,
+    componentFacts: [componentFact({
+      componentUid: "shared-uid",
+      accessibleName: "Open",
+      role: "button",
+      regionDynamics: {
+        regionId: "activity_feed",
+        classification: "loaded_window",
+        loadedContentOnly: true,
+      },
+      locator: { strategy: "css_selector", value: "#open-dynamic", reliability: 95 },
+    })],
+    now: "2026-07-04T00:01:00.000Z",
+  });
+
+  assert.equal(refreshed.classification, MapperPageClassifications.HybridDynamic);
+  assert.deepEqual(refreshed.components.map((component) => component.mappingLayer), [
+    MapperComponentLayers.Dynamic,
+    MapperComponentLayers.Static,
+  ]);
+  assert.deepEqual(refreshed.components.map((component) => component.status), [
+    MapperComponentStatuses.New,
+    MapperComponentStatuses.Removed,
+  ]);
+  assert.notEqual(refreshed.components[0].componentId, previous.components[0].componentId);
+  assert.equal(refreshed.layers.static.removedCount, 1);
+  assert.equal(refreshed.layers.dynamic.componentCount, 1);
+  assert.equal(refreshed.architecture.isolatedLayerReconciliation, true);
+});
+
+test("dynamic component limits do not erase the static map layer", () => {
+  const dynamicFacts = Array.from({ length: 4 }, (_, index) => componentFact({
+    accessibleName: `Loaded item ${index + 1}`,
+    role: "button",
+    regionDynamics: {
+      regionId: "activity_feed",
+      classification: "loaded_window",
+      loadedContentOnly: true,
+    },
+    locator: { strategy: "css_selector", value: `#feed-${index + 1}`, reliability: 90 },
+  }));
+  const pageMap = buildStaticPageMap({
+    page: {
+      url: "https://example.com/dashboard",
+      materialMutationCount: 120,
+    },
+    settings: {
+      maxComponents: 2,
+      materialMutationLimit: 5,
+    },
+    componentFacts: [
+      componentFact({
+        accessibleName: "Stable search",
+        role: "textbox",
+        tag: "input",
+        inputType: "text",
+        locator: { strategy: "css_selector", value: "#stable-search", reliability: 95 },
+      }),
+      ...dynamicFacts,
+    ],
+  });
+
+  assert.equal(pageMap.status, "ready");
+  assert.equal(pageMap.classification, MapperPageClassifications.HybridDynamic);
+  assert.deepEqual(pageMap.components.map((component) => component.displayName), ["Stable search"]);
+  assert.equal(pageMap.components[0].mappingLayer, MapperComponentLayers.Static);
+  assert.equal(pageMap.layers.static.status, "ready");
+  assert.equal(pageMap.layers.dynamic.status, "deferred");
+  assert.equal(pageMap.layers.dynamic.reason, "dynamic_component_limit_exceeded");
+  assert.equal(pageMap.diagnostics.reason, "bounded_dynamic_regions");
 });
 
 test("page map reconciliation marks changed and removed components", () => {

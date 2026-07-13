@@ -108,6 +108,7 @@ class PackagingConfigTests(unittest.TestCase):
         self.assertIn("HIDDEN_IMPORTS", spec)
         self.assertIn("MODULE_EXCLUDES", spec)
         self.assertIn("BRunnerHost.spec", builder)
+        self.assertIn('"--clean"', builder)
         self.assertNotIn("--hidden-import", builder)
 
 

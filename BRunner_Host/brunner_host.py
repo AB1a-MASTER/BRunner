@@ -314,11 +314,13 @@ async def handle_host_visual_match(websocket, request_id, payload, protocol_vers
         result["requestId"] = request_id
     await send_json(websocket, success(request_id, **result))
     logging.info(
-        "[Fallback] host.visual_match performed: %s x=%s y=%s confidence=%s",
+        "[Fallback] host.visual_match performed: %s x=%s y=%s confidence=%s search_ms=%s region=%s",
         result["action"],
         result.get("x"),
         result.get("y"),
         result.get("matchConfidence"),
+        result.get("searchDurationMs"),
+        result.get("searchRegion"),
     )
 
 

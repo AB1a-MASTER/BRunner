@@ -1,5 +1,6 @@
 import base64
 import io
+import time
 
 from PIL import Image
 
@@ -39,7 +40,10 @@ def execute_visual_match_action(config, payload=None, adapter=None):
 
     threshold = visual_match_confidence(request, settings)
     template = decode_template_image(request)
-    match = locate_single_match(provider, template, threshold)
+    search_region = foreground_search_region(foreground, screen)
+    started_at = time.perf_counter()
+    match = locate_single_match(provider, template, threshold, search_region)
+    search_duration_ms = max(0, round((time.perf_counter() - started_at) * 1000))
     point = {
         "x": match["left"] + match["width"] / 2,
         "y": match["top"] + match["height"] / 2,
@@ -60,6 +64,8 @@ def execute_visual_match_action(config, payload=None, adapter=None):
         "minimumMatchConfidence": threshold,
         "matchedBox": match,
         "foregroundWindow": foreground,
+        "searchRegion": region_to_dict(search_region),
+        "searchDurationMs": search_duration_ms,
     }
 
 
@@ -100,8 +106,8 @@ def decode_template_image(request):
     return image
 
 
-def locate_single_match(provider, template, threshold):
-    matches = list(first_two_matches(provider, template, threshold))
+def locate_single_match(provider, template, threshold, region=None):
+    matches = list(first_two_matches(provider, template, threshold, region))
     if not matches:
         raise HostFallbackError("Visual match target was not found.")
     if len(matches) > 1:
@@ -114,28 +120,88 @@ def locate_single_match(provider, template, threshold):
     return match
 
 
-def first_two_matches(provider, template, threshold):
+def first_two_matches(provider, template, threshold, region=None):
     locator = getattr(provider, "locateAllOnScreen", None)
     if callable(locator):
-        try:
-            yield from limited_matches(
-                locator(template, confidence=threshold, grayscale=True),
-                2,
-            )
-        except (TypeError, NotImplementedError):
-            yield from limited_matches(locator(template), 2)
+        yield from locate_with_supported_options(locator, template, threshold, region)
         return
 
     locator = getattr(provider, "locateOnScreen", None)
     if not callable(locator):
         raise HostFallbackError("PyAutoGUI visual matching is unavailable.")
 
-    try:
-        match = locator(template, confidence=threshold, grayscale=True)
-    except (TypeError, NotImplementedError):
-        match = locator(template)
+    match = locate_one_with_supported_options(locator, template, threshold, region)
     if match is not None:
         yield match
+
+
+def locate_with_supported_options(locator, template, threshold, region):
+    option_sets = visual_locator_option_sets(threshold, region)
+    last_error = None
+    for options in option_sets:
+        try:
+            yield from limited_matches(locator(template, **options), 2)
+            return
+        except (TypeError, NotImplementedError) as error:
+            last_error = error
+    if last_error:
+        raise HostFallbackError("PyAutoGUI visual matching is unavailable.") from last_error
+
+
+def locate_one_with_supported_options(locator, template, threshold, region):
+    last_error = None
+    for options in visual_locator_option_sets(threshold, region):
+        try:
+            return locator(template, **options)
+        except (TypeError, NotImplementedError) as error:
+            last_error = error
+    if last_error:
+        raise HostFallbackError("PyAutoGUI visual matching is unavailable.") from last_error
+    return None
+
+
+def visual_locator_option_sets(threshold, region):
+    full = {"confidence": threshold, "grayscale": True}
+    if region:
+        full["region"] = region
+    options = [full]
+    if region:
+        options.append({"region": region})
+    options.append({})
+    return options
+
+
+def foreground_search_region(foreground, screen):
+    window = foreground if isinstance(foreground, dict) else {}
+    desktop = screen if isinstance(screen, dict) else {}
+    screen_left = int(desktop.get("left") or 0)
+    screen_top = int(desktop.get("top") or 0)
+    screen_width = max(0, int(desktop.get("width") or 0))
+    screen_height = max(0, int(desktop.get("height") or 0))
+    window_width = max(0, int(window.get("width") or 0))
+    window_height = max(0, int(window.get("height") or 0))
+    if screen_width <= 0 or screen_height <= 0 or window_width <= 0 or window_height <= 0:
+        return None
+
+    left = max(screen_left, int(window.get("left") or 0))
+    top = max(screen_top, int(window.get("top") or 0))
+    right = min(screen_left + screen_width, int(window.get("left") or 0) + window_width)
+    bottom = min(screen_top + screen_height, int(window.get("top") or 0) + window_height)
+    if right <= left or bottom <= top:
+        return None
+    return (left, top, right - left, bottom - top)
+
+
+def region_to_dict(region):
+    if not region:
+        return None
+    left, top, width, height = region
+    return {
+        "left": left,
+        "top": top,
+        "width": width,
+        "height": height,
+    }
 
 
 def limited_matches(iterator, limit):

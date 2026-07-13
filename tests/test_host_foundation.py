@@ -18,7 +18,14 @@ from app_paths import (
 )
 from atomic_io import atomic_write_json, atomic_write_text
 import app
-from app import SERVE_HOST_ENV, launcher_log_file, should_serve_host
+from app import (
+    SELF_CHECK_FLAG,
+    SERVE_HOST_ENV,
+    launcher_log_file,
+    run_self_check,
+    should_run_self_check,
+    should_serve_host,
+)
 
 
 class HostFoundationTests(unittest.TestCase):
@@ -87,6 +94,18 @@ class HostFoundationTests(unittest.TestCase):
         self.assertTrue(should_serve_host(["BRunnerHost.exe"], {SERVE_HOST_ENV: "1"}))
         self.assertTrue(should_serve_host(["BRunnerHost.exe"], {SERVE_HOST_ENV: "true"}))
         self.assertFalse(should_serve_host(["BRunnerHost.exe"], {}))
+        self.assertTrue(should_run_self_check(["BRunnerHost.exe", SELF_CHECK_FLAG]))
+        self.assertFalse(should_run_self_check(["BRunnerHost.exe"]))
+
+    def test_source_self_check_initializes_writable_runtime_state(self):
+        original_host_dir = app.HOST_DIR
+        try:
+            app.HOST_DIR = self.base_dir
+            self.assertEqual(run_self_check(), 0)
+            self.assertTrue((self.base_dir / "brunner_config.json").is_file())
+            self.assertTrue((self.base_dir / "Workflows").is_dir())
+        finally:
+            app.HOST_DIR = original_host_dir
 
     def test_frozen_launcher_log_uses_executable_directory(self):
         original_executable = sys.executable

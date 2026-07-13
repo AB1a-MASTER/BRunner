@@ -10,8 +10,11 @@ sys.path.insert(0, str(HOST_DIR))
 
 from host_settings import (
     DEFAULT_PORT,
+    format_pairing_key,
     format_allowed_roots,
+    is_strong_pairing_key,
     load_or_create_config,
+    normalize_pairing_key,
     normalize_config,
     parse_allowed_roots,
     save_config,
@@ -168,6 +171,15 @@ class HostSettingsTests(unittest.TestCase):
         roots = parse_allowed_roots("AllowedFiles\n\nDatasets\n")
         self.assertEqual(roots, ["AllowedFiles", "Datasets"])
         self.assertEqual(format_allowed_roots(roots), "AllowedFiles\nDatasets")
+
+    def test_pairing_key_format_preserves_entropy_and_accepts_grouped_input(self):
+        raw = "0123456789abcdef0123456789abcdef"
+        formatted = "0123-4567-89ab-cdef-0123-4567-89ab-cdef"
+
+        self.assertEqual(format_pairing_key(raw), formatted)
+        self.assertEqual(normalize_pairing_key(formatted.upper()), raw)
+        self.assertTrue(is_strong_pairing_key(formatted))
+        self.assertFalse(is_strong_pairing_key("123456"))
 
 
 if __name__ == "__main__":

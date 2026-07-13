@@ -6,11 +6,12 @@ Implementation and acceptance source for website/product-specific mapper profile
 chat/social acceptance fixture exists at
 `BRunner_Host/mapper_platform_profiles_test.html`. Initial redacted profile
 hint detection, saved-map metadata, and redacted component-level platform scope
-facts are in source. Known chat/social hosts now receive conservative landmark
-inference; scope contradictions are rejected before locator scoring, ephemeral
-text is excluded from durable identity, and repeated rows/cards without a
-durable container are protected unsupported. Product-specific live acceptance
-is still required before claiming WhatsApp/social support.
+facts are in source. Known chat/social hosts now receive top-down app-shell,
+major-pane, subregion, and repeated-template inference; scope contradictions
+are rejected before locator scoring, ephemeral text is excluded from durable
+identity, and repeated rows/cards without a durable redacted identity remain
+protected unsupported. Product-specific live acceptance is still required
+before claiming WhatsApp/social support.
 
 ## Problem
 
@@ -30,6 +31,10 @@ When evidence is weak, they should return unresolved or `dynamic_deferred`
 instead of pretending generic mapping is safe.
 
 Profiles are workflow-scoped mapper behavior, not extension-global magic.
+When a page declares explicit local profile roots, profile grouping must be
+bounded to those roots. Page chrome outside the roots remains generic DOM
+structure, and fixture/profile controls outside the actual app shell are shell
+controls instead of being folded into the active chat/feed pane.
 
 ## First Profile Families
 
@@ -110,23 +115,35 @@ The Mapper Inspector should expose:
 - conservative unresolved/dynamic-deferred reasons when profile evidence is
   insufficient.
 
-Current implementation note: saved maps can carry
+Current implementation: saved maps carry
 `mapper.platform_profile.v1` metadata with family, confidence, signal counts,
-and loaded-window counts. The Inspector shows the detected family/confidence in
-the selected map subtitle and Policy panel. This is diagnostic only; it does
-not yet replace generic grouping or resolution.
+and loaded-window counts plus a redacted `mapper.platform_structure.v1` summary.
+That summary persists major panes, subregions, repeated template parts, record
+counts, component counts, and structural boundary paths without raw chat/post
+content.
 
 Component facts can also carry `mapper.platform_scope.v1` structural evidence.
 For the local fixture this scopes controls to chat regions such as conversation
 list, active thread, message row, and message composer, or social regions such
 as profile tabs, feed card, loaded feed window, and comment composer. Scope data
-is sanitized to family, region, container/thread tokens, loaded-window index,
-repeat kind, and durability; raw chat/post text must not be stored.
-The Inspector uses this scope for Structure paths and Regions labels before
-falling back to generic DOM path/form/role grouping. The selected Component
-panel also shows a compact Platform Scope block so operators can inspect the
-sanitized family, region, durability, thread/container token, repeated kind,
-and loaded-window index that influenced grouping.
+is sanitized to family, major pane, subregion, template kind/part,
+container/thread tokens, loaded-window index, durability, and exact structural
+boundary paths; raw chat/post text must not be stored. When stable attributes
+are absent, inferred repeated records may use a unique redacted identity hash;
+duplicate identities remain unsupported instead of receiving an unsafe index.
+Explicit fixture roots fence this behavior: elements outside chat/social roots
+do not receive inferred chat/social scope, and controls inside a fixture root
+but outside its app shell are assigned to shell/profile-controls regions.
+
+The Inspector keeps one canonical structural dataset for every page. Structure
+and Graph render the actual DOM hierarchy from the saved structural paths
+(`body`, `header`, `main`, `section`, app shells, forms, panes, and nested
+containers). Platform scope remains semantic metadata for identity,
+resolution, Regions grouping, diagnostics, and component details; it must not
+replace the actual page hierarchy in Structure or Graph. Container rows in both
+views should highlight their complete live containers. The selected Component
+panel exposes the same sanitized platform scope alongside the canonical DOM
+structure.
 
 Scoped reconciliation and runtime resolution now apply a conservative boundary
 before locator or fingerprint scoring. A scoped chat/social component must stay
@@ -145,12 +162,20 @@ target.
 2. Done: build a local fixture that simulates social-feed cards, repeated
    action bars, comment composers, loaded-window appends, and changing
    counters.
-3. Verify grouping is stable top-to-bottom and scoped by thread/card.
-4. Source-covered: composer/action targets with contradictory scope are
+3. Source-covered: chat maps persist navigation rail, contacts pane, and chat
+   pane as separate major regions; social maps persist navigation, feed, and
+   right-rail regions when present. Verify this live.
+4. Source-covered: repeated contacts/messages/posts are compact template groups
+   in Graph and semantic hierarchy branches in Structure. Verify this live.
+5. Source-covered: composer/action targets with contradictory scope are
    rejected before locator/fingerprint scoring. Verify this live in the fixture.
-5. Verify unloaded virtualized records are not claimed as present.
-6. Verify dynamic badges/counters/timestamps do not cause identity churn.
-7. Verify Inspector explains the page profile, selected component scope, and
+6. Verify unloaded virtualized records are not claimed as present.
+7. Verify dynamic badges/counters/timestamps do not cause identity churn.
+8. Verify Inspector explains the page profile, selected component scope, and
    any conservative unsupported outcome.
-8. Only after fixture acceptance, run manual live checks against WhatsApp Web
+9. Verify explicit fixture roots do not pull page header/results into the
+   profile hierarchy, and fixture toolbars remain shell/profile controls.
+10. Verify Structure and Graph agree on the same actual DOM hierarchy for
+   platform fixtures instead of showing a separate platform-only hierarchy.
+11. Only after fixture acceptance, run manual live checks against WhatsApp Web
    and one social app with redacted diagnostics.

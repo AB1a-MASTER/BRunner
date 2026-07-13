@@ -98,12 +98,15 @@ Expected result: open Shadow DOM controls can be captured and resolved.
 
 1. Open `mapper_stress_test.html` and map the page.
 2. Confirm **Frame name** and **Save Frame** appear under a non-top Frame Scope.
-3. Select **Save Frame** and confirm highlight is drawn inside the iframe.
-4. Reload the stress page, run Check live resolution again, and confirm the
+3. In Structure mode, confirm same-origin iframe content appears under its own
+   frame grouping row instead of merging into the top-page `body`, `main`, or
+   `form` branches.
+4. Select **Save Frame** and confirm highlight is drawn inside the iframe.
+5. Reload the stress page, run Check live resolution again, and confirm the
    stable frame path rediscovers the current Chrome frame ID.
-5. Execute a recorded frame input/save action and confirm the nested frame log
+6. Execute a recorded frame input/save action and confirm the nested frame log
    changes without targeting a same-named top-page control.
-6. Confirm inaccessible cross-origin frames are counted as protected and never
+7. Confirm inaccessible cross-origin frames are counted as protected and never
    exposed as actionable components.
 
 Expected result: same-origin frames work by stable path; cross-origin frames
@@ -114,6 +117,16 @@ fail honestly as `protected_unsupported`.
 1. Open `mapper_platform_profiles_test.html`.
 2. In the chat fixture, map the active thread region, conversation list,
    message composer, **Attach**, **Send**, and one loaded message action.
+   Confirm Structure and Graph begin with a Chat Application shell and separate
+   **Navigation Rail**, **Contacts Pane**, and **Chat Pane** major regions.
+   Confirm conversation rows appear under a Contact template and loaded
+   messages under Message template parts instead of one giant component list.
+   Select Contacts Pane and Chat Pane Structure rows and confirm each complete
+   live pane highlights independently.
+   Confirm the page header/results outside the chat fixture are not grouped
+   under Chat Application. Confirm **Swap Active Thread**, **Load Older
+   Messages**, and **Tick Chat Ephemeral Data** appear under **Chat Shell** ->
+   **Profile Controls**, not under Thread Header or Chat Pane.
 3. Use **Swap Active Thread**, **Load Older Messages**, and **Tick Chat
    Ephemeral Data**. Confirm mapper grouping remains scoped to the active
    thread, composer targets do not drift to another thread, and ephemeral unread
@@ -131,6 +144,10 @@ fail honestly as `protected_unsupported`.
    absent.
 4. In the social fixture, map the home feed region, one post/card action bar,
    the comment composer, **Media**, and **Post**.
+   Confirm Graph separates Navigation Pane, Feed Pane, and Right Rail and
+   summarizes repeated Post template content/actions by record count.
+   Confirm **Append Feed Window** and **Tick Social Ephemeral Data** appear
+   under **Social Shell** -> **Profile Controls**, not under Feed Pane.
 5. Use **Append Feed Window** and **Tick Social Ephemeral Data**. Confirm
    repeated post/card controls stay scoped to their card, loaded-window content
    is represented as currently loaded only, and changing counters/timestamps are
@@ -203,7 +220,23 @@ arbitrary row.
    than jumping around the page.
 14. In Graph view, confirm Site -> Page -> Region -> Component nodes are visible
    in a top-down hierarchy with connector ports, right-angle relationship edges,
-   compact labels, pan/zoom controls, and selected node state.
+   compact labels, pan/zoom controls, and selected node state. Use the layout
+   icon to switch between vertical and horizontal hierarchies; confirm the
+   horizontal view flows left-to-right with sibling nodes stacked by layer and
+   switches back without changing filters or the selected component.
+   Confirm Graph is built from the same structure as Tree Structure: page DOM
+   containers such as `body`, `header`, `main`, `section`, forms, app shells,
+   and nested divs appear as parent/child nodes instead of a one-layer
+   region-to-component list.
+   Reload the Inspector while leaving the mapped page open, then click and
+   hover Tree records again. Confirm the website accepts the new highlight
+   requests rather than reporting them as stale. Repeated chat/social templates
+   should show numbered records, with each record appearing once and
+   highlighting its own live container.
+   Trigger a dynamic sibling insertion before highlighting a pane or record;
+   confirm the container is recovered through its live mapped descendant even
+   when the original positional DOM path moved. In Graph, confirm each repeated
+   template appears once with combined record, part, and element counts.
 15. On the stress page, append feed items or apply controlled dynamic drift,
    then choose **Refresh Map** in the Inspector. Confirm Tree and Graph update
    the selected page with the new/changed component count while other saved
@@ -213,6 +246,12 @@ arbitrary row.
    existing feed items in Tree/Graph, and removed historical records do not
    interleave with live rows unless filtering for **Removed** or **Review
    required**.
+   Confirm the saved map exposes separate static and dynamic layer diagnostics:
+   stable/static controls keep their Component IDs, loaded-window/dynamic
+   records reconcile only against dynamic history, and a dynamic record with
+   matching visible text does not inherit an older static Component ID. In the
+   Policy rail, confirm **Map Layers** shows static/dynamic counts, lane states,
+   removed counts, and any deferred dynamic reason.
 16. Start the mutation burst, wait until material mutations exceed the policy
    limit, then use **Check live**. Confirm the live-status badge reports
    `dynamic_deferred`. Stop or settle the burst, then choose **Refresh Map** and
@@ -255,22 +294,29 @@ arbitrary row.
     Graph views when present on the page.
 30. Select a mapped image and visible text component, then confirm details show
     locators, fingerprint, capabilities, and history.
-31. Select a mapped element that is outside the current viewport. Confirm the
+31. In Structure mode, select an intermediate `div`, `form`, or `section` row.
+    Confirm the complete live container is highlighted, including its child
+    area. Use that row's chevron and confirm expand/collapse works without
+    triggering a different highlight.
+32. Hide or remove a saved container, then select its Structure row. Confirm
+    the Inspector reports hidden or not found instead of highlighting a child
+    or a similarly shaped container.
+33. Select a mapped element that is outside the current viewport. Confirm the
     real page scrolls the resolved element into view before drawing the overlay.
-32. Confirm ambiguous or unresolved components are not clicked or typed into.
-33. Save a display alias and refresh the Inspector. Confirm the alias persists
+34. Confirm ambiguous or unresolved components are not clicked or typed into.
+35. Save a display alias and refresh the Inspector. Confirm the alias persists
     and the canonical Component ID is unchanged.
-34. For a review-required component, choose **Accept current mapping** and
+36. For a review-required component, choose **Accept current mapping** and
     confirm it leaves the Review Queue.
-35. Select a review-required component and choose **Check live resolution**.
+37. Select a review-required component and choose **Check live resolution**.
     Confirm the Component panel shows Live Resolution and Resolver Log details.
-36. If the live resolution shows candidate attempts, link a live candidate.
+38. If the live resolution shows candidate attempts, link a live candidate.
     Confirm the canonical Component ID is unchanged, review is cleared, history
     records the linked candidate, and a new map version appears while the
     previous map version remains selectable.
-37. Mark the site sensitive in Policy and confirm locator/resolution details are
+39. Mark the site sensitive in Policy and confirm locator/resolution details are
     redacted while Component IDs and status remain visible.
-38. Confirm live resolution details include a structured resolver log with
+40. Confirm live resolution details include a structured resolver log with
     thresholds, selected candidate, runner-up when present, margin, ranked
     candidates, and attempts.
 

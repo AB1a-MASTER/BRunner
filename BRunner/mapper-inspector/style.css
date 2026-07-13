@@ -859,6 +859,17 @@ select:focus-visible {
   cursor: pointer;
 }
 
+.tree-row.container-highlightable .tree-chevron {
+  min-width: 22px;
+  min-height: 24px;
+  border-radius: 4px;
+}
+
+.tree-row.container-highlightable .tree-chevron:hover {
+  color: #ffffff;
+  background: rgba(148, 163, 184, 0.16);
+}
+
 .tree-row-button:hover,
 .tree-toggle:hover,
 .tree-row.active {
@@ -1091,6 +1102,21 @@ select:focus-visible {
   bottom: -6px;
 }
 
+.graph-layout-horizontal .graph-port {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.graph-layout-horizontal .graph-port-in {
+  left: -6px;
+}
+
+.graph-layout-horizontal .graph-port-out {
+  right: -6px;
+  left: auto;
+}
+
 .graph-node-site {
   border-color: #64748b;
   background: #172033;
@@ -1106,12 +1132,30 @@ select:focus-visible {
   background: #111827;
 }
 
+.graph-node-subregion {
+  border-color: #14b8a6;
+  background: #0b2928;
+}
+
+.graph-node-template {
+  border-color: #eab308;
+  background: #2b2408;
+}
+
 .graph-node-component {
   cursor: pointer;
   border-color: #475569;
 }
 
+.graph-node.container-highlightable {
+  cursor: pointer;
+}
+
 .graph-node-component:hover {
+  border-color: var(--accent);
+}
+
+.graph-node.container-highlightable:hover {
   border-color: var(--accent);
 }
 
@@ -1143,6 +1187,14 @@ select:focus-visible {
 
 .graph-node-region .graph-port {
   background: #a78bfa;
+}
+
+.graph-node-subregion .graph-port {
+  background: #2dd4bf;
+}
+
+.graph-node-template .graph-port {
+  background: #facc15;
 }
 
 .graph-node-component .graph-port {
@@ -1210,6 +1262,14 @@ select:focus-visible {
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.map-layer-panel .metric-pill {
+  white-space: normal;
+}
+
+.map-layer-panel .metric-pill strong {
+  overflow-wrap: anywhere;
 }
 
 .metric-footnote,
@@ -1722,6 +1782,7 @@ pre {
 
   .graph-mobile-region {
     min-width: 0;
+    margin-left: calc((var(--level, 0)) * 8px);
   }
 
   .graph-mobile-region h3 {
@@ -1731,6 +1792,46 @@ pre {
     margin: 0 0 5px;
     color: var(--muted);
     font-size: 12px;
+  }
+
+  .inline-container-button {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    font: inherit;
+    text-align: left;
+  }
+
+  .graph-mobile-subregion {
+    display: grid;
+    gap: 5px;
+    margin: 0 0 10px;
+    padding-left: 8px;
+    border-left: 2px solid #14b8a6;
+  }
+
+  .graph-mobile-subregion h4 {
+    margin: 0;
+    color: #ccfbf1;
+    font-size: 11px;
+  }
+
+  .graph-template-summary {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid #854d0e;
+    border-radius: 5px;
+    color: #fef08a;
+    background: #2b2408;
+  }
+
+  .graph-template-summary span {
+    color: var(--muted);
+    font-size: 10px;
   }
 
   .metric-pill {

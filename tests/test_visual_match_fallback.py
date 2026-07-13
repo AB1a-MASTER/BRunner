@@ -78,6 +78,16 @@ class VisualMatchFallbackTests(unittest.TestCase):
         self.assertEqual(result["x"], 130)
         self.assertEqual(result["y"], 215)
         self.assertEqual(result["matchConfidence"], 0.97)
+        self.assertEqual(result["searchRegion"], {
+            "left": 10,
+            "top": 20,
+            "width": 1200,
+            "height": 800,
+        })
+        self.assertGreaterEqual(result["searchDurationMs"], 0)
+        locate_call = adapter.calls[0]
+        self.assertEqual(locate_call[0], "locateAllOnScreen")
+        self.assertEqual(locate_call[2]["region"], (10, 20, 1200, 800))
         self.assertEqual(adapter.calls[-1], ("click", 130, 215, {"clicks": 1, "button": "left"}))
 
     def test_visual_match_refuses_disabled_wrong_window_missing_and_ambiguous(self):

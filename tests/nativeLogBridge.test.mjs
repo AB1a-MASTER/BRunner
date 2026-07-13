@@ -90,6 +90,8 @@ test("native host pairing is storage-backed and commands wait for authentication
   assert.match(bridge, /loadNativePairing/);
   assert.match(bridge, /saveNativePairing/);
   assert.match(bridge, /generateNativePairingKey/);
+  assert.match(bridge, /normalizeNativePairingKey/);
+  assert.match(bridge, /32 hexadecimal characters/);
   assert.match(bridge, /waitForAuthentication/);
   assert.match(bridge, /extensionId: globalThis\.chrome\?\.runtime\?\.id/);
   assert.match(host, /pairedExtensionId/);
@@ -328,7 +330,11 @@ test("mapper platform profile page covers chat and social fixtures", async () =>
   assert.match(platformHarness, /BRunner Mapper Platform Profile Harness/);
   assert.match(platformHarness, /data-platform-profile="chat"/);
   assert.match(platformHarness, /data-testid="conversation-list"/);
+  assert.match(platformHarness, /data-testid="account-navigation"/);
+  assert.match(platformHarness, /data-testid="contacts-pane"/);
+  assert.match(platformHarness, /data-testid="chat-search-filters"/);
   assert.match(platformHarness, /data-testid="active-thread-region"/);
+  assert.match(platformHarness, /data-testid="thread-header"/);
   assert.match(platformHarness, /data-testid="message-composer"/);
   assert.match(platformHarness, /data-testid="message-loaded-window"/);
   assert.match(platformHarness, /Swap Active Thread/);
@@ -336,6 +342,7 @@ test("mapper platform profile page covers chat and social fixtures", async () =>
   assert.match(platformHarness, /tick-chat-ephemeral/);
   assert.match(platformHarness, /data-platform-profile="social"/);
   assert.match(platformHarness, /data-testid="home-feed-region"/);
+  assert.match(platformHarness, /data-testid="social-right-rail"/);
   assert.match(platformHarness, /data-testid="social-loaded-window"/);
   assert.match(platformHarness, /data-testid="global-comment-composer"/);
   assert.match(platformHarness, /Append Feed Window/);

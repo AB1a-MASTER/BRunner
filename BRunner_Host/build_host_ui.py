@@ -12,6 +12,7 @@ def main():
         sys.executable,
         "-m",
         "PyInstaller",
+        "--clean",
         SPEC_FILE,
     ]
     try:

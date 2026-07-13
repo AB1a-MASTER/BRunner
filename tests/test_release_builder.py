@@ -12,6 +12,7 @@ from release_builder import (
     is_extension_excluded,
     package_extension,
     package_host_executable,
+    validate_release_artifacts,
 )
 
 
@@ -81,7 +82,7 @@ class ReleaseBuilderTests(unittest.TestCase):
             extension.mkdir()
             host.mkdir(parents=True)
             (extension / "manifest.json").write_text("{}", encoding="utf-8")
-            (host / "BRunnerHost.exe").write_bytes(b"exe")
+            (host / "BRunnerHost.exe").write_bytes(b"MZexe")
 
             extension_zip = package_extension(extension, output / EXTENSION_PACKAGE_NAME)
             host_exe = package_host_executable(host / "BRunnerHost.exe", output / HOST_PACKAGE_NAME)
@@ -92,6 +93,25 @@ class ReleaseBuilderTests(unittest.TestCase):
                 EXTENSION_PACKAGE_NAME,
                 HOST_PACKAGE_NAME,
             ])
+
+    def test_release_validation_checks_exact_artifacts_and_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            host = output / HOST_PACKAGE_NAME
+            host.write_bytes(b"MZhost")
+            extension = output / EXTENSION_PACKAGE_NAME
+            with zipfile.ZipFile(extension, "w") as archive:
+                archive.writestr("manifest.json", '{"manifest_version": 3}')
+                archive.writestr("background.js", "runtime")
+
+            result = validate_release_artifacts(output)
+
+            self.assertEqual(result["manifestVersion"], 3)
+            self.assertEqual(result["extensionFileCount"], 2)
+
+            (output / "stale.txt").write_text("stale", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly"):
+                validate_release_artifacts(output)
 
 
 if __name__ == "__main__":

@@ -189,8 +189,8 @@ Visible Host Fallback live acceptance:
 9. Also run the same acceptance with Chrome side UI open. When the side UI
    creates a large horizontal browser inset, the extension should prefer visual
    matching so the OS pointer lands on the button instead of an estimated page
-   coordinate. This passed, but the visual-match path was noticeably slow and
-   should be optimized.
+   coordinate. This passed. Host search is now clipped to the foreground
+   browser window and reports search-region/timing diagnostics.
 
 ## Phase C — Graph-dependent control flow
 

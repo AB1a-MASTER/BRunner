@@ -38,6 +38,14 @@ That top-level command emits exactly two deliverables:
 The PyInstaller entry point is `app.py`, which opens the PySide6 companion UI.
 The same executable can start the embedded websocket service with
 `--serve-host`.
+Run a non-GUI packaged-path check with:
+
+```powershell
+.\BRunnerHost.exe --self-check
+```
+
+Exit code `0` confirms that configuration and the active workflow directory
+can be created and written beside the installed executable.
 The host-only staging helper copies `BRunnerHost.exe`, companion docs, and a
 manifest for internal inspection. Runtime folders such as `Workflows`,
 `AllowedFiles`, `Logs`, local configuration, build caches, and obsolete source
@@ -59,6 +67,14 @@ the host Pairing tab, confirm the WebSocket port, and save. The extension must
 authenticate before workflow storage or host capability requests are accepted.
 After a successful auth, the host remembers that extension instance internally;
 use Unpair or Generate Host Key when switching browser profiles.
+Pairing keys retain 128 bits of entropy and are displayed in readable groups;
+hyphens are optional when pasting. Changing, regenerating, or revoking pairing
+restarts a host managed by the companion so an authenticated old session cannot
+remain active.
+
+The Status tab controls whether the host starts with the companion. Closing the
+window keeps the app in the tray. Tray **Exit** stops the managed host and exits
+the application, including the packaged one-file child process.
 
 ## Troubleshooting
 
@@ -69,8 +85,9 @@ use Unpair or Generate Host Key when switching browser profiles.
   configured port before starting a second copy.
 - If visible host fallback is refused, keep Chrome foregrounded and check the
   Host Fallback tab for the expected window title and confidence threshold.
-- If visual-match fallback is slow, close Chrome side UI where possible or keep
-  using it only for workflows that need OS-level fallback.
+- Visual matching searches only the clipped foreground browser window and logs
+  its search region and duration. Keep it opt-in for workflows that need
+  OS-level fallback.
 - If packaging misses a module, add it once to `packaging_config.py`; both the
   `.spec` file and `build_host_ui.py` read from that shared list.
 - If release staging fails, build the executable first and confirm

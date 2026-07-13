@@ -375,6 +375,7 @@
             request.component,
             request.pageMap,
             request.highlightRequestId,
+            request.containerTarget,
           );
 
         case "GET_CONTROLS_TREE":
@@ -589,7 +590,7 @@
       });
     }
 
-    async highlightMapperComponent(component = {}, pageMap = {}, highlightRequestId = 0) {
+    async highlightMapperComponent(component = {}, pageMap = {}, highlightRequestId = 0, containerTarget = null) {
       const requestId = Number(highlightRequestId) || 0;
       if (requestId && requestId < (this.mapperHighlightRequestId || 0)) {
         return {
@@ -603,6 +604,10 @@
         };
       }
       if (requestId) this.mapperHighlightRequestId = requestId;
+
+      if (containerTarget?.domPath) {
+        return await this.highlightMapperContainer(containerTarget, requestId, pageMap);
+      }
 
       if (!component?.componentId) {
         this.hideMapperInspectorHighlight();
@@ -671,6 +676,98 @@
         highlighted,
         hidden,
       };
+    }
+
+    async highlightMapperContainer(target = {}, requestId = 0, pageMap = {}) {
+      const anchoredElement = this.resolveMapperContainerAnchor(target, pageMap);
+      const matches = anchoredElement
+        ? [anchoredElement]
+        : this.findMapperElementsByDomPath(target.domPath);
+      if (matches.length !== 1) {
+        this.hideMapperInspectorHighlight();
+        return {
+          ok: true,
+          mapperState: matches.length ? "ambiguous" : "not_found",
+          mapperReason: matches.length ? "container_path_ambiguous" : "container_path_not_found",
+          confidence: 0,
+          attempts: [],
+          resolverLog: null,
+          highlighted: false,
+          hidden: false,
+        };
+      }
+
+      const element = matches[0];
+      const hidden = !this.isVisibleElement(element);
+      const component = {
+        componentId: target.label || "container",
+        status: "container",
+      };
+      const highlighted = hidden
+        ? false
+        : await this.showMapperInspectorHighlight(
+            element,
+            component,
+            "container",
+            requestId,
+          );
+      if (hidden) this.hideMapperInspectorHighlight();
+      if (requestId && requestId !== this.mapperHighlightRequestId) {
+        return {
+          ok: true,
+          mapperState: "stale",
+          mapperReason: "stale_highlight_request",
+          confidence: 0,
+          attempts: [],
+          resolverLog: null,
+          highlighted: false,
+          hidden: false,
+        };
+      }
+      return {
+        ok: true,
+        mapperState: hidden ? "hidden" : "resolved",
+        mapperReason: hidden
+          ? "container_hidden"
+          : anchoredElement
+            ? "container_anchor_resolved"
+            : "container_path_unique",
+        confidence: 100,
+        attempts: [],
+        resolverLog: null,
+        highlighted,
+        hidden,
+      };
+    }
+
+    resolveMapperContainerAnchor(target = {}, pageMap = {}) {
+      const componentId = String(target.anchorComponentId || "");
+      if (!componentId) return null;
+      const component = (pageMap.components || []).find((item) => item.componentId === componentId);
+      if (!component) return null;
+      const result = this.resolveMapperComponentTarget({
+        mapperContext: {
+          state: "ready",
+          includeHidden: true,
+          pageMap: {
+            classification: pageMap.classification || "",
+          },
+          component,
+        },
+      }, component.action || "");
+      let element = result.element || null;
+      const ancestorDepth = Math.min(40, Math.max(0, Number(target.ancestorDepth) || 0));
+      for (let depth = 0; element && depth < ancestorDepth; depth += 1) {
+        element = this.getMapperComposedParentElement(element);
+      }
+      return element instanceof Element ? element : null;
+    }
+
+    getMapperComposedParentElement(element = null) {
+      if (!element) return null;
+      if (element.parentElement) return element.parentElement;
+      const root = element.getRootNode?.();
+      return root instanceof ShadowRoot ? root.host : null;
     }
 
     async showMapperInspectorHighlight(element, component = {}, state = "resolved", highlightRequestId = 0) {
@@ -958,11 +1055,15 @@
         "td",
         "th",
         "span",
+        "pre",
+        "output",
         "[role='button']",
         "[role='link']",
         "[role='textbox']",
         "[role='img']",
         "[role='heading']",
+        "[role='status']",
+        "[role='log']",
         "[contenteditable='true']",
       ].join(",");
       const roots = this.getOpenDomRoots();
@@ -1083,6 +1184,7 @@
         behavioral,
         visual,
       };
+      const mappingLayer = this.getMapperMappingLayer(fingerprint);
       const fingerprintDigest = this.hashString(JSON.stringify(fingerprint));
       const componentUid = `uid_${fingerprintDigest}`;
       const mapVersionId = `map_${this.hashString(`${pageProfileKey}|${fingerprintDigest}`)}`;
@@ -1095,6 +1197,7 @@
         pageProfileKey,
         componentId,
         componentUid,
+        mappingLayer,
         capturedMapVersionId: mapVersionId,
         displayName: this.mapperDisplayName(semantic, technical),
         locatorCandidates,
@@ -1103,11 +1206,26 @@
       };
     }
 
+    getMapperMappingLayer(fingerprint = {}) {
+      const structural = fingerprint.structural || {};
+      const region = structural.regionDynamics || {};
+      const repeat = structural.repeatScope || {};
+      const scope = structural.platformScope || {};
+      if (["dynamic", "loaded_window", "ephemeral_context"].includes(region.classification)) {
+        return "dynamic";
+      }
+      if (repeat.loadedContentOnly === true) return "dynamic";
+      if (["loaded_window", "ephemeral"].includes(scope.durability)) return "dynamic";
+      if (scope.dynamicKind) return "dynamic";
+      return "static";
+    }
+
     createComponentRef(mapperFact = {}) {
       return {
         mapperSchemaVersion: 1,
         componentId: mapperFact.componentId || "",
         componentUid: mapperFact.componentUid || "",
+        mappingLayer: mapperFact.mappingLayer || "static",
         siteKey: mapperFact.siteKey || "",
         pageProfileKey: mapperFact.pageProfileKey || "",
         capturedMapVersionId: mapperFact.capturedMapVersionId || "",
@@ -1347,33 +1465,79 @@
       const chatRoot = element.closest?.("[data-platform-profile='chat'], [data-testid='chat-profile']");
       if (chatRoot) {
         const ephemeral = this.isMapperEphemeralElement(element);
+        const chatShell = element.closest("[data-testid='chat-app-shell']");
+        const profileControls = !chatShell;
+        const profileToolbar = profileControls ? element.closest(".toolbar, [data-chat-region='profile-controls']") : null;
+        const navigation = element.closest("[data-testid='account-navigation'], [data-chat-region='navigation']");
+        const contactsPane = element.closest("[data-testid='contacts-pane'], [data-chat-region='contacts']");
         const composer = element.closest("[data-testid='message-composer']");
         const conversationList = element.closest("[data-testid='conversation-list']");
         const conversationRow = element.closest("[data-testid^='thread-'][data-thread-id]");
         const activeThread = element.closest("[data-testid='active-thread-region']");
         const messageRow = element.closest("[data-testid^='message-'][data-thread-id]");
         const loadedWindow = element.closest("[data-testid='message-loaded-window']");
-        const region = composer
-          ? "message_composer"
+        const threadHeader = element.closest("[data-testid='thread-header'], [data-chat-region='thread-header']");
+        const searchFilters = element.closest("[data-testid='chat-search-filters'], [data-chat-region='search-filters']");
+        let majorRegion = "chat_pane";
+        if (profileControls) {
+          majorRegion = "chat_shell";
+        } else if (navigation) {
+          majorRegion = "navigation_rail";
+        } else if (contactsPane || conversationList || conversationRow) {
+          majorRegion = "contacts_pane";
+        }
+
+        let subregion = "chat_shell";
+        if (profileControls) {
+          subregion = "profile_controls";
+        } else if (navigation) {
+          subregion = "navigation_actions";
+        } else if (searchFilters) {
+          subregion = "search_and_filters";
+        } else if (composer) {
+          subregion = "message_composer";
+        } else if (conversationRow || conversationList) {
+          subregion = "conversation_list";
+        } else if (threadHeader) {
+          subregion = "thread_header";
+        } else if (messageRow || loadedWindow) {
+          subregion = "message_history";
+        } else if (activeThread) {
+          subregion = "chat_pane";
+        }
+        const majorBoundary = profileControls
+          ? chatRoot
+          : navigation || contactsPane || conversationList || activeThread || chatRoot;
+        const subregionBoundary = profileControls
+          ? profileToolbar || chatRoot
+          : searchFilters || composer ||
+          (conversationRow ? conversationList || conversationRow.parentElement : null) || conversationList ||
+          threadHeader || (messageRow ? loadedWindow || messageRow.parentElement : null) ||
+          loadedWindow || activeThread || majorBoundary;
+        const templateKind = messageRow
+          ? "message"
           : conversationRow
-            ? "conversation_row"
-            : conversationList
-            ? "conversation_list"
-            : messageRow
-              ? "message_row"
-              : loadedWindow
-                ? "message_loaded_window"
-                : activeThread
-                  ? "active_thread"
-                  : "chat_shell";
+            ? "contact"
+            : "";
 
         return {
           version: "mapper.platform_scope.v1",
           family: "chat",
-          region,
+          region: subregion,
+          majorRegion,
+          subregion,
+          templateKind,
+          templatePart: this.getMapperPlatformTemplatePart(element, templateKind, ephemeral),
+          majorRegionPath: this.getMapperDomPath(majorBoundary),
+          subregionPath: this.getMapperDomPath(subregionBoundary),
+          repeatedRecordPath: this.getMapperDomPath(messageRow || conversationRow),
+          majorRegionDepth: this.getMapperComposedAncestorDistance(element, majorBoundary),
+          subregionDepth: this.getMapperComposedAncestorDistance(element, subregionBoundary),
+          repeatedRecordDepth: this.getMapperComposedAncestorDistance(element, messageRow || conversationRow),
           containerId: this.toMapperIdentifier(
             messageRow?.getAttribute("data-testid") ||
               conversationRow?.getAttribute("data-testid") ||
+              profileToolbar?.getAttribute("data-testid") ||
               composer?.getAttribute("data-testid") ||
               conversationList?.getAttribute("data-testid") ||
               activeThread?.getAttribute("data-testid") ||
@@ -1390,7 +1554,7 @@
           loadedWindowIndex: this.toMapperIdentifier(messageRow?.getAttribute("data-testid") || ""),
           durability: ephemeral
             ? "ephemeral"
-            : composer || conversationList
+            : profileControls || composer || conversationList
               ? "durable"
               : messageRow
                 ? "loaded_window"
@@ -1403,29 +1567,63 @@
       const socialRoot = element.closest?.("[data-platform-profile='social'], [data-testid='social-profile']");
       if (socialRoot) {
         const ephemeral = this.isMapperEphemeralElement(element);
+        const socialShell = element.closest("[data-testid='social-app-shell']");
+        const profileControls = !socialShell;
+        const profileToolbar = profileControls ? element.closest(".toolbar, [data-social-region='profile-controls']") : null;
+        const navigation = element.closest("[data-testid='social-navigation'], [data-social-region='navigation']");
+        const rightRail = element.closest("[data-testid='social-right-rail'], [data-social-region='right-rail']");
         const composer = element.closest("[data-testid='global-comment-composer']");
         const tabs = element.closest("[data-testid='profile-tabs']");
         const card = element.closest("[data-testid^='social-card-'][data-loaded-window-index]");
         const loadedWindow = element.closest("[data-testid='social-loaded-window']");
         const feedRegion = element.closest("[data-testid='home-feed-region']");
-        const region = composer
-          ? "comment_composer"
-          : tabs
-            ? "profile_tabs"
-            : card
-              ? "feed_card"
-              : loadedWindow
-                ? "feed_loaded_window"
-                : feedRegion
-                  ? "home_feed"
-                  : "social_shell";
+        let majorRegion = "feed_pane";
+        if (profileControls) {
+          majorRegion = "social_shell";
+        } else if (navigation || tabs) {
+          majorRegion = "navigation_pane";
+        } else if (rightRail) {
+          majorRegion = "right_rail";
+        }
+
+        let subregion = "social_shell";
+        if (profileControls) {
+          subregion = "profile_controls";
+        } else if (composer) {
+          subregion = "comment_composer";
+        } else if (tabs) {
+          subregion = "profile_tabs";
+        } else if (card || loadedWindow) {
+          subregion = "feed_stream";
+        } else if (feedRegion) {
+          subregion = "feed_pane";
+        }
+        const majorBoundary = profileControls
+          ? socialRoot
+          : navigation || tabs || rightRail || feedRegion || socialRoot;
+        const subregionBoundary = profileControls
+          ? profileToolbar || socialRoot
+          : composer || tabs ||
+          (card ? loadedWindow || feedRegion || card.parentElement : null) ||
+          loadedWindow || feedRegion || majorBoundary;
 
         return {
           version: "mapper.platform_scope.v1",
           family: "social",
-          region,
+          region: subregion,
+          majorRegion,
+          subregion,
+          templateKind: card ? "post" : "",
+          templatePart: this.getMapperPlatformTemplatePart(element, card ? "post" : "", ephemeral),
+          majorRegionPath: this.getMapperDomPath(majorBoundary),
+          subregionPath: this.getMapperDomPath(subregionBoundary),
+          repeatedRecordPath: this.getMapperDomPath(card),
+          majorRegionDepth: this.getMapperComposedAncestorDistance(element, majorBoundary),
+          subregionDepth: this.getMapperComposedAncestorDistance(element, subregionBoundary),
+          repeatedRecordDepth: this.getMapperComposedAncestorDistance(element, card),
           containerId: this.toMapperIdentifier(
             card?.getAttribute("data-testid") ||
+              profileToolbar?.getAttribute("data-testid") ||
               composer?.getAttribute("data-testid") ||
               tabs?.getAttribute("data-testid") ||
               feedRegion?.getAttribute("data-testid") ||
@@ -1437,7 +1635,7 @@
           loadedWindowIndex: this.toMapperIdentifier(card?.getAttribute("data-loaded-window-index") || ""),
           durability: ephemeral
             ? "ephemeral"
-            : composer || tabs
+            : profileControls || composer || tabs
               ? "durable"
               : card
                 ? "loaded_window"
@@ -1447,6 +1645,8 @@
         };
       }
 
+      if (this.hasExplicitMapperPlatformRoots()) return null;
+
       const detectedFamily = this.currentMapperPlatformProfile?.family || "generic";
       if (detectedFamily === "chat") return this.getInferredChatPlatformScope(element);
       if (detectedFamily === "social") return this.getInferredSocialPlatformScope(element);
@@ -1454,33 +1654,63 @@
       return null;
     }
 
+    hasExplicitMapperPlatformRoots() {
+      return Boolean(document.querySelector("[data-platform-profile='chat'], [data-platform-profile='social']"));
+    }
+
     getInferredChatPlatformScope(element) {
       const ephemeral = this.isMapperEphemeralElement(element);
-      const composer = element.closest("form, [role='form']");
-      const composerHasInput = Boolean(composer?.querySelector("textarea, input[type='text'], [contenteditable='true']"));
-      const repeatedRow = element.closest("[role='listitem'], article");
-      const conversationList = element.closest("[role='list'], nav, aside");
-      const region = composer && composerHasInput
+      const major = this.getMapperInferredMajorRegion(element, "chat");
+      const composer = this.getMapperComposerBoundary(element);
+      const search = this.getMapperSearchBoundary(element);
+      const header = this.getMapperHeaderBoundary(element, major.element);
+      const repeatedRow = this.getMapperRepeatedRecord(element, major.name);
+      const templateKind = repeatedRow
+        ? major.name === "contacts_pane" ? "contact" : "message"
+        : "";
+      const subregion = composer
         ? "message_composer"
-        : repeatedRow
-          ? "message_or_conversation_row"
-          : conversationList
-            ? "conversation_list"
-            : element.closest("main, [role='main']")
-              ? "active_thread"
-              : "chat_shell";
-      const container = repeatedRow || (composerHasInput ? composer : null) || conversationList;
-      const containerId = this.getMapperStableContainerToken(container, region);
+        : search && major.name === "contacts_pane"
+          ? "search_and_filters"
+          : repeatedRow
+            ? templateKind === "contact" ? "conversation_list" : "message_history"
+            : header && major.name === "chat_pane"
+              ? "thread_header"
+              : major.name === "navigation_rail"
+                ? "navigation_actions"
+                : major.name === "contacts_pane"
+                  ? "conversation_list"
+                  : "message_history";
+      const subregionBoundary = composer || search ||
+        (repeatedRow ? this.getMapperRepeatedCollectionBoundary(repeatedRow, major.element) : null) ||
+        header || major.element;
+      const containerId = repeatedRow
+        ? this.getMapperStableContainerToken(repeatedRow, templateKind, {
+            allowIdentityHash: true,
+          })
+        : this.getMapperStableContainerToken(composer || search || header || major.element, subregion);
       const unsupportedRepeated = Boolean(repeatedRow && !containerId);
       return {
         version: "mapper.platform_scope.v1",
         family: "chat",
-        region,
+        region: subregion,
+        majorRegion: major.name,
+        subregion,
+        templateKind,
+        templatePart: this.getMapperPlatformTemplatePart(element, templateKind, ephemeral),
+        majorRegionPath: this.getMapperDomPath(major.element),
+        subregionPath: this.getMapperDomPath(subregionBoundary),
+        repeatedRecordPath: this.getMapperDomPath(repeatedRow),
+        majorRegionDepth: this.getMapperComposedAncestorDistance(element, major.element),
+        subregionDepth: this.getMapperComposedAncestorDistance(element, subregionBoundary),
+        repeatedRecordDepth: this.getMapperComposedAncestorDistance(element, repeatedRow),
         containerId,
-        threadId: "",
-        repeatedKind: repeatedRow ? "repeated_row" : "",
+        threadId: major.name === "chat_pane"
+          ? this.getMapperStableContainerToken(major.element, "thread", { allowIdentityHash: false })
+          : "",
+        repeatedKind: templateKind ? `${templateKind}_row` : "",
         loadedWindowIndex: "",
-        durability: ephemeral ? "ephemeral" : repeatedRow ? "loaded_window" : composerHasInput ? "durable" : "context",
+        durability: ephemeral ? "ephemeral" : repeatedRow ? "loaded_window" : composer ? "durable" : "context",
         dynamicKind: this.getMapperDynamicKind(element),
         mappingDisposition: unsupportedRepeated
           ? "unsupported_scope"
@@ -1488,37 +1718,59 @@
             ? "context_only"
             : "action_or_extract",
         scopeSource: "inferred_landmarks",
-        confidence: unsupportedRepeated ? 35 : 65,
+        confidence: unsupportedRepeated ? 45 : major.confidence,
       };
     }
 
     getInferredSocialPlatformScope(element) {
       const ephemeral = this.isMapperEphemeralElement(element);
-      const composer = element.closest("form, [role='form']");
-      const composerHasInput = Boolean(composer?.querySelector("textarea, input[type='text'], [contenteditable='true']"));
-      const card = element.closest("article, [role='article'], [role='listitem']");
-      const tabs = element.closest("[role='tablist'], nav");
-      const region = composer && composerHasInput
+      const major = this.getMapperInferredMajorRegion(element, "social");
+      const composer = this.getMapperComposerBoundary(element);
+      const search = this.getMapperSearchBoundary(element);
+      const header = this.getMapperHeaderBoundary(element, major.element);
+      const card = this.getMapperRepeatedRecord(element, major.name);
+      const tabs = element.closest("[role='tablist'], nav, [role='navigation']");
+      const subregion = composer
         ? "comment_composer"
+        : search && major.name === "navigation_pane"
+          ? "search_and_navigation"
         : card
-          ? "feed_card"
+          ? "feed_stream"
           : tabs
             ? "profile_tabs"
-            : element.closest("main, [role='main']")
-              ? "home_feed"
-              : "social_shell";
-      const container = card || (composerHasInput ? composer : null) || tabs;
-      const containerId = this.getMapperStableContainerToken(container, region);
+            : header && major.name === "feed_pane"
+              ? "feed_header"
+              : major.name === "right_rail"
+                ? "recommendations"
+                : major.name === "navigation_pane"
+                  ? "navigation"
+                  : "feed_stream";
+      const subregionBoundary = composer || search ||
+        (card ? this.getMapperRepeatedCollectionBoundary(card, major.element) : null) ||
+        tabs || header || major.element;
+      const containerId = card
+        ? this.getMapperStableContainerToken(card, "post", { allowIdentityHash: true })
+        : this.getMapperStableContainerToken(composer || tabs || search || header || major.element, subregion);
       const unsupportedRepeated = Boolean(card && !containerId);
       return {
         version: "mapper.platform_scope.v1",
         family: "social",
-        region,
+        region: subregion,
+        majorRegion: major.name,
+        subregion,
+        templateKind: card ? "post" : "",
+        templatePart: this.getMapperPlatformTemplatePart(element, card ? "post" : "", ephemeral),
+        majorRegionPath: this.getMapperDomPath(major.element),
+        subregionPath: this.getMapperDomPath(subregionBoundary),
+        repeatedRecordPath: this.getMapperDomPath(card),
+        majorRegionDepth: this.getMapperComposedAncestorDistance(element, major.element),
+        subregionDepth: this.getMapperComposedAncestorDistance(element, subregionBoundary),
+        repeatedRecordDepth: this.getMapperComposedAncestorDistance(element, card),
         containerId,
         threadId: "",
         repeatedKind: card ? "feed_card" : "",
         loadedWindowIndex: "",
-        durability: ephemeral ? "ephemeral" : card ? "loaded_window" : composerHasInput || tabs ? "durable" : "context",
+        durability: ephemeral ? "ephemeral" : card ? "loaded_window" : composer || tabs ? "durable" : "context",
         dynamicKind: this.getMapperDynamicKind(element),
         mappingDisposition: unsupportedRepeated
           ? "unsupported_scope"
@@ -1526,27 +1778,198 @@
             ? "context_only"
             : "action_or_extract",
         scopeSource: "inferred_landmarks",
-        confidence: unsupportedRepeated ? 35 : 65,
+        confidence: unsupportedRepeated ? 45 : major.confidence,
       };
     }
 
-    getMapperStableContainerToken(element, prefix = "region") {
+    getMapperRepeatedCollectionBoundary(record = null, fallback = null) {
+      if (!record) return fallback;
+      const semanticCollection = record.closest?.([
+        "[role='list']",
+        "[role='feed']",
+        "[role='log']",
+        "[role='grid']",
+        "[aria-live]",
+        "ul",
+        "ol",
+        "tbody",
+      ].join(","));
+      if (semanticCollection && semanticCollection !== record) return semanticCollection;
+      const parent = record.parentElement;
+      if (parent && (!fallback || fallback.contains(parent))) return parent;
+      return fallback;
+    }
+
+    getMapperComposedAncestorDistance(element = null, ancestor = null) {
+      if (!element || !ancestor) return 0;
+      let current = element;
+      for (let depth = 0; current && depth <= 40; depth += 1) {
+        if (current === ancestor) return depth;
+        current = this.getMapperComposedParentElement(current);
+      }
+      return 0;
+    }
+
+    getMapperInferredMajorRegion(element, family = "chat") {
+      const navigation = element.closest("nav, [role='navigation']");
+      const main = element.closest("main, [role='main']");
+      const complementary = element.closest("aside, [role='complementary']");
+      const layoutPane = this.getMapperLargePaneBoundary(element);
+      const boundary = navigation || main || complementary || layoutPane || document.body;
+      const rect = boundary?.getBoundingClientRect?.() || {};
+      const viewportWidth = Math.max(Number(window.innerWidth) || 0, 1);
+      const centerRatio = ((Number(rect.left) || 0) + (Number(rect.width) || 0) / 2) / viewportWidth;
+
+      if (family === "chat") {
+        const narrowNavigation = Boolean(navigation && (Number(rect.width) || 0) <= viewportWidth * 0.2);
+        if (narrowNavigation || centerRatio <= 0.12) {
+          return { name: "navigation_rail", element: navigation || layoutPane || boundary, confidence: navigation ? 88 : 72 };
+        }
+        if (complementary || (!main && centerRatio <= 0.42)) {
+          return { name: "contacts_pane", element: complementary || layoutPane || boundary, confidence: complementary ? 82 : 70 };
+        }
+        return { name: "chat_pane", element: main || layoutPane || boundary, confidence: main ? 88 : 72 };
+      }
+
+      if (navigation || centerRatio <= 0.24) {
+        return { name: "navigation_pane", element: navigation || layoutPane || boundary, confidence: navigation ? 86 : 68 };
+      }
+      if (complementary || centerRatio >= 0.78) {
+        return { name: "right_rail", element: complementary || layoutPane || boundary, confidence: complementary ? 82 : 68 };
+      }
+      return { name: "feed_pane", element: main || layoutPane || boundary, confidence: main ? 88 : 72 };
+    }
+
+    getMapperLargePaneBoundary(element) {
+      const viewportWidth = Math.max(Number(window.innerWidth) || 0, 1);
+      const viewportHeight = Math.max(Number(window.innerHeight) || 0, 1);
+      let current = element;
+      let fallback = null;
+      for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
+        const rect = current.getBoundingClientRect?.() || {};
+        const width = Number(rect.width) || 0;
+        const height = Number(rect.height) || 0;
+        if (width >= viewportWidth * 0.08 && height >= viewportHeight * 0.45) {
+          fallback = current;
+          const parentRect = current.parentElement?.getBoundingClientRect?.() || {};
+          if ((Number(parentRect.width) || 0) >= viewportWidth * 0.72 && width <= viewportWidth * 0.82) {
+            return current;
+          }
+        }
+        current = current.parentElement;
+      }
+      return fallback;
+    }
+
+    getMapperComposerBoundary(element) {
+      const candidate = element.closest("form, [role='form'], footer, [data-lexical-editor='true']");
+      if (!candidate) return null;
+      const hasEditor = candidate.matches("textarea, input, [contenteditable='true']") ||
+        Boolean(candidate.querySelector("textarea, input[type='text'], [contenteditable='true'], [role='textbox']"));
+      return hasEditor ? candidate : null;
+    }
+
+    getMapperSearchBoundary(element) {
+      const searchControl = element.matches?.("input[type='search'], [role='searchbox']")
+        ? element
+        : element.closest?.("[role='search'], form")?.querySelector?.("input[type='search'], [role='searchbox']");
+      if (!searchControl) return null;
+      return searchControl.closest("[role='search'], form") || searchControl;
+    }
+
+    getMapperHeaderBoundary(element, majorBoundary = null) {
+      const header = element.closest("header, [role='banner'], [data-testid*='header' i]");
+      if (header && (!majorBoundary || majorBoundary.contains(header))) return header;
+      return null;
+    }
+
+    getMapperRepeatedRecord(element, majorRegion = "") {
+      const semantic = element.closest("[role='listitem'], [role='row'], article, [role='article']");
+      if (semantic?.matches("[role='listitem'], [role='row']")) return semantic;
+      if (semantic) {
+        const siblings = Array.from(semantic.parentElement?.children || []);
+        const signature = this.getMapperStructureSignature(semantic);
+        if (siblings.filter((sibling) => this.getMapperStructureSignature(sibling) === signature).length >= 2) {
+          return semantic;
+        }
+      }
+      let current = element;
+      for (let depth = 0; current?.parentElement && depth < 7; depth += 1) {
+        const tag = current.tagName?.toLowerCase?.() || "";
+        if (["button", "a", "input", "textarea", "svg", "path"].includes(tag)) {
+          current = current.parentElement;
+          continue;
+        }
+        const rect = current.getBoundingClientRect?.() || {};
+        const parent = current.parentElement;
+        const siblings = Array.from(parent.children || []);
+        const signature = this.getMapperStructureSignature(current);
+        const matching = siblings.filter((sibling) => this.getMapperStructureSignature(sibling) === signature);
+        const minimumWidth = majorRegion === "contacts_pane" ? 120 : 160;
+        if (
+          signature && matching.length >= 2 &&
+          (Number(rect.width) || 0) >= minimumWidth &&
+          (Number(rect.height) || 0) >= 24
+        ) {
+          return current;
+        }
+        current = parent;
+      }
+      return null;
+    }
+
+    getMapperStructureSignature(element) {
+      if (!element) return "";
+      const classes = Array.from(element.classList || [])
+        .map((value) => this.toMapperIdentifier(value))
+        .filter(Boolean)
+        .slice(0, 3)
+        .sort();
+      return [
+        element.tagName?.toLowerCase?.() || "",
+        element.getAttribute?.("role") || "",
+        ...classes,
+      ].join("|");
+    }
+
+    getMapperPlatformTemplatePart(element, templateKind = "", ephemeral = false) {
+      if (!templateKind) return "";
+      if (ephemeral || element.matches?.("time")) return "metadata";
+      const tag = element.tagName?.toLowerCase?.() || "";
+      const role = element.getAttribute?.("role") || this.inferRole(element);
+      if (["img", "picture", "svg", "canvas"].includes(tag) || role === "img") return "media";
+      if (element.closest?.("[role='toolbar'], [class*='action' i], [aria-label*='action' i]")) return "actions";
+      if (element.matches?.("input, textarea, [contenteditable='true'], [role='textbox']")) return "input";
+      if (templateKind === "contact") return "identity_preview";
+      return "content";
+    }
+
+    getMapperStableContainerToken(element, prefix = "region", options = {}) {
       if (!element) return "";
       const stableValue = element.getAttribute("data-testid") ||
         element.getAttribute("data-id") ||
         element.getAttribute("data-key") ||
         element.id ||
         "";
-      if (!stableValue) return "";
-      return `${this.toMapperIdentifier(prefix)}_${this.hashString(stableValue)}`;
+      if (stableValue) return `${this.toMapperIdentifier(prefix)}_${this.hashString(stableValue)}`;
+      if (options.allowIdentityHash !== true) return "";
+      const identity = this.getMapperIdentityText(element);
+      if (!identity) return "";
+      const normalized = this.toMapperIdentifier(identity);
+      if (!normalized) return "";
+      const duplicates = Array.from(element.parentElement?.children || []).filter((sibling) => {
+        return this.toMapperIdentifier(this.getMapperIdentityText(sibling)) === normalized;
+      });
+      if (duplicates.length !== 1) return "";
+      return `${this.toMapperIdentifier(prefix)}_${this.hashString(normalized)}`;
     }
 
     platformScopeToken(scope = null) {
       if (!scope?.family || scope.family === "generic") return "";
-      return [scope.family, scope.region, scope.threadId || scope.containerId]
+      return [scope.family, scope.majorRegion, scope.subregion || scope.region, scope.threadId || scope.containerId]
         .map((value) => this.toMapperIdentifier(value))
         .filter(Boolean)
-        .slice(0, 3)
+        .slice(0, 4)
         .join("_");
     }
 
@@ -2365,6 +2788,7 @@
         .map((element) => this.mapperCandidateFromElement(element, action))
         .filter((candidate) => {
           return this.mapperActionCompatible(candidate.fact.expectedCapabilities, action) &&
+            this.mapperMappingLayersCompatible(options.component, candidate.fact) &&
             this.mapperPlatformScopesCompatible(
               options.component?.fingerprint?.structural?.platformScope,
               candidate.fact?.fingerprint?.structural?.platformScope,
@@ -2400,6 +2824,7 @@
           mapperFact: {
             componentId: fact.componentId,
             componentUid: fact.componentUid,
+            mappingLayer: fact.mappingLayer,
             displayName: fact.displayName,
             action: fact.action,
             locatorCandidates: locators,
@@ -2784,6 +3209,15 @@
       let score = 0;
       const evidence = [];
 
+      if (!this.mapperMappingLayersCompatible(component, candidate.fact)) {
+        return {
+          score: 0,
+          evidence: ["mapping_layer_contradiction"],
+          disqualified: true,
+          reason: "mapping_layer_mismatch",
+        };
+      }
+
       if (!this.mapperPlatformScopesCompatible(
         expected.structural?.platformScope,
         actual.structural?.platformScope,
@@ -2868,7 +3302,7 @@
         return false;
       }
 
-      for (const field of ["threadId", "containerId", "repeatedKind"]) {
+      for (const field of ["majorRegion", "threadId", "containerId", "repeatedKind"]) {
         const expectedValue = this.toMapperIdentifier(expected?.[field]);
         if (expectedValue && this.toMapperIdentifier(actual?.[field]) !== expectedValue) {
           return false;
@@ -2876,6 +3310,16 @@
       }
 
       return true;
+    }
+
+    mapperMappingLayersCompatible(expected = {}, actual = {}) {
+      return this.mapperRecordLayer(expected) === this.mapperRecordLayer(actual);
+    }
+
+    mapperRecordLayer(record = {}) {
+      if (record?.mappingLayer === "dynamic") return "dynamic";
+      const fingerprint = record?.fingerprint || record || {};
+      return this.getMapperMappingLayer(fingerprint);
     }
 
     mapperActionCompatible(capabilities = [], action = "") {
@@ -3816,14 +4260,18 @@
           "p",
           "label",
           "li",
-          "td",
-          "th",
-          "span",
+        "td",
+        "th",
+        "span",
+        "pre",
+        "output",
           "[role='button']",
           "[role='link']",
           "[role='textbox']",
           "[role='img']",
           "[role='heading']",
+          "[role='status']",
+          "[role='log']",
           "[contenteditable='true']",
         ].join(","),
       );
@@ -3858,7 +4306,9 @@
         "td",
         "th",
         "span",
-      ].includes(tag) || role === "heading";
+        "pre",
+        "output",
+      ].includes(tag) || ["heading", "status", "log"].includes(role);
     }
 
     isVisualMediaCandidate(element) {

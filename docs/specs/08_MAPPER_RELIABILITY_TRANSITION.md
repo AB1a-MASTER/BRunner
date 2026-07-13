@@ -39,7 +39,7 @@ Closed Shadow DOM and inaccessible cross-origin frames are hard limits.
 | Review policy | Manual review is exceptional. Strong unique reconciliation is accepted automatically. Weak or close historical matches become new components while unmatched prior records become bounded tombstones. Runtime ambiguity still blocks interaction. |
 | Continuation | Mapper failures must not crash the workflow or silently continue on success. DOM nodes expose an `unresolved` path. |
 | Configuration | All mapper configuration lives in `workflow.settings.mapper`; site/page overrides are nested under that workflow. There is no extension-global mapper policy. |
-| Initial persistence | Use compact workflow-scoped maps in `chrome.storage.local` behind a storage adapter. Add filesystem persistence later through the existing local host adapter. |
+| Persistence | Use compact workflow-scoped maps in `chrome.storage.local`. Maps are disposable and recreated after loss; do not activate filesystem persistence or periodic native snapshots. |
 | Inspector | Build a dedicated extension window, comparable to the debugger, not a side panel or popup-only view. |
 
 ## Why Replacement Is Required
@@ -254,8 +254,40 @@ To avoid duplicated resolver logic:
 | Content mapper session | Scan live DOM including open shadow roots, build compact facts, resolve live targets, validate action readiness, render highlights. |
 | Background coordinator | Load workflow settings and maps, persist map versions, coordinate reconciliation, attach mapper context to nodes, consume results, route graph outcomes. |
 | Mapper Core | Naming, fingerprint comparison, scoring, ambiguity rules, reconciliation, serialization, policy merging. |
-| Map store adapter | Store/retrieve compact workflow-scoped site/page maps. Chrome storage first, filesystem later. |
+| Map store adapter | Store/retrieve compact workflow-scoped site/page maps in Chrome storage. The native filesystem adapter remains inactive. |
 | Inspector window | Browse maps, validate/highlight live targets, review changed or ambiguous components, edit workflow-scoped settings and overrides. |
+
+### Static and Dynamic Map Lanes
+
+First-release mapper reliability is static-first. The persisted page map now
+has explicit `static` and `dynamic` lanes under `layers`, plus
+`architecture.isolatedLayerReconciliation = true`.
+
+Rules:
+
+- Static facts are the primary lane for workflow execution and Component ID
+  stability.
+- Dynamic facts include bounded loaded-window records, ephemeral/context
+  records, loaded-only repeat scopes, and platform records with loaded-window
+  or ephemeral durability.
+- Reconciliation, UID matching, historical-lock preservation, and runtime
+  fallback scoring must not cross lanes. A dynamic fact that looks like a
+  static prior record becomes a new dynamic record, while the old static record
+  becomes a static removed tombstone.
+- Dynamic component limits or loaded-window churn must not erase a usable
+  static map lane. The dynamic lane may be marked deferred while the static
+  lane remains `ready`.
+- Dynamic records may be used for loaded-content inspection and scoped runtime
+  behavior, but they must not inherit static Component IDs. If a dynamic name
+  collides with a static or historical static ID, it receives a dynamic suffix.
+- The Inspector may show both lanes, but default duplicate suppression is
+  layer-aware and removed records remain behind live records unless explicitly
+  filtered.
+
+This boundary is intentionally conservative. Any product-specific dynamic
+profile that cannot prove safe grouping remains `dynamic_deferred`,
+`protected_unsupported`, or v2 follow-up work rather than weakening the static
+map path.
 
 ## Data Model
 
@@ -795,9 +827,9 @@ When sensitive:
 - show a visible sensitivity badge in the Inspector;
 - do not lower safety thresholds because evidence is redacted.
 
-### Host Filesystem Store
+### Inactive Host Filesystem Store
 
-After Chrome storage is stable, add a filesystem `MapStore` adapter through the
+An earlier source pass added a filesystem `MapStore` adapter through the
 existing local-host bridge.
 
 **Initial source pass complete:** the Windows host now exposes a mapper
@@ -807,9 +839,9 @@ a `NativeMapStore` adapter behind the existing `MapStore` contract. Native
 mapper calls now have bounded timeouts, the adapter exposes
 unavailable/timeout status, host writes enforce a 1 MB normal payload cap
 instead of chunking, and host-saved states retain revision plus bounded
-last-write-wins conflict metadata. The background still defaults to Chrome
-storage until filesystem-backed persistence is explicitly accepted as the
-default.
+last-write-wins conflict metadata. The final product decision is to keep this
+adapter inactive. Mapper state remains in Chrome storage and is recreated after
+loss; no periodic native snapshots are required.
 
 Required behavior:
 
@@ -1161,7 +1193,7 @@ Exit: reviewer can locate a component by Component ID, see why it resolved or
 failed, inspect it live safely, and resolve changed/ambiguous mapping without
 changing canonical name.
 
-### Milestone 4 - Filesystem Map Persistence
+### Milestone 4 - Persistence Adapter Hardening
 
 - Add local-host MapStore adapter, commands, file format, schema checks, atomic
   writes, timeouts, and host-unavailable state.
@@ -1170,12 +1202,11 @@ changing canonical name.
   complete for bounded mapper request timeouts, native unavailable/timeout
   status, 1 MB normal payload cap, native revision stamps, and retained
   last-write-wins conflict metadata.**
-- Add optional periodic snapshot persistence for active tracking.
-- Switch the default from Chrome storage only after live/manual acceptance of
-  the filesystem-backed adapter.
+- Keep the filesystem adapter inactive; do not add periodic snapshots or switch
+  the mapper away from Chrome storage. Maps are disposable by design.
 
-Exit: Chrome storage and filesystem adapters produce identical map schema and
-equivalent resolution behavior.
+Exit: Chrome storage remains the active mapper store; the inactive filesystem
+adapter retains schema compatibility without becoming a product dependency.
 
 ### Milestone 5 - Deferred Dynamic, Feed, and Frame Support
 

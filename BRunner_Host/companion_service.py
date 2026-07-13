@@ -10,10 +10,11 @@ from app_paths import application_directory
 
 
 class HostServiceController:
-    def __init__(self, base_dir=None, host_script=None, popen_factory=None):
+    def __init__(self, base_dir=None, host_script=None, popen_factory=None, run_factory=None):
         self.base_dir = Path(base_dir).resolve() if base_dir else application_directory(__file__)
         self.host_script = Path(host_script).resolve() if host_script else self.base_dir / "brunner_host.py"
         self.popen_factory = popen_factory or subprocess.Popen
+        self.run_factory = run_factory or subprocess.run
         self.process = None
         self.last_message = ""
 
@@ -69,13 +70,15 @@ class HostServiceController:
                 "An existing BRunner host may already be running."
             )
             return False
-        self.process = self.popen_factory(
-            self.command(),
-            cwd=str(self.base_dir),
-            env=self.environment(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        popen_options = {
+            "cwd": str(self.base_dir),
+            "env": self.environment(),
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+        }
+        if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+            popen_options["creationflags"] = subprocess.CREATE_NO_WINDOW
+        self.process = self.popen_factory(self.command(), **popen_options)
         self.last_message = "Host start requested."
         return True
 
@@ -83,14 +86,33 @@ class HostServiceController:
         if not self.is_running():
             self.last_message = "Host stop requested; host was not running."
             return False
-        self.process.terminate()
+        process = self.process
+        tree_stop_requested = self.stop_windows_process_tree(process)
+        if not tree_stop_requested:
+            process.terminate()
         try:
-            self.process.wait(timeout=timeout)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=timeout)
+            process.kill()
+            process.wait(timeout=timeout)
+        self.process = None
         self.last_message = "Host stop requested."
         return True
+
+    def stop_windows_process_tree(self, process):
+        pid = getattr(process, "pid", None)
+        if os.name != "nt" or not pid:
+            return False
+        try:
+            self.run_factory(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except OSError:
+            return False
 
     def restart(self, config=None):
         self.stop()

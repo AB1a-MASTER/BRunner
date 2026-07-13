@@ -178,7 +178,11 @@ function findPageMapForComponent(state = null, componentRef = {}) {
 
 function findStoredComponent(pageMap = null, componentRef = {}) {
   if (!Array.isArray(pageMap?.components)) return null;
-  return pageMap.components.find((component) => {
+  const expectedLayer = componentRef.mappingLayer || "";
+  const candidates = expectedLayer
+    ? pageMap.components.filter((component) => recordMappingLayer(component) === expectedLayer)
+    : pageMap.components;
+  return candidates.find((component) => {
     return component.componentId === componentRef.componentId ||
       component.componentUid === componentRef.componentUid ||
       (component.historicalLinks || []).some((link) => {
@@ -201,6 +205,7 @@ function collectPageFacts(previousMap = null, mapperFact = {}) {
       action: component.action || "",
       componentId: component.componentId || "",
       componentUid: component.componentUid || "",
+      mappingLayer: recordMappingLayer(component),
       locatorCandidates: [
         component.primaryLocator,
         ...(component.fallbackLocators || []),
@@ -239,15 +244,18 @@ function preserveRecordedComponentLocks(pageMap = {}, previousMap = null, mapper
         .map((link) => link.componentUid)
         .find((uid) => previousByUid.has(uid));
       const incomingPrevious = previousByIncomingUid.get(mapperFact.componentUid);
+      const uidPrevious = previousByUid.get(component.componentUid);
+      const historicalPrevious = previousByUid.get(historicalUid);
+      const componentIdPrevious = component.componentId === mapperFact.componentId
+        ? previousByIncomingUid.get(mapperFact.componentUid)
+        : null;
       const previous = (
         incomingPrevious && isIncomingComponent(component, mapperFact)
           ? incomingPrevious
           : null
-      ) || previousByUid.get(component.componentUid) ||
-        previousByUid.get(historicalUid) ||
-        (component.componentId === mapperFact.componentId
-          ? previousByIncomingUid.get(mapperFact.componentUid)
-          : null);
+      ) || sameLayerPrevious(component, uidPrevious) ||
+        sameLayerPrevious(component, historicalPrevious) ||
+        sameLayerPrevious(component, componentIdPrevious);
       if (!previous) return component;
       return {
         ...component,
@@ -256,6 +264,11 @@ function preserveRecordedComponentLocks(pageMap = {}, previousMap = null, mapper
       };
     }),
   };
+}
+
+function sameLayerPrevious(component = {}, previous = null) {
+  if (!previous) return null;
+  return recordMappingLayer(component) === recordMappingLayer(previous) ? previous : null;
 }
 
 function attachIncomingFactLink(pageMap = {}, mapperFact = {}) {
@@ -287,27 +300,32 @@ function attachIncomingFactLink(pageMap = {}, mapperFact = {}) {
 }
 
 function findIncomingComponentIndex(components = [], mapperFact = {}) {
-  const directIndex = components.findIndex((component) => isIncomingComponent(component, mapperFact));
-  if (directIndex >= 0) return directIndex;
+  const compatibleComponents = components
+    .map((component, index) => ({ component, index }))
+    .filter(({ component }) => {
+      return recordMappingLayer(component) === recordMappingLayer(mapperFact);
+    });
+  const direct = compatibleComponents.find(({ component }) => isIncomingComponent(component, mapperFact));
+  if (direct) return direct.index;
 
   const incomingLocatorValues = new Set((mapperFact.locatorCandidates || [])
     .map((locator) => locator?.value)
     .filter(Boolean));
   if (incomingLocatorValues.size) {
-    const locatorIndex = components.findIndex((component) => {
+    const locatorMatch = compatibleComponents.find(({ component }) => {
       return [
         component.primaryLocator,
         ...(component.fallbackLocators || []),
       ].some((locator) => incomingLocatorValues.has(locator?.value));
     });
-    if (locatorIndex >= 0) return locatorIndex;
+    if (locatorMatch) return locatorMatch.index;
   }
 
   const incomingBounds = visualBounds(mapperFact);
   if (incomingBounds) {
     let bestIndex = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
-    components.forEach((component, index) => {
+    compatibleComponents.forEach(({ component, index }) => {
       const bounds = visualBounds(component);
       if (!bounds) return;
       const distance = Math.abs(bounds.x - incomingBounds.x) + Math.abs(bounds.y - incomingBounds.y);
@@ -324,12 +342,26 @@ function findIncomingComponentIndex(components = [], mapperFact = {}) {
 
 function isIncomingComponent(component = {}, mapperFact = {}) {
   return Boolean(
-    (mapperFact.componentUid && component.componentUid === mapperFact.componentUid) ||
+    recordMappingLayer(component) === recordMappingLayer(mapperFact) &&
+      ((mapperFact.componentUid && component.componentUid === mapperFact.componentUid) ||
       (mapperFact.componentId && component.componentId === mapperFact.componentId) ||
       (mapperFact.componentUid && (component.historicalLinks || []).some((link) => {
         return link.componentUid === mapperFact.componentUid;
-      })),
+      }))),
   );
+}
+
+function recordMappingLayer(record = {}) {
+  if (record.mappingLayer === "dynamic") return "dynamic";
+  const structural = record.fingerprint?.structural || {};
+  const region = structural.regionDynamics || {};
+  const repeat = structural.repeatScope || {};
+  const scope = structural.platformScope || {};
+  if (["dynamic", "loaded_window", "ephemeral_context"].includes(region.classification)) return "dynamic";
+  if (repeat.loadedContentOnly === true) return "dynamic";
+  if (["loaded_window", "ephemeral"].includes(scope.durability)) return "dynamic";
+  if (scope.dynamicKind) return "dynamic";
+  return "static";
 }
 
 function visualBounds(record = {}) {

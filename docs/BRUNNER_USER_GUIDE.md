@@ -70,6 +70,10 @@ First mapper support is limited to static or bounded pages and open Shadow DOM.
 Dynamic-heavy pages, infinite feeds, unsupported frames, and closed Shadow DOM
 return an honest unsupported/unresolved result until later phases explicitly add
 support.
+Static and dynamic map records are isolated internally: stable page controls
+keep the primary Component IDs, while loaded-window or ephemeral records are
+tracked in a separate dynamic lane and cannot take over a static control's
+identity.
 
 ## Workflow data
 
@@ -235,11 +239,11 @@ highlighting from selected map elements.
 The source manual checklist is in
 [`MAPPER_MANUAL_ACCEPTANCE.md`](MAPPER_MANUAL_ACCEPTANCE.md).
 
-Mapper maps still default to extension Chrome storage. A hardened native
-filesystem adapter now exists behind the same store contract with request
-timeouts, unavailable/timeout status, payload caps, native revisions, and
-last-write-wins conflict metadata; switching it on as the default remains a
-separate acceptance step.
+Mapper maps live in extension Chrome storage. They are intentionally disposable:
+if mapper state is lost, remap the page rather than restoring a filesystem
+copy. A hardened native filesystem adapter exists behind the same store contract
+for compatibility, but it is inactive and periodic native snapshots are not
+part of the product.
 
 Ambiguous components go to a Review Queue. The Inspector must not offer a
 "choose first candidate" action. A reviewer can explicitly link a historical
@@ -274,13 +278,21 @@ post-action verification fails. Use `verificationSelector` and
 `verificationText` when a workflow needs to prove that the visible action
 changed page state. The refreshed host-served coordinate fallback workflows
 have passed manual testing. Visual-match fallback also passed manual testing
-with Chrome side UI open, but that path is currently slower than desired.
+with Chrome side UI open. Searches are now clipped to the foreground browser
+window and diagnostics report the bounded search region and duration.
 
 ## Companion setup and packaging
 
 The companion source lives in `BRunner_Host`. Install dependencies with
 `python -m pip install -r requirements.txt`, run from source with
 `python app.py`, and build a Windows executable with `python build_host_ui.py`.
+For a packaged-path check, run `BRunnerHost.exe --self-check`; exit code `0`
+confirms that configuration and the active workflow directory are writable.
+Pairing keys are 128-bit hexadecimal secrets shown in grouped form for
+readability. Changing or revoking pairing restarts a companion-managed host to
+invalidate existing sessions. The Status tab controls host autostart, closing
+the window keeps the companion in the tray, and tray Exit stops the managed
+host.
 Packaging uses `app.py` as the PyInstaller entry point and shares hidden-import
 and exclude settings through `packaging_config.py`.
 

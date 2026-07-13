@@ -147,10 +147,10 @@ the foreground browser window to find the component, click the matched center,
 and return bounded match diagnostics. The extension must still perform
 post-action verification before the workflow marks the step successful.
 
-Current implementation note: `BRunner_Host/host_ui.py` and
-`BRunner_Host/build_host_ui.py` are transitional artifacts from the earlier
-Tkinter-based host UI and should be replaced or retired during the companion app
-packaging phase. See [07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md).
+Current implementation note: the earlier `BRunner_Host/host_ui.py` Tkinter UI
+has been retired. `BRunner_Host/build_host_ui.py` remains the packaging entry
+point for the current companion app. See
+[07_WINDOWS_COMPANION_APP.md](07_WINDOWS_COMPANION_APP.md).
 
 ### Host-managed file data sources
 
