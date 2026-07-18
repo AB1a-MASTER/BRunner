@@ -33,10 +33,12 @@ test("sidebar keeps workflow failures out of extension-level error styling", asy
   assert.match(source, /Workflow failed\. See Studio diagnostics\/logs\./);
   assert.match(source, /isWorkflowExecutionFailure/);
   assert.match(source, /GetNativePairing/);
-  assert.match(source, /SaveNativePairing/);
-  assert.match(source, /GenerateNativePairingKey/);
+  assert.match(source, /PairNativeProfile/);
+  assert.match(source, /UnpairNativeProfile/);
   assert.match(html, /host-pairing-status/);
-  assert.match(html, /host-pairing-key/);
+  assert.match(html, /host-profile-instance-id/);
+  assert.match(html, /btn-pair-profile/);
+  assert.match(html, /btn-unpair-profile/);
   assert.doesNotMatch(source, /setSelectedLabel\(`Failed: \$\{execution\.error\}`, true\)/);
 });
 
@@ -55,5 +57,6 @@ test("Sequential Studio preserves description and dirty save state", async () =>
   assert.match(source, /workflow\.description = workflowDescriptionInput/);
   assert.match(source, /isWorkflowDirty/);
   assert.match(source, /No unsaved workflow changes/);
+  assert.doesNotMatch(source, /workflowNameInput\.value\s*=\s*savedFilename/);
   assert.equal(/[🔴▶⏹⏳📂📋🗑]/u.test(source), false);
 });

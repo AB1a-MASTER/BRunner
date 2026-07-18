@@ -40,4 +40,4 @@ def default_logs_directory(anchor_file=None):
 
 
 def default_log_file(anchor_file=None):
-    return application_directory(anchor_file) / "brunner_host.log"
+    return default_logs_directory(anchor_file) / "brunner_host.log"

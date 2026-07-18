@@ -1,53 +1,33 @@
 import json
-import secrets
 import re
 from pathlib import Path
 from atomic_io import atomic_write_json
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_PORT = 8999
 DEFAULT_ALLOWED_ROOTS = ["AllowedFiles"]
 DEFAULT_COORDINATE_CONFIDENCE = 0.9
-PAIRING_KEY_BYTES = 16
-PAIRING_KEY_HEX_LENGTH = PAIRING_KEY_BYTES * 2
+PROFILE_INSTANCE_ID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
-def generate_pairing_key():
-    return secrets.token_hex(PAIRING_KEY_BYTES)
+def normalize_profile_instance_id(value):
+    return str(value or "").strip().lower()
 
 
-def normalize_pairing_key(value):
-    text = str(value or "").strip()
-    compact = re.sub(r"[\s-]+", "", text)
-    if re.fullmatch(rf"[0-9A-Fa-f]{{{PAIRING_KEY_HEX_LENGTH}}}", compact):
-        return compact.lower()
-    return text
-
-
-def is_strong_pairing_key(value):
-    return bool(re.fullmatch(
-        rf"[0-9a-f]{{{PAIRING_KEY_HEX_LENGTH}}}",
-        normalize_pairing_key(value),
+def is_valid_profile_instance_id(value):
+    return bool(PROFILE_INSTANCE_ID_PATTERN.fullmatch(
+        normalize_profile_instance_id(value)
     ))
 
 
-def format_pairing_key(value):
-    normalized = normalize_pairing_key(value)
-    if not is_strong_pairing_key(normalized):
-        return normalized
-    return "-".join(
-        normalized[index:index + 4]
-        for index in range(0, len(normalized), 4)
-    )
-
-
-def create_default_config(pairing_key=None):
-    key = normalize_pairing_key(pairing_key) or generate_pairing_key()
+def create_default_config():
     config = {
         "schemaVersion": SCHEMA_VERSION,
-        "pairingKey": key,
-        "pairedExtensionId": None,
+        "pairedInstanceId": None,
         "host": {
             "port": DEFAULT_PORT,
             "startWithApp": True,
@@ -63,7 +43,6 @@ def create_default_config(pairing_key=None):
         "hostFallback": {
             "enabled": True,
             "minimumCoordinateConfidence": DEFAULT_COORDINATE_CONFIDENCE,
-            "captureDiagnosticsScreenshots": False,
         },
     }
     return with_legacy_aliases(config)
@@ -95,11 +74,15 @@ def save_config(config_file, config):
 
 def normalize_config(config, base_dir=None):
     source = config if isinstance(config, dict) else {}
-    defaults = create_default_config()
-    pairing_key = normalize_pairing_key(
-        source.get("pairingKey") or source.get("pairing_key") or ""
+    has_explicit_approved_directories = isinstance(
+        source.get("approvedDirectories"),
+        list,
     )
-    paired_extension_id = source.get("pairedExtensionId", source.get("paired_extension_id"))
+    paired_instance_id = normalize_profile_instance_id(
+        source.get("pairedInstanceId")
+    )
+    if not is_valid_profile_instance_id(paired_instance_id):
+        paired_instance_id = None
     host = source.get("host") if isinstance(source.get("host"), dict) else {}
     workflow_storage = (
         source.get("workflowStorage")
@@ -122,8 +105,7 @@ def normalize_config(config, base_dir=None):
     local_enabled = any(entry.get("read") for entry in approved_directories)
     normalized = {
         "schemaVersion": SCHEMA_VERSION,
-        "pairingKey": pairing_key or defaults["pairingKey"],
-        "pairedExtensionId": normalize_optional_text(paired_extension_id),
+        "pairedInstanceId": paired_instance_id,
         "host": {
             "port": normalize_port(host.get("port", source.get("port"))),
             "startWithApp": host.get("startWithApp") is not False,
@@ -135,12 +117,13 @@ def normalize_config(config, base_dir=None):
             "minimumCoordinateConfidence": normalize_coordinate_confidence(
                 host_fallback.get("minimumCoordinateConfidence")
             ),
-            "captureDiagnosticsScreenshots": (
-                host_fallback.get("captureDiagnosticsScreenshots") is True
-            ),
         },
     }
-    if local_file_access.get("enabled") is True and not local_enabled:
+    if (
+        not has_explicit_approved_directories
+        and local_file_access.get("enabled") is True
+        and not local_enabled
+    ):
         normalized["approvedDirectories"] = [
             {**entry, "read": True}
             for entry in normalized["approvedDirectories"]
@@ -155,8 +138,6 @@ def with_legacy_aliases(config):
     if not isinstance(approved, list):
         approved = []
     host = copied.get("host") if isinstance(copied.get("host"), dict) else {}
-    copied["pairing_key"] = copied.get("pairingKey")
-    copied["paired_extension_id"] = copied.get("pairedExtensionId")
     copied["port"] = normalize_port(host.get("port"))
     copied["local_file_access"] = {
         "enabled": any(entry.get("read") for entry in approved),
@@ -165,14 +146,9 @@ def with_legacy_aliases(config):
     return copied
 
 
-def normalize_port(value):
-    try:
-        port = int(value)
-    except (TypeError, ValueError):
-        return DEFAULT_PORT
-    if port < 1 or port > 65535:
-        return DEFAULT_PORT
-    return port
+def normalize_port(_value=None):
+    """Keep the companion aligned with the extension's fixed loopback port."""
+    return DEFAULT_PORT
 
 
 def normalize_coordinate_confidence(value):
@@ -210,7 +186,7 @@ def normalize_allowed_roots(value, base_dir=None):
 
 
 def normalize_approved_directories(value, local_file_access=None, base_dir=None):
-    if isinstance(value, list) and value:
+    if isinstance(value, list):
         entries = []
         used_ids = set()
         for index, item in enumerate(value):
@@ -232,8 +208,7 @@ def normalize_approved_directories(value, local_file_access=None, base_dir=None)
                 "write": item.get("write") is True,
                 "recursive": item.get("recursive") is not False,
             })
-        if entries:
-            return entries
+        return entries
 
     access = local_file_access if isinstance(local_file_access, dict) else {}
     roots = normalize_allowed_roots(access.get("allowed_roots"), base_dir)

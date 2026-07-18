@@ -1,6 +1,25 @@
 export const MapperCoreVersion = "0.1.0";
 export const MapperSchemaVersion = 1;
 
+export const MapperPersistenceLimits = Object.freeze({
+  maxTextLength: 480,
+  maxTokenLength: 120,
+  maxPathLength: 4096,
+  maxLocatorValueLength: 1000,
+  maxLocatorsPerComponent: 32,
+  maxShadowPathDepth: 256,
+  maxCapabilities: 16,
+  maxEvidenceLabels: 8,
+  maxEvidenceLabelLength: 80,
+  maxRecordEntries: 32,
+  maxRecordDepth: 3,
+  maxNestedArrayItems: 100,
+  maxNestedRecordDepth: 8,
+  maxComponentsPerMap: 2000,
+  maxResolverAttemptsPerMap: 100,
+  maxHistoricalLinksPerComponent: 20,
+});
+
 export const MapperModes = Object.freeze({
   Automatic: "automatic",
   Explicit: "explicit",
@@ -95,8 +114,8 @@ export function normalizeMapperSettings(settings = {}) {
     maxVersions: clampInteger(settings?.maxVersions, 1, 3, 3),
     materialMutationLimit: clampInteger(settings?.materialMutationLimit, 1, 500, 50),
     queryAllowlist: normalizeStringList(settings?.queryAllowlist),
-    siteOverrides: normalizeRecord(settings?.siteOverrides),
-    pageOverrides: normalizeRecord(settings?.pageOverrides),
+    siteOverrides: normalizeMapperOverrides(settings?.siteOverrides),
+    pageOverrides: normalizeMapperOverrides(settings?.pageOverrides),
   };
 }
 
@@ -106,21 +125,17 @@ export function normalizePageProfile(input = {}, settings = {}) {
 
   try {
     const parsed = new URL(String(url || ""));
-    const query = new URLSearchParams();
-    for (const key of allowlist) {
-      if (parsed.searchParams.has(key)) {
-        query.set(key, parsed.searchParams.get(key));
-      }
-    }
+    const path = normalizePath(parsed.pathname);
+    const query = createAllowlistedQuery(parsed.searchParams, allowlist);
 
     return {
       origin: parsed.origin,
       hostname: parsed.hostname,
-      path: normalizePath(parsed.pathname),
-      query: query.toString(),
+      path,
+      query,
       title: typeof input?.title === "string" ? input.title.trim() : "",
       siteKey: createSiteKey(parsed.hostname),
-      pageKey: createPageKey(parsed.hostname, parsed.pathname, query.toString()),
+      pageKey: createPageKey(parsed.origin, parsed.hostname, path, query),
     };
   } catch {
     return {
@@ -133,6 +148,33 @@ export function normalizePageProfile(input = {}, settings = {}) {
       pageKey: "",
     };
   }
+}
+
+export function pageMapMatchesUrl(pageMap = {}, url = "", settings = {}) {
+  const current = normalizePageProfile(url, settings);
+  if (!current.pageKey || !current.origin) return false;
+
+  if (pageMap.origin && pageMap.origin !== current.origin) return false;
+  if (pageMap.siteKey && pageMap.siteKey !== current.siteKey) return false;
+  if (pageMap.path && normalizePath(pageMap.path) !== current.path) {
+    return false;
+  }
+  if (typeof pageMap.query === "string" && pageMap.query !== current.query) {
+    return false;
+  }
+  if (
+    isCollisionSafePageKey(pageMap.pageProfileKey) &&
+    pageMap.pageProfileKey !== current.pageKey
+  ) return false;
+
+  const hasPersistedExactIdentity = Boolean(
+    pageMap.origin && pageMap.path && typeof pageMap.query === "string",
+  );
+  if (pageMap.pageProfileKey && !hasPersistedExactIdentity && !isCollisionSafePageKey(pageMap.pageProfileKey)) {
+    return false;
+  }
+
+  return true;
 }
 
 export function createPlaceholderComponentRef(nodeId = "", action = "") {
@@ -155,8 +197,9 @@ export function isComponentRef(value) {
     value &&
       typeof value === "object" &&
       Number(value.mapperSchemaVersion) === MapperSchemaVersion &&
-      typeof value.id === "string" &&
-      value.id.trim(),
+      ((typeof value.id === "string" && value.id.trim()) ||
+        (typeof value.componentId === "string" && value.componentId.trim() &&
+          typeof value.pageProfileKey === "string" && value.pageProfileKey.trim())),
   );
 }
 
@@ -173,12 +216,13 @@ export function createEmptyWorkflowMapperState(workflowId = "", settings = {}) {
 }
 
 export function serializeWorkflowMapperState(state = {}) {
+  assertSupportedMapperSchemaVersion(state.mapperSchemaVersion, "workflow mapper state");
   return {
     mapperSchemaVersion: MapperSchemaVersion,
     mapperCoreVersion: String(state.mapperCoreVersion || MapperCoreVersion),
     workflowId: String(state.workflowId || ""),
     settings: normalizeMapperSettings(state.settings),
-    maps: Array.isArray(state.maps) ? structuredClone(state.maps) : [],
+    maps: normalizePersistedPageMaps(state.maps),
     storage: createMapperStorageMetadata(state.storage),
     updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : "",
   };
@@ -188,6 +232,169 @@ export function deserializeWorkflowMapperState(state = {}) {
   if (!state || typeof state !== "object") return null;
   if (Number(state.mapperSchemaVersion) !== MapperSchemaVersion) return null;
   return serializeWorkflowMapperState(state);
+}
+
+function assertSupportedMapperSchemaVersion(version, label) {
+  if (version === undefined || version === null || version === "") return;
+  if (Number(version) === MapperSchemaVersion) return;
+  const error = new TypeError(
+    `Unsupported ${label} schema version: ${String(version)}.`,
+  );
+  error.code = "mapper_schema_unsupported";
+  throw error;
+}
+
+function normalizePersistedPageMaps(maps = []) {
+  return (Array.isArray(maps) ? maps : [])
+    .map((map) => normalizePersistedPageMap(map))
+    .filter(Boolean);
+}
+
+function normalizePersistedPageMap(map = null) {
+  if (!isPlainRecord(map)) return null;
+  if (
+    (map.schemaVersion !== undefined && Number(map.schemaVersion) !== MapperSchemaVersion) ||
+    (map.mapperSchemaVersion !== undefined &&
+      Number(map.mapperSchemaVersion) !== MapperSchemaVersion)
+  ) {
+    return null;
+  }
+
+  const normalized = {};
+  copyPersistedNumber(map, normalized, "schemaVersion", 0, 1000);
+  copyPersistedNumber(map, normalized, "mapperSchemaVersion", 0, 1000);
+  copyPersistedText(map, normalized, "mapVersionId");
+  copyPersistedText(map, normalized, "siteKey");
+  copyPersistedText(map, normalized, "pageProfileKey");
+  copyPersistedText(map, normalized, "pageKey");
+  copyPersistedText(map, normalized, "pageId");
+  copyPersistedText(map, normalized, "origin");
+  copyPersistedText(map, normalized, "hostname");
+  copyPersistedText(map, normalized, "path", MapperPersistenceLimits.maxPathLength);
+  copyPersistedText(map, normalized, "query", MapperPersistenceLimits.maxPathLength);
+  copyPersistedText(map, normalized, "title");
+  copyPersistedText(map, normalized, "createdAt");
+  copyPersistedText(map, normalized, "status", MapperPersistenceLimits.maxTokenLength);
+  copyPersistedText(map, normalized, "classification", MapperPersistenceLimits.maxTokenLength);
+  copyPersistedText(map, normalized, "fingerprintDigest");
+  copyPersistedNumber(map, normalized, "componentCount", 0, MapperPersistenceLimits.maxComponentsPerMap);
+
+  for (const key of [
+    "architecture",
+    "platformStructure",
+    "layers",
+    "reconciliation",
+    "reliabilityMetrics",
+    "diagnostics",
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(map, key)) {
+      normalized[key] = normalizeBoundedJson(map[key]);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(map, "platformProfile")) {
+    normalized.platformProfile = map.platformProfile === null
+      ? null
+      : normalizePlatformProfile(map.platformProfile);
+  }
+  if (Object.prototype.hasOwnProperty.call(map, "components")) {
+    normalized.components = (Array.isArray(map.components) ? map.components : [])
+      .map(normalizePersistedComponent)
+      .filter(Boolean)
+      .slice(0, MapperPersistenceLimits.maxComponentsPerMap);
+  }
+  if (Object.prototype.hasOwnProperty.call(map, "resolverAttempts")) {
+    normalized.resolverAttempts = (Array.isArray(map.resolverAttempts)
+      ? map.resolverAttempts
+      : [])
+      .filter(isPlainRecord)
+      .slice(-MapperPersistenceLimits.maxResolverAttemptsPerMap)
+      .map((attempt) => normalizeRuntimeResolutionOutcome(
+        attempt,
+        boundedText(attempt.createdAt),
+      ));
+  }
+  return normalized;
+}
+
+function normalizePersistedComponent(component = null) {
+  if (!isPlainRecord(component)) return null;
+  if (
+    component.mapperSchemaVersion !== undefined &&
+    Number(component.mapperSchemaVersion) !== MapperSchemaVersion
+  ) return null;
+
+  const normalized = {};
+  copyPersistedNumber(component, normalized, "mapperSchemaVersion", 0, 1000);
+  for (const key of [
+    "componentId",
+    "componentUid",
+    "displayName",
+    "siteKey",
+    "pageProfileKey",
+    "capturedMapVersionId",
+    "createdAt",
+    "updatedAt",
+    "status",
+    "action",
+  ]) {
+    copyPersistedText(component, normalized, key);
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "mappingLayer")) {
+    normalized.mappingLayer = normalizeComponentLayer(component.mappingLayer);
+  }
+  copyPersistedNumber(
+    component,
+    normalized,
+    "captureOrder",
+    0,
+    MapperPersistenceLimits.maxComponentsPerMap,
+  );
+  if (Object.prototype.hasOwnProperty.call(component, "reviewRequired")) {
+    normalized.reviewRequired = component.reviewRequired === true;
+  }
+  for (const key of ["reconciliationDecision", "identityConfirmation"]) {
+    if (Object.prototype.hasOwnProperty.call(component, key)) {
+      normalized[key] = normalizeBoundedJson(component[key]);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "primaryLocator")) {
+    normalized.primaryLocator = component.primaryLocator === null
+      ? null
+      : normalizeLocators([component.primaryLocator])[0] || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "fallbackLocators")) {
+    normalized.fallbackLocators = normalizeLocators(component.fallbackLocators);
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "fingerprint")) {
+    normalized.fingerprint = normalizeFingerprint(component.fingerprint);
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "expectedCapabilities")) {
+    normalized.expectedCapabilities = normalizeCapabilities(component.expectedCapabilities);
+  }
+  if (Object.prototype.hasOwnProperty.call(component, "historicalLinks")) {
+    normalized.historicalLinks = (Array.isArray(component.historicalLinks)
+      ? component.historicalLinks
+      : [])
+      .filter(isPlainRecord)
+      .slice(-MapperPersistenceLimits.maxHistoricalLinksPerComponent)
+      .map((link) => ({
+        componentUid: boundedText(link.componentUid),
+        mapVersionId: boundedText(link.mapVersionId),
+        score: clampInteger(link.score, 0, 100, 0),
+        status: boundedToken(link.status),
+      }));
+  }
+  return normalized;
+}
+
+function copyPersistedText(source, target, key, maxLength = MapperPersistenceLimits.maxTextLength) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return;
+  target[key] = boundedText(source[key], maxLength);
+}
+
+function copyPersistedNumber(source, target, key, min, max) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return;
+  target[key] = clampInteger(source[key], min, max, min);
 }
 
 export function createMapperStorageMetadata(metadata = {}) {
@@ -209,10 +416,14 @@ export function createMapperStorageMetadata(metadata = {}) {
   return {
     provider: cleanToken(metadata.provider || "unknown"),
     revision: cleanValue(metadata.revision),
+    generation: cleanValue(metadata.generation),
     savedAt: cleanValue(metadata.savedAt),
     loadedAt: cleanValue(metadata.loadedAt),
     lastWriter: cleanValue(metadata.lastWriter),
     conflictPolicy: cleanToken(metadata.conflictPolicy || "last_write_wins"),
+    quotaPruned: metadata.quotaPruned === true,
+    prunedMapCount: clampInteger(metadata.prunedMapCount, 0, 100000, 0),
+    prunedComponentCount: clampInteger(metadata.prunedComponentCount, 0, 1000000, 0),
     conflicts,
   };
 }
@@ -236,6 +447,11 @@ export function buildStaticPageMap({
   const materialMutationCount = Math.max(Number(page.materialMutationCount) || 0, 0);
   const platformProfile = normalizePlatformProfile(page.platformProfile);
   const frameSummary = normalizeFrameSummary(page.frameSummary);
+  const scanDiagnostics = normalizeMapperScanDiagnostics(
+    page.scanDiagnostics,
+    policy.maxComponents,
+  );
+  const scanOverflow = scanDiagnostics.overflow;
   const pageMutationOverLimit = materialMutationCount > policy.materialMutationLimit;
   const staticOverLimit = staticFacts.length > policy.maxComponents;
   const dynamicOverLimit = dynamicFacts.length > policy.maxComponents;
@@ -246,9 +462,11 @@ export function buildStaticPageMap({
   const hasPreviousDynamicComponents = previousMapHasLayerComponents(previousMap, MapperComponentLayers.Dynamic);
   const staticSupported = (staticFacts.length > 0 || hasPreviousStaticComponents) &&
     !staticOverLimit &&
+    !scanOverflow &&
     !staticBlockedByUnboundedMutation;
   const dynamicSupported = (dynamicFacts.length > 0 || hasPreviousDynamicComponents) &&
-    !dynamicOverLimit;
+    !dynamicOverLimit &&
+    !scanOverflow;
   const staticResult = staticSupported
     ? createComponentRecords({
         facts: staticFacts,
@@ -279,15 +497,17 @@ export function buildStaticPageMap({
   const hasMappedComponents = components.some((component) => {
     return component.status !== MapperComponentStatuses.Removed;
   });
-  const classification = !hasMappedComponents && (
-    staticOverLimit ||
-    dynamicOverLimit ||
-    pageMutationOverLimit
-  )
+  const classification = scanOverflow
     ? MapperPageClassifications.DynamicDeferred
-    : hasBoundedDynamicRegions || pageMutationOverLimit
-      ? MapperPageClassifications.HybridDynamic
-      : MapperPageClassifications.Static;
+    : !hasMappedComponents && (
+      staticOverLimit ||
+      dynamicOverLimit ||
+      pageMutationOverLimit
+    )
+      ? MapperPageClassifications.DynamicDeferred
+      : hasBoundedDynamicRegions || pageMutationOverLimit
+        ? MapperPageClassifications.HybridDynamic
+        : MapperPageClassifications.Static;
   const reconciliation = summarizeReconciliation(previousMap, components);
   const fingerprintDigest = digestSerializable(orderedFacts.map((fact) => fact.fingerprint));
   const refreshed = Boolean(previousMap?.mapVersionId) &&
@@ -304,6 +524,7 @@ export function buildStaticPageMap({
     staticOverLimit,
     dynamicOverLimit,
     hasMappedComponents,
+    scanOverflow,
   });
 
   return {
@@ -311,6 +532,11 @@ export function buildStaticPageMap({
     mapVersionId: createMapVersionId(profile, now, orderedFacts),
     siteKey: profile.siteKey,
     pageProfileKey: profile.pageKey,
+    origin: profile.origin,
+    hostname: profile.hostname,
+    path: profile.path,
+    query: profile.query,
+    title: profile.title,
     createdAt: now,
     status,
     classification,
@@ -334,6 +560,7 @@ export function buildStaticPageMap({
         components: staticResult.components,
         overLimit: staticOverLimit,
         blockedByUnboundedMutation: staticBlockedByUnboundedMutation,
+        scanOverflow,
       }),
       [MapperComponentLayers.Dynamic]: createMapLayerSummary({
         layer: MapperComponentLayers.Dynamic,
@@ -341,6 +568,7 @@ export function buildStaticPageMap({
         components: dynamicResult.components,
         overLimit: dynamicOverLimit,
         blockedByUnboundedMutation: false,
+        scanOverflow,
       }),
     },
     reconciliation,
@@ -355,9 +583,157 @@ export function buildStaticPageMap({
       dynamicComponentCount: dynamicFacts.length,
       dynamicRegionCount,
       loadedContentOnly: classification === MapperPageClassifications.HybridDynamic,
+      scanOverflow,
+      scanSampledComponentCount: scanDiagnostics.sampledComponentCount,
+      scanCandidateCount: scanDiagnostics.candidateCount,
+      scanCandidateCountIsLowerBound: scanDiagnostics.candidateCountIsLowerBound,
+      scanReason: scanDiagnostics.reason,
+      scanOverflowKind: scanDiagnostics.overflowKind,
+      maxFrameContexts: scanDiagnostics.maxFrameContexts,
+      discoveredFrameContextCount: scanDiagnostics.discoveredFrameContextCount,
+      processedFrameContextCount: scanDiagnostics.processedFrameContextCount,
+      reachableFrameContextCount: scanDiagnostics.reachableFrameContextCount,
+      frameContextOverflow: scanDiagnostics.frameContextOverflow,
+      frameScanIncomplete: scanDiagnostics.frameScanIncomplete,
+      accessibleFramePathsComplete: scanDiagnostics.accessibleFramePathsComplete,
+      firstOmittedFramePath: scanDiagnostics.firstOmittedFramePath,
       reason,
     },
   };
+}
+
+export function scanPage(options = {}) {
+  return buildStaticPageMap(options);
+}
+
+export function refreshPageMap({
+  page = {},
+  componentFacts = [],
+  settings = {},
+  previousMap = null,
+  now = new Date().toISOString(),
+} = {}) {
+  return buildStaticPageMap({
+    page,
+    componentFacts,
+    settings,
+    previousMap,
+    now,
+  });
+}
+
+export function getPageMap(workflowState = null, pageRef = {}) {
+  const maps = Array.isArray(workflowState?.maps) ? workflowState.maps : [];
+  const reference = typeof pageRef === "string"
+    ? { pageProfileKey: pageRef }
+    : pageRef || {};
+  if (reference.mapVersionId) {
+    return maps.find((map) => {
+      if (map.mapVersionId !== reference.mapVersionId) return false;
+      if (reference.pageProfileKey && map.pageProfileKey !== reference.pageProfileKey) return false;
+      if (reference.siteKey && map.siteKey !== reference.siteKey) return false;
+      return true;
+    }) || null;
+  }
+  const matching = maps.filter((map) => {
+    if (reference.pageProfileKey && map.pageProfileKey !== reference.pageProfileKey) return false;
+    if (reference.siteKey && map.siteKey !== reference.siteKey) return false;
+    return true;
+  });
+  return matching.at(-1) || null;
+}
+
+export function createComponentRef(pageMap = null, componentId = "", options = {}) {
+  if (!pageMap || !Array.isArray(pageMap.components)) return null;
+  const id = String(componentId || "").trim();
+  if (!id) return null;
+  const component = pageMap.components.find((record) => {
+    return record.componentId === id || record.componentUid === id;
+  });
+  if (!component || component.status === MapperComponentStatuses.Removed) return null;
+  return createComponentRefFromRecord(component, {
+    workflowId: options.workflowId || "",
+    siteKey: pageMap.siteKey || component.siteKey || "",
+    pageProfileKey: pageMap.pageProfileKey || component.pageProfileKey || "",
+    mapVersionId: pageMap.mapVersionId || component.capturedMapVersionId || "",
+  });
+}
+
+export function resolveComponent({
+  pageMap = null,
+  componentRef = null,
+  candidateFacts = [],
+  requirements = {},
+} = {}) {
+  if (!isComponentRef(componentRef)) {
+    return createResolutionResult(MapperResolverStates.NotFound, {
+      reason: "invalid_component_ref",
+    });
+  }
+  if (!pageMap || !Array.isArray(pageMap.components)) {
+    return createResolutionResult(MapperResolverStates.NotFound, {
+      reason: "page_map_missing",
+    });
+  }
+  if (
+    componentRef.pageProfileKey &&
+    pageMap.pageProfileKey &&
+    componentRef.pageProfileKey !== pageMap.pageProfileKey
+  ) {
+    return createResolutionResult(MapperResolverStates.MapStale, {
+      reason: "page_profile_mismatch",
+    });
+  }
+  if (
+    componentRef.siteKey &&
+    pageMap.siteKey &&
+    componentRef.siteKey !== pageMap.siteKey
+  ) {
+    return createResolutionResult(MapperResolverStates.MapStale, {
+      reason: "site_key_mismatch",
+    });
+  }
+
+  const component = findComponentForRef(pageMap, componentRef);
+  if (!component || component.status === MapperComponentStatuses.Removed) {
+    const versionChanged = Boolean(
+      componentRef.capturedMapVersionId &&
+        pageMap.mapVersionId &&
+        componentRef.capturedMapVersionId !== pageMap.mapVersionId,
+    );
+    return createResolutionResult(
+      versionChanged ? MapperResolverStates.MapStale : MapperResolverStates.NotFound,
+      { reason: versionChanged ? "component_missing_after_refresh" : "component_record_missing" },
+    );
+  }
+
+  return resolveMappedComponent(component, candidateFacts, {
+    ...requirements,
+    action: requirements.action || requirements.capability || component.action || "",
+    pageClassification: pageMap.classification,
+  });
+}
+
+export function revalidateComponent(options = {}) {
+  return {
+    ...resolveComponent(options),
+    operation: "revalidate",
+  };
+}
+
+function findComponentForRef(pageMap = {}, componentRef = {}) {
+  const expectedLayer = cleanToken(componentRef.mappingLayer);
+  return (pageMap.components || [])
+    .filter((component) => {
+      return !expectedLayer || componentMappingLayer(component) === expectedLayer;
+    })
+    .find((component) => {
+      return component.componentId === componentRef.componentId ||
+        component.componentUid === componentRef.componentUid ||
+        (component.historicalLinks || []).some((link) => {
+          return link.componentUid && link.componentUid === componentRef.componentUid;
+        });
+    }) || null;
 }
 
 function partitionComponentFactsByLayer(facts = []) {
@@ -397,25 +773,29 @@ function createMapLayerSummary({
   components = [],
   overLimit = false,
   blockedByUnboundedMutation = false,
+  scanOverflow = false,
 } = {}) {
   const liveComponents = components.filter((component) => {
     return component.status !== MapperComponentStatuses.Removed;
   });
+  const layerDeferred = overLimit || blockedByUnboundedMutation;
   return {
     version: "mapper.layer.v1",
     layer,
-    status: facts.length
-      ? overLimit
-        ? "deferred"
-        : blockedByUnboundedMutation
+    status: scanOverflow
+      ? "deferred"
+      : facts.length
+        ? layerDeferred
           ? "deferred"
           : "ready"
-      : "empty",
-    reason: overLimit
-      ? `${layer}_component_limit_exceeded`
-      : blockedByUnboundedMutation
-        ? "unbounded_page_mutation"
-        : "",
+        : "empty",
+    reason: scanOverflow
+      ? "component_scan_overflow"
+      : overLimit
+        ? `${layer}_component_limit_exceeded`
+        : blockedByUnboundedMutation
+          ? "unbounded_page_mutation"
+          : "",
     factCount: facts.length,
     componentCount: liveComponents.length,
     removedCount: components.length - liveComponents.length,
@@ -428,7 +808,9 @@ function createMapClassificationReason({
   staticOverLimit = false,
   dynamicOverLimit = false,
   hasMappedComponents = false,
+  scanOverflow = false,
 } = {}) {
+  if (scanOverflow) return "component_scan_overflow";
   if (staticOverLimit && !hasMappedComponents) return "static_component_limit_exceeded";
   if (dynamicOverLimit && !hasMappedComponents) return "dynamic_component_limit_exceeded";
   if (pageMutationOverLimit && !hasBoundedDynamicRegions && !hasMappedComponents) {
@@ -547,15 +929,23 @@ function summarizePlatformStructure(components = [], profile = {}) {
   };
 }
 
-export function createComponentRefFromRecord(component = {}) {
+export function createComponentRefFromRecord(component = {}, context = {}) {
+  const componentId = String(component.componentId || "");
+  const pageProfileKey = String(context.pageProfileKey || component.pageProfileKey || "");
+  const capturedMapVersionId = String(
+    context.mapVersionId || component.capturedMapVersionId || "",
+  );
   return {
+    schema: "mapper.component_ref.v1",
     mapperSchemaVersion: MapperSchemaVersion,
-    componentId: String(component.componentId || ""),
+    id: `${pageProfileKey}:${componentId}`,
+    workflowId: String(context.workflowId || component.workflowId || ""),
+    componentId,
     componentUid: String(component.componentUid || ""),
     mappingLayer: componentMappingLayer(component),
-    siteKey: String(component.siteKey || ""),
-    pageProfileKey: String(component.pageProfileKey || ""),
-    capturedMapVersionId: String(component.capturedMapVersionId || ""),
+    siteKey: String(context.siteKey || component.siteKey || ""),
+    pageProfileKey,
+    capturedMapVersionId,
   };
 }
 
@@ -569,9 +959,59 @@ export function resolveMappedComponent(component = {}, candidateFacts = [], opti
       component,
     });
   }
-  if (frameScope.access === "cross_origin") {
+  if (
+    frameScope.access === "cross_origin" &&
+    frameScope.extensionAccessible !== true
+  ) {
     return createResolutionResult(MapperResolverStates.ProtectedUnsupported, {
-      reason: "cross_origin_frame_unsupported",
+      reason: "cross_origin_frame_unreachable",
+      component,
+    });
+  }
+  if (
+    frameScope.access === "cross_origin" &&
+    frameScope.identityAmbiguous === true
+  ) {
+    return createResolutionResult(MapperResolverStates.Ambiguous, {
+      reason: "cross_origin_frame_context_ambiguous",
+      component,
+    });
+  }
+
+  const liveFrameScopes = candidateFacts
+    .map((candidate) => candidate?.fingerprint?.structural?.frameScope || {})
+    .filter((scope) => scope && typeof scope === "object");
+  if (
+    frameScope.access === "cross_origin" &&
+    liveFrameScopes.some((scope) => crossOriginFrameContextConflicts(frameScope, scope))
+  ) {
+    return createResolutionResult(MapperResolverStates.Ambiguous, {
+      reason: "cross_origin_frame_context_ambiguous",
+      component,
+    });
+  }
+
+  const matchingAccessibleFramePaths = Array.isArray(options.accessibleFramePaths)
+    ? new Set(options.accessibleFramePaths
+      .filter((path) => framePathMatchesScope(frameScope, path))
+      .map(cleanValue))
+    : null;
+  if (
+    frameScope.access === "cross_origin" &&
+    matchingAccessibleFramePaths?.size > 1
+  ) {
+    return createResolutionResult(MapperResolverStates.Ambiguous, {
+      reason: "cross_origin_frame_context_ambiguous",
+      component,
+    });
+  }
+  if (
+    frameScope.access === "cross_origin" &&
+    frameScope.extensionAccessible === true &&
+    matchingAccessibleFramePaths?.size === 0
+  ) {
+    return createResolutionResult(MapperResolverStates.ProtectedUnsupported, {
+      reason: "cross_origin_frame_unreachable",
       component,
     });
   }
@@ -677,16 +1117,16 @@ export function resolveMappedComponent(component = {}, candidateFacts = [], opti
 
 export function recordMapperRuntimeResolution(pageMap = {}, outcome = {}, now = new Date().toISOString()) {
   if (!pageMap || typeof pageMap !== "object") return pageMap;
-  const redactedOutcome = redactRuntimeResolutionOutcome(outcome, now);
+  const normalizedOutcome = normalizeRuntimeResolutionOutcome(outcome, now);
   const reliabilityMetrics = updateRuntimeReliabilityMetrics(
     pageMap.reliabilityMetrics ||
       pageMap.reconciliation?.reliabilityMetrics ||
-      createRedactedReliabilityMetrics(null, pageMap.components || [], pageMap.reconciliation || null),
-    redactedOutcome,
+      createReliabilityMetrics(null, pageMap.components || [], pageMap.reconciliation || null),
+    normalizedOutcome,
   );
   const resolverAttempts = [
     ...(Array.isArray(pageMap.resolverAttempts) ? pageMap.resolverAttempts : []),
-    redactedOutcome,
+    normalizedOutcome,
   ].slice(-25);
 
   return {
@@ -873,7 +1313,7 @@ function createComponentRecords({
         score: match.score || 0,
         margin: Number.isFinite(match.margin) ? match.margin : null,
         automatic: match.reviewRequired !== true,
-        evidence: redactEvidenceLabels(match.evidence),
+        evidence: normalizeEvidenceLabels(match.evidence),
       },
       identityConfirmation,
       primaryLocator,
@@ -1085,7 +1525,7 @@ function summarizeReconciliation(previousMap, components = []) {
     else if (component.status === MapperComponentStatuses.Removed) summary.removed += 1;
     else if (component.status === MapperComponentStatuses.Ambiguous) summary.ambiguous += 1;
   }
-  summary.reliabilityMetrics = createRedactedReliabilityMetrics(previousMap, components, summary);
+  summary.reliabilityMetrics = createReliabilityMetrics(previousMap, components, summary);
   return summary;
 }
 
@@ -1097,7 +1537,7 @@ function createEmptyReconciliation(previousMap = null) {
     new: 0,
     removed: 0,
     ambiguous: 0,
-    reliabilityMetrics: createRedactedReliabilityMetrics(previousMap, [], null),
+    reliabilityMetrics: createReliabilityMetrics(previousMap, [], null),
   };
 }
 
@@ -1202,18 +1642,18 @@ function createEvidenceSignature({ previous = {}, componentUid = "", match = {} 
     nextUid: cleanValue(componentUid),
     scoreBand: Math.floor((Number(match.score) || 0) / 5) * 5,
     marginBand: Math.floor((Number(match.margin) || 0) / 5) * 5,
-    evidence: redactEvidenceLabels(match.evidence),
+    evidence: normalizeEvidenceLabels(match.evidence),
   }).slice(0, 16);
 }
 
-function redactEvidenceLabels(evidence = []) {
+function normalizeEvidenceLabels(evidence = []) {
   return normalizeStringList(evidence)
-    .map(cleanToken)
+    .map((entry) => cleanToken(entry).slice(0, MapperPersistenceLimits.maxEvidenceLabelLength))
     .filter(Boolean)
-    .slice(0, 8);
+    .slice(0, MapperPersistenceLimits.maxEvidenceLabels);
 }
 
-function createRedactedReliabilityMetrics(previousMap = null, components = [], summary = null) {
+function createReliabilityMetrics(previousMap = null, components = [], summary = null) {
   const liveComponents = components.filter((component) => {
     return component.status !== MapperComponentStatuses.Removed;
   });
@@ -1251,11 +1691,6 @@ function createRedactedReliabilityMetrics(previousMap = null, components = [], s
   return {
     version: "mapper.reliability.v1",
     source: "static_reconciliation",
-    redaction: {
-      level: "counts_only",
-      rawTextStored: false,
-      rawLocatorStored: false,
-    },
     liveComponentCount: liveComponents.length,
     previousLiveComponentCount: previousLiveCount,
     automaticStrongMatchCount,
@@ -1321,13 +1756,13 @@ function updateRuntimeReliabilityMetrics(metrics = {}, outcome = {}) {
   };
 }
 
-function redactRuntimeResolutionOutcome(outcome = {}, now = "") {
+function normalizeRuntimeResolutionOutcome(outcome = {}, now = "") {
   const state = cleanToken(outcome.state || outcome.mapperState || "unresolved");
   const resolverLog = outcome.resolverLog && typeof outcome.resolverLog === "object"
     ? outcome.resolverLog
     : {};
-  const selected = sanitizeRuntimeCandidate(resolverLog.selected);
-  const runnerUp = sanitizeRuntimeCandidate(resolverLog.runnerUp);
+  const selected = normalizeRuntimeCandidate(outcome.selected || resolverLog.selected);
+  const runnerUp = normalizeRuntimeCandidate(outcome.runnerUp || resolverLog.runnerUp);
   const margin = Number.isFinite(Number(outcome.margin))
     ? Number(outcome.margin)
     : Number.isFinite(Number(resolverLog.margin))
@@ -1338,43 +1773,35 @@ function redactRuntimeResolutionOutcome(outcome = {}, now = "") {
 
   return {
     version: "mapper.runtime_resolution.v1",
-    createdAt: cleanValue(outcome.createdAt || now),
-    action: cleanToken(outcome.action || resolverLog.action || ""),
-    componentId: cleanValue(outcome.componentId || resolverLog.componentId),
-    componentUid: cleanValue(outcome.componentUid || resolverLog.componentUid),
-    pageProfileKey: cleanValue(outcome.pageProfileKey),
-    mapVersionId: cleanValue(outcome.mapVersionId),
-    state,
-    reason: cleanToken(outcome.reason || outcome.mapperReason || resolverLog.reason),
-    finalReason: cleanToken(outcome.finalReason),
+    createdAt: boundedText(outcome.createdAt || now),
+    action: boundedToken(outcome.action || resolverLog.action || ""),
+    componentId: boundedText(outcome.componentId || resolverLog.componentId),
+    componentUid: boundedText(outcome.componentUid || resolverLog.componentUid),
+    pageProfileKey: boundedText(outcome.pageProfileKey),
+    mapVersionId: boundedText(outcome.mapVersionId),
+    state: boundedToken(state),
+    reason: boundedToken(outcome.reason || outcome.mapperReason || resolverLog.reason),
+    finalReason: boundedToken(outcome.finalReason),
     confidence: clampInteger(outcome.confidence ?? resolverLog.confidence, 0, 100, 0),
     margin,
     attemptCount: clampInteger(outcome.attemptCount ?? resolverLog.attemptCount, 0, 1000, 0),
     selected,
     runnerUp,
-    evidence: redactEvidenceLabels(outcome.evidence || selected?.evidence || []),
+    evidence: normalizeEvidenceLabels(outcome.evidence || selected?.evidence || []),
     staleToResolved: outcome.staleToResolved === true,
-    redaction: {
-      level: "counts_and_scores",
-      rawTextStored: false,
-      rawLocatorStored: false,
-    },
   };
 }
 
-function sanitizeRuntimeCandidate(candidate = null) {
+function normalizeRuntimeCandidate(candidate = null) {
   if (!candidate || typeof candidate !== "object") return null;
   return {
     rank: clampInteger(candidate.rank, 1, 100, 1),
     score: clampInteger(candidate.score, 0, 100, 0),
-    evidence: redactEvidenceLabels(candidate.evidence),
-    componentIdHash: candidate.componentId
-      ? digestSerializable(cleanValue(candidate.componentId)).slice(0, 12)
-      : "",
-    componentUidHash: candidate.componentUid
-      ? digestSerializable(cleanValue(candidate.componentUid)).slice(0, 12)
-      : "",
-    primaryStrategy: cleanToken(candidate.primary?.strategy),
+    evidence: normalizeEvidenceLabels(candidate.evidence),
+    componentId: boundedText(candidate.componentId),
+    componentUid: boundedText(candidate.componentUid),
+    displayName: boundedText(candidate.displayName),
+    primary: normalizeLocators(candidate.primary ? [candidate.primary] : [])[0] || null,
     visible: candidate.visible !== false,
   };
 }
@@ -1400,9 +1827,9 @@ function normalizeComponentFact(fact = {}, index = 0) {
 
   return {
     index,
-    action: String(fact.action || ""),
-    componentId: cleanValue(fact.componentId),
-    componentUid: cleanValue(fact.componentUid),
+    action: boundedText(fact.action, MapperPersistenceLimits.maxTokenLength),
+    componentId: boundedText(fact.componentId),
+    componentUid: boundedText(fact.componentUid),
     mappingLayer: normalizeComponentLayer(fact.mappingLayer || fact.mapperLayer || inferComponentLayerFromFingerprint(fingerprint)),
     locators,
     fingerprint: {
@@ -1527,13 +1954,108 @@ function normalizeFrameScope(scope = {}) {
     access,
     path: cleanValue(scope?.path || "top").slice(0, 480),
     depth: clampInteger(scope?.depth, 0, 6, 0),
+    contextKey: cleanToken(scope?.contextKey).slice(0, 120),
+    frameContextId: cleanToken(scope?.frameContextId).slice(0, 160),
+    frameIdHint: scope?.frameIdHint !== undefined && scope?.frameIdHint !== null &&
+      Number.isInteger(Number(scope.frameIdHint))
+      ? clampInteger(scope.frameIdHint, 0, 1000000, 0)
+      : null,
+    contextMultiplicity: clampInteger(scope?.contextMultiplicity, 1, 100, 1),
+    identityAmbiguous: scope?.identityAmbiguous === true,
+    extensionAccessible: scope?.extensionAccessible === true,
   };
 }
 
 function normalizeFrameSummary(summary = {}) {
+  const maxFrameContexts = clampInteger(summary?.maxFrameContexts, 1, 100, 100);
+  const frameScanIncomplete = summary?.frameScanIncomplete === true;
   return {
     sameOriginFrames: clampInteger(summary?.sameOriginFrames, 0, 100, 0),
     crossOriginFrames: clampInteger(summary?.crossOriginFrames, 0, 100, 0),
+    accessibleFramePaths: normalizeStringList(summary?.accessibleFramePaths).slice(0, 100),
+    incompleteFramePaths: normalizeStringList(summary?.incompleteFramePaths).slice(0, 1),
+    maxFrameContexts,
+    discoveredFrameContextCount: clampInteger(
+      summary?.discoveredFrameContextCount,
+      0,
+      1000000,
+      0,
+    ),
+    processedFrameContextCount: clampInteger(
+      summary?.processedFrameContextCount,
+      0,
+      maxFrameContexts,
+      0,
+    ),
+    reachableFrameContextCount: clampInteger(
+      summary?.reachableFrameContextCount,
+      0,
+      maxFrameContexts,
+      0,
+    ),
+    frameContextOverflow: summary?.frameContextOverflow === true,
+    frameScanIncomplete,
+    accessibleFramePathsComplete: summary?.accessibleFramePathsComplete !== false &&
+      !frameScanIncomplete,
+  };
+}
+
+function normalizeMapperScanDiagnostics(diagnostics = {}, fallbackMaxComponents = 500) {
+  const maxComponents = clampInteger(
+    diagnostics?.maxComponents,
+    1,
+    2000,
+    fallbackMaxComponents,
+  );
+  const sampledComponentCount = clampInteger(
+    diagnostics?.sampledComponentCount,
+    0,
+    maxComponents,
+    0,
+  );
+  const overflow = diagnostics?.overflow === true;
+  const candidateCount = clampInteger(
+    diagnostics?.candidateCount,
+    0,
+    maxComponents + 1,
+    overflow ? maxComponents + 1 : sampledComponentCount,
+  );
+  const maxFrameContexts = clampInteger(diagnostics?.maxFrameContexts, 1, 100, 100);
+  const frameScanIncomplete = diagnostics?.frameScanIncomplete === true;
+  return {
+    maxComponents,
+    sampledComponentCount,
+    candidateCount: overflow
+      ? Math.max(candidateCount, Math.min(maxComponents + 1, sampledComponentCount + 1))
+      : candidateCount,
+    candidateCountIsLowerBound: overflow || diagnostics?.candidateCountIsLowerBound === true,
+    overflow,
+    reason: cleanToken(diagnostics?.reason).slice(0, 80),
+    overflowKind: cleanToken(diagnostics?.overflowKind).slice(0, 120),
+    maxFrameContexts,
+    discoveredFrameContextCount: clampInteger(
+      diagnostics?.discoveredFrameContextCount,
+      0,
+      1000000,
+      0,
+    ),
+    processedFrameContextCount: clampInteger(
+      diagnostics?.processedFrameContextCount,
+      0,
+      maxFrameContexts,
+      0,
+    ),
+    reachableFrameContextCount: clampInteger(
+      diagnostics?.reachableFrameContextCount,
+      0,
+      maxFrameContexts,
+      0,
+    ),
+    frameContextOverflow: diagnostics?.frameContextOverflow === true,
+    frameScanIncomplete,
+    accessibleFramePathsComplete: diagnostics?.accessibleFramePathsComplete !== false &&
+      !frameScanIncomplete,
+    firstOmittedFramePath: cleanValue(diagnostics?.firstOmittedFramePath).slice(0, 480),
   };
 }
 
@@ -1560,47 +2082,63 @@ function normalizeFingerprint(fingerprint = {}) {
 
   return {
     semantic: {
-      role: cleanToken(semantic.role || fingerprint.role),
-      accessibleName: cleanValue(semantic.accessibleName || semantic.ariaLabel || fingerprint.ariaLabel),
-      altText: cleanValue(semantic.altText || fingerprint.altText),
-      labelText: cleanValue(semantic.labelText || fingerprint.labelText),
-      stableText: cleanValue(semantic.stableText || fingerprint.text),
-      placeholder: cleanValue(semantic.placeholder || fingerprint.placeholder),
-      title: cleanValue(semantic.title || fingerprint.title),
-      name: cleanToken(semantic.name || fingerprint.name),
-      inputType: cleanToken(semantic.inputType || fingerprint.type),
-      stableAttributes: normalizeRecord(semantic.stableAttributes),
+      role: boundedToken(semantic.role || fingerprint.role),
+      accessibleName: boundedText(
+        semantic.accessibleName || semantic.ariaLabel || fingerprint.ariaLabel,
+      ),
+      altText: boundedText(semantic.altText || fingerprint.altText),
+      labelText: boundedText(semantic.labelText || fingerprint.labelText),
+      stableText: boundedText(semantic.stableText || fingerprint.text),
+      placeholder: boundedText(semantic.placeholder || fingerprint.placeholder),
+      title: boundedText(semantic.title || fingerprint.title),
+      name: boundedToken(semantic.name || fingerprint.name),
+      inputType: boundedToken(semantic.inputType || fingerprint.type),
+      stableAttributes: normalizeBoundedRecord(semantic.stableAttributes),
     },
     structural: {
-      ancestorTokens: normalizeStringList(structural.ancestorTokens || fingerprint.ancestorTokens).slice(0, 3),
+      ancestorTokens: normalizeBoundedStringList(
+        structural.ancestorTokens || fingerprint.ancestorTokens,
+        { maxItems: 3, maxLength: 160 },
+      ),
       platformScope: normalizePlatformScope(structural.platformScope || fingerprint.platformScope),
       frameScope: normalizeFrameScope(structural.frameScope || fingerprint.frameScope),
       repeatScope: normalizeRepeatScope(structural.repeatScope || fingerprint.repeatScope),
       regionDynamics: normalizeRegionDynamics(structural.regionDynamics || fingerprint.regionDynamics),
-      formName: cleanToken(structural.formName || fingerprint.formName),
-      relativeIndex: Number.isFinite(Number(structural.relativeIndex))
+      formName: boundedToken(structural.formName || fingerprint.formName),
+      relativeIndex: structural.relativeIndex !== undefined &&
+        structural.relativeIndex !== null &&
+        Number.isFinite(Number(structural.relativeIndex))
         ? Number(structural.relativeIndex)
         : null,
-      nearbyLabel: cleanValue(structural.nearbyLabel || fingerprint.nearbyText),
+      nearbyLabel: boundedText(structural.nearbyLabel || fingerprint.nearbyText),
     },
     technical: {
-      tag: cleanToken(technical.tag || fingerprint.tag),
-      id: cleanToken(technical.id || fingerprint.id),
-      classes: normalizeStringList(technical.classes || fingerprint.classes).slice(0, 8),
-      domPath: cleanValue(technical.domPath || fingerprint.domPath),
+      tag: boundedToken(technical.tag || fingerprint.tag),
+      id: boundedToken(technical.id || fingerprint.id),
+      classes: normalizeBoundedStringList(technical.classes || fingerprint.classes, {
+        maxItems: 8,
+        maxLength: MapperPersistenceLimits.maxTokenLength,
+      }),
+      domPath: boundedText(
+        technical.domPath || fingerprint.domPath,
+        MapperPersistenceLimits.maxPathLength,
+      ),
       shadowPath: normalizeShadowPath(technical.shadowPath || fingerprint.shadowPath),
     },
     behavioral: {
       capabilities: normalizeCapabilities(behavioral.capabilities),
-      href: cleanValue(behavioral.href || fingerprint.href),
-      state: normalizeRecord(behavioral.state),
+      href: boundedText(
+        behavioral.href || fingerprint.href,
+        MapperPersistenceLimits.maxLocatorValueLength,
+      ),
+      state: normalizeBoundedRecord(behavioral.state),
       dynamicContext: behavioral.dynamicContext === true,
     },
     visual: {
       bounds: normalizeBounds(visual.bounds || fingerprint.bounds),
       viewportBounds: normalizeBounds(visual.viewportBounds),
       documentBounds: normalizeBounds(visual.documentBounds),
-      viewport: normalizeRecord(visual.viewport),
+      viewport: normalizeBoundedRecord(visual.viewport),
     },
   };
 }
@@ -1608,27 +2146,31 @@ function normalizeFingerprint(fingerprint = {}) {
 function normalizeLocators(locators = []) {
   return (Array.isArray(locators) ? locators : [])
     .map((locator) => ({
-      strategy: cleanToken(locator?.strategy),
-      value: cleanValue(locator?.value),
-      family: cleanToken(locator?.family),
+      strategy: boundedToken(locator?.strategy),
+      value: boundedText(locator?.value, MapperPersistenceLimits.maxLocatorValueLength),
+      family: boundedToken(locator?.family),
       reliability: clampInteger(locator?.reliability, 0, 100, 50),
       selectedAtCapture: locator?.selectedAtCapture === true,
     }))
-    .filter((locator) => locator.strategy && locator.value);
+    .filter((locator) => locator.strategy && locator.value)
+    .slice(0, MapperPersistenceLimits.maxLocatorsPerComponent);
 }
 
 function normalizeCapabilities(capabilities = []) {
-  return normalizeStringList(capabilities);
+  return normalizeBoundedStringList(capabilities, {
+    maxItems: MapperPersistenceLimits.maxCapabilities,
+    maxLength: MapperPersistenceLimits.maxTokenLength,
+  });
 }
 
 function normalizeShadowPath(path = []) {
   return (Array.isArray(path) ? path : [])
-    .slice(0, 4)
     .map((boundary) => ({
-      hostPath: cleanValue(boundary?.hostPath).slice(0, 320),
-      innerPath: cleanValue(boundary?.innerPath).slice(0, 320),
+      hostPath: boundedText(boundary?.hostPath, MapperPersistenceLimits.maxPathLength),
+      innerPath: boundedText(boundary?.innerPath, MapperPersistenceLimits.maxPathLength),
     }))
-    .filter((boundary) => boundary.hostPath && boundary.innerPath);
+    .filter((boundary) => boundary.hostPath && boundary.innerPath)
+    .slice(0, MapperPersistenceLimits.maxShadowPathDepth);
 }
 
 function inferCapabilities(fingerprint = {}) {
@@ -1930,11 +2472,45 @@ function createSiteKey(hostname = "") {
   return toIdentifier(hostname.replace(/\./g, "_")) || "site";
 }
 
-function createPageKey(hostname = "", path = "/", query = "") {
+function createPageKey(origin = "", hostname = "", path = "/", query = "") {
   const site = createSiteKey(hostname);
-  const page = pageNameFromPath(path);
-  const queryToken = query ? toIdentifier(query) : "";
-  return [site, page, queryToken].filter(Boolean).join("::");
+  const page = pageNameFromPath(path).slice(0, 160);
+  const identity = digestExactPageIdentity(origin, path, query);
+  return `${site}::${page}::identity_v2_${identity}`;
+}
+
+function createAllowlistedQuery(searchParams = new URLSearchParams(), allowlist = []) {
+  const query = new URLSearchParams();
+  [...allowlist].sort().forEach((key) => {
+    searchParams.getAll(key).forEach((value) => query.append(key, value));
+  });
+  return query.toString();
+}
+
+function digestExactPageIdentity(origin = "", path = "/", query = "") {
+  const value = JSON.stringify([
+    String(origin || ""),
+    normalizePath(path),
+    String(query || ""),
+  ]);
+  return `${fnv1a64(value)}${fnv1a64(value, 0x84222325cbf29ce4n, true)}`;
+}
+
+function fnv1a64(value = "", offset = 0xcbf29ce484222325n, reverse = false) {
+  let hash = offset;
+  const text = String(value || "");
+  let index = reverse ? text.length - 1 : 0;
+  const end = reverse ? -1 : text.length;
+  const direction = reverse ? -1 : 1;
+  for (; index !== end; index += direction) {
+    hash ^= BigInt(text.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function isCollisionSafePageKey(value = "") {
+  return /::identity_v2_[0-9a-f]{32}$/.test(String(value || ""));
 }
 
 function pageNameFromProfile(profile = {}) {
@@ -2001,7 +2577,45 @@ function platformScopesCompatible(expected = {}, actual = {}) {
 function frameScopesCompatible(expected = {}, actual = {}) {
   const expectedPath = cleanValue(expected?.path || "top");
   const actualPath = cleanValue(actual?.path || "top");
-  return expectedPath === actualPath;
+  const expectedMultiplicity = Number(expected?.contextMultiplicity) || 1;
+  const actualMultiplicity = Number(actual?.contextMultiplicity) || 1;
+  if (expectedMultiplicity !== actualMultiplicity) return false;
+  if (expected?.identityAmbiguous === true || actual?.identityAmbiguous === true) {
+    return false;
+  }
+  if (expectedPath === actualPath) return true;
+  const expectedContextKey = cleanToken(expected?.contextKey);
+  return cleanToken(expected?.access) === "cross_origin" &&
+    cleanToken(actual?.access) === "cross_origin" &&
+    expectedContextKey &&
+    cleanToken(actual?.contextKey) === expectedContextKey;
+}
+
+function framePathMatchesScope(scope = {}, path = "") {
+  const expectedPath = cleanValue(scope?.path || "top");
+  const actualPath = cleanValue(path);
+  if (expectedPath === actualPath) return true;
+  if (cleanToken(scope?.access) !== "cross_origin") return false;
+  const contextKey = cleanToken(scope?.contextKey);
+  if (!contextKey) return false;
+  const contextPath = `isolated/${contextKey}`;
+  return actualPath === contextPath || actualPath.startsWith(`${contextPath}/instance_`);
+}
+
+function crossOriginFrameContextConflicts(expected = {}, actual = {}) {
+  if (
+    cleanToken(expected?.access) !== "cross_origin" ||
+    cleanToken(actual?.access) !== "cross_origin"
+  ) {
+    return false;
+  }
+  const expectedContextKey = cleanToken(expected?.contextKey);
+  if (!expectedContextKey || cleanToken(actual?.contextKey) !== expectedContextKey) {
+    return false;
+  }
+  return actual?.identityAmbiguous === true ||
+    (Number(actual?.contextMultiplicity) || 1) !==
+      (Number(expected?.contextMultiplicity) || 1);
 }
 
 function repeatScopesCompatible(expected = {}, actual = {}) {
@@ -2048,7 +2662,7 @@ function stableStringify(value) {
 }
 
 function normalizePath(path = "") {
-  const value = String(path || "/").replace(/\/+/g, "/");
+  const value = String(path || "/");
   return value.startsWith("/") ? value : `/${value}`;
 }
 
@@ -2058,10 +2672,107 @@ function normalizeStringList(value) {
     .filter(Boolean))];
 }
 
+function normalizeBoundedStringList(
+  value,
+  {
+    maxItems = MapperPersistenceLimits.maxCapabilities,
+    maxLength = MapperPersistenceLimits.maxTextLength,
+    tokens = false,
+  } = {},
+) {
+  const normalize = tokens ? cleanToken : cleanValue;
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map((item) => normalize(item).slice(0, maxLength))
+    .filter(Boolean))]
+    .slice(0, maxItems);
+}
+
+function normalizeMapperOverrides(value) {
+  const overrides = normalizeRecord(value);
+  return Object.fromEntries(Object.entries(overrides).map(([key, override]) => {
+    if (!override || typeof override !== "object" || Array.isArray(override)) {
+      return [key, {}];
+    }
+    const normalized = {};
+    if (override.enabled !== undefined) normalized.enabled = override.enabled !== false;
+    if (Object.values(MapperModes).includes(override.mode)) normalized.mode = override.mode;
+    if (override.maxComponents !== undefined) {
+      normalized.maxComponents = clampInteger(override.maxComponents, 1, 2000, 500);
+    }
+    if (override.maxVersions !== undefined) {
+      normalized.maxVersions = clampInteger(override.maxVersions, 1, 3, 3);
+    }
+    if (override.materialMutationLimit !== undefined) {
+      normalized.materialMutationLimit = clampInteger(
+        override.materialMutationLimit,
+        1,
+        500,
+        50,
+      );
+    }
+    if (override.queryAllowlist !== undefined) {
+      normalized.queryAllowlist = normalizeStringList(override.queryAllowlist);
+    }
+    return [key, normalized];
+  }));
+}
+
 function normalizeRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? structuredClone(value)
     : {};
+}
+
+function normalizeBoundedRecord(
+  value,
+  depth = 0,
+) {
+  if (!isPlainRecord(value) || depth >= MapperPersistenceLimits.maxRecordDepth) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, MapperPersistenceLimits.maxRecordEntries)
+      .map(([key, entry]) => {
+        const safeKey = boundedText(key, MapperPersistenceLimits.maxTokenLength);
+        if (!safeKey) return null;
+        if (isPlainRecord(entry)) {
+          return [safeKey, normalizeBoundedRecord(entry, depth + 1)];
+        }
+        if (Array.isArray(entry)) {
+          return [safeKey, normalizeBoundedStringList(entry)];
+        }
+        if (typeof entry === "number" || typeof entry === "boolean" || entry === null) {
+          return [safeKey, entry];
+        }
+        return [safeKey, boundedText(entry)];
+      })
+      .filter(Boolean),
+  );
+}
+
+function normalizeBoundedJson(value, depth = 0) {
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") return boundedText(value);
+  if (depth >= MapperPersistenceLimits.maxNestedRecordDepth) return null;
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MapperPersistenceLimits.maxNestedArrayItems)
+      .map((entry) => normalizeBoundedJson(entry, depth + 1));
+  }
+  if (!isPlainRecord(value)) return null;
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, MapperPersistenceLimits.maxRecordEntries)
+      .map(([key, entry]) => {
+        const safeKey = boundedText(key, MapperPersistenceLimits.maxTokenLength);
+        return safeKey
+          ? [safeKey, normalizeBoundedJson(entry, depth + 1)]
+          : null;
+      })
+      .filter(Boolean),
+  );
 }
 
 function clampInteger(value, min, max, fallback) {
@@ -2074,8 +2785,22 @@ function cleanValue(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
+function boundedText(value, maxLength = MapperPersistenceLimits.maxTextLength) {
+  return cleanValue(value).slice(0, maxLength);
+}
+
+function boundedToken(value, maxLength = MapperPersistenceLimits.maxTokenLength) {
+  return cleanToken(value).slice(0, maxLength);
+}
+
 function cleanToken(value) {
   return toIdentifier(value);
+}
+
+function isPlainRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function normalizedText(value) {

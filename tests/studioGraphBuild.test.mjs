@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { test } from "node:test";
+import { computeStudioBuildFingerprint } from "../studioBuildFingerprint.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -14,10 +15,8 @@ test("graph Studio dependencies are pinned exactly", async () => {
 });
 
 test("production graph build uses extension-safe relative assets", async () => {
-  const index = await readFile(
-    new URL("BRunner/studio-graph/index.html", root),
-    "utf8",
-  );
+  const indexUrl = new URL("BRunner/studio-graph/index.html", root);
+  const index = await readFile(indexUrl, "utf8");
   const assets = await readdir(new URL("BRunner/studio-graph/assets/", root));
 
   assert.match(index, /src="\.\/assets\//);
@@ -25,6 +24,60 @@ test("production graph build uses extension-safe relative assets", async () => {
   assert.equal(/<script(?![^>]*src=)/i.test(index), false);
   assert.equal(assets.some((name) => name.endsWith(".js")), true);
   assert.equal(assets.some((name) => name.endsWith(".css")), true);
+
+  const localReferences = Array.from(
+    index.matchAll(/(?:src|href)="(\.\/[^"?#]+)(?:[?#][^"]*)?"/g),
+    (match) => match[1],
+  );
+  assert.ok(localReferences.length >= 2);
+  for (const reference of localReferences) {
+    await access(new URL(reference, indexUrl));
+    if (reference.startsWith("./assets/")) {
+      assert.equal(
+        assets.includes(decodeURIComponent(reference.slice("./assets/".length))),
+        true,
+        `missing emitted asset referenced by index: ${reference}`,
+      );
+    }
+  }
+});
+
+test("production graph build matches its complete source fingerprint", async () => {
+  const expected = await computeStudioBuildFingerprint();
+  const actual = JSON.parse(await readFile(
+    new URL("BRunner/studio-graph/build-meta.json", root),
+    "utf8",
+  ));
+
+  assert.deepEqual(actual, expected);
+  assert.equal(
+    actual.inputs.includes("BRunner/studio-graph-src/src/GraphStudio.jsx"),
+    true,
+  );
+  for (const transitiveInput of [
+    "BRunner/icons/icon2.png",
+    "BRunner/mapper/core.js",
+    "BRunner/core/workflowSchema.js",
+    "BRunner/core/constants.js",
+    "BRunner/core/variableInspector.js",
+    "BRunner/shared/studio-tokens.css",
+    "BRunner/core/studioPreferencesBootstrap.js",
+    "BRunner/core/studioPreferences.js",
+  ]) {
+    assert.equal(actual.inputs.includes(transitiveInput), true, transitiveInput);
+  }
+});
+
+test("production graph bundle contains mapper graph v3 routing", async () => {
+  const assetsUrl = new URL("BRunner/studio-graph/assets/", root);
+  const scripts = (await readdir(assetsUrl)).filter((name) => name.endsWith(".js"));
+  const bundle = (await Promise.all(
+    scripts.map((name) => readFile(new URL(name, assetsUrl), "utf8")),
+  )).join("\n");
+
+  assert.match(bundle, /workflow\.needs_attention/);
+  assert.match(bundle, /Needs attention/);
+  assert.match(bundle, /unresolved/);
 });
 
 test("graph Studio wires persistence and execution controls", async () => {

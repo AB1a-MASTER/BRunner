@@ -280,6 +280,18 @@ main {
   background-color: var(--bg-main);
 }
 
+.draft-status {
+  padding: 0.38rem calc(0.85rem * var(--studio-density-scale));
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  background: rgba(15,23,42,0.7);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+.draft-status[data-kind="success"] { color: #86efac; }
+.draft-status[data-kind="warning"] { color: #fde68a; }
+.draft-status[data-kind="error"] { color: #fca5a5; }
+
 .icon-btn {
   background: transparent;
   color: var(--text-main);
@@ -337,6 +349,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   header { grid-template-columns: 1fr; align-items: start; }
   .host-connection { justify-self: start; }
   .header-controls { justify-content: flex-start; flex-wrap: wrap; }
+}
+
+@media (max-width: 720px) {
+  header { max-height: 38vh; overflow: auto; }
+  .header-controls { width: 100%; }
+  main {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .workflow-manager {
+    order: -3;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: min(440px, 70vh);
+    max-height: 70vh;
+    border-left: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .canvas {
+    order: -2;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 360px;
+  }
+  .palette {
+    order: -1;
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 280px;
+    border-right: 0;
+    border-top: 1px solid var(--border);
+  }
+  .palette.collapsed,
+  .workflow-manager.collapsed {
+    display: none;
+    margin: 0;
+  }
+  .manager-toolbar { flex-wrap: wrap; }
+  .icon-btn { min-height: var(--studio-control-height); }
 }
 
 @media (prefers-reduced-motion: reduce) {

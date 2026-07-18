@@ -46,6 +46,61 @@ class DirectoryRegistryTests(unittest.TestCase):
         self.assertTrue(result[0]["read"])
         self.assertTrue(result[0]["write"])
 
+    def test_unavailable_alias_remains_visible_with_an_exact_diagnostic(self):
+        missing = self.base_dir / "removed-folder"
+        self.config["approvedDirectories"][0]["path"] = str(missing)
+
+        result = list_approved_directories(self.config, self.base_dir)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["id"], "imports")
+        self.assertFalse(result[0]["available"])
+        self.assertEqual(result[0]["error"], "Approved directory is unavailable.")
+        self.assertNotIn("resolvedPath", result[0])
+
+        with self.assertRaisesRegex(
+            DirectoryRegistryError,
+            r"^Approved directory is unavailable\.$",
+        ):
+            find_approved_files(
+                self.config,
+                self.base_dir,
+                {"directoryAlias": "imports"},
+            )
+
+    def test_missing_unknown_and_empty_registry_aliases_fail_explicitly(self):
+        with self.assertRaisesRegex(
+            DirectoryRegistryError,
+            r"^Approved directory alias is missing\.$",
+        ):
+            find_approved_files(self.config, self.base_dir, {})
+
+        with self.assertRaisesRegex(
+            DirectoryRegistryError,
+            r"^Approved directory alias is unavailable\.$",
+        ):
+            find_approved_files(
+                self.config,
+                self.base_dir,
+                {"directoryAlias": "not-configured"},
+            )
+
+        self.config["approvedDirectories"] = []
+        self.assertEqual(list_approved_directories(self.config, self.base_dir), [])
+        with self.assertRaisesRegex(
+            DirectoryRegistryError,
+            r"^Approved directory alias is unavailable\.$",
+        ):
+            write_approved_file(
+                self.config,
+                self.base_dir,
+                {
+                    "directoryAlias": "imports",
+                    "relativePath": "out.txt",
+                    "content": "x",
+                },
+            )
+
     def test_find_files_respects_alias_pattern_and_extensions(self):
         (self.approved / "users.csv").write_text("id,name\n1,Ada\n", encoding="utf-8")
         (self.approved / "notes.txt").write_text("skip", encoding="utf-8")
@@ -124,6 +179,33 @@ class DirectoryRegistryTests(unittest.TestCase):
                 self.config,
                 self.base_dir,
                 {"directoryAlias": "imports", "relativePath": "child/out.txt", "content": "x"},
+            )
+
+    def test_compatibility_fields_cannot_bypass_alias_permissions(self):
+        self.config["approvedDirectories"][0]["read"] = False
+        with self.assertRaisesRegex(DirectoryRegistryError, "reads"):
+            find_approved_files(
+                self.config,
+                self.base_dir,
+                {"alias": "imports", "glob": "*"},
+            )
+
+        self.config["approvedDirectories"][0]["read"] = True
+        self.config["approvedDirectories"][0]["write"] = False
+        with self.assertRaisesRegex(DirectoryRegistryError, "writes"):
+            write_approved_file(
+                self.config,
+                self.base_dir,
+                {"alias": "imports", "path": "out.txt", "content": "x"},
+            )
+
+        self.config["approvedDirectories"][0]["write"] = True
+        self.config["approvedDirectories"][0]["recursive"] = False
+        with self.assertRaisesRegex(DirectoryRegistryError, "recursive"):
+            write_approved_file(
+                self.config,
+                self.base_dir,
+                {"alias": "imports", "filePath": "child/out.txt", "content": "x"},
             )
 
 

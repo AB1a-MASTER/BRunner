@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "algorithm": "sha256",
+  "inputHash": "748e0f18b0a35abf0d7414888ffcb90b9ee836af0c9c2f895e76b3cf910cbd36",
+  "inputs": [
+    "BRunner/core/constants.js",
+    "BRunner/core/nativeHostRequirements.js",
+    "BRunner/core/studioPreferences.js",
+    "BRunner/core/studioPreferencesBootstrap.js",
+    "BRunner/core/studioSession.js",
+    "BRunner/core/variableInspector.js",
+    "BRunner/core/workflowSchema.js",
+    "BRunner/icons/icon2.png",
+    "BRunner/mapper/core.js",
+    "BRunner/shared/studio-tokens.css",
+    "BRunner/studio-graph-src/index.html",
+    "BRunner/studio-graph-src/src/canvasInteraction.js",
+    "BRunner/studio-graph-src/src/GraphNode.jsx",
+    "BRunner/studio-graph-src/src/GraphStudio.jsx",
+    "BRunner/studio-graph-src/src/graphStudioModel.js",
+    "BRunner/studio-graph-src/src/main.jsx",
+    "BRunner/studio-graph-src/src/nodePresentation.js",
+    "BRunner/studio-graph-src/src/RemovableEdge.jsx",
+    "BRunner/studio-graph-src/src/runtimeProjection.js",
+    "BRunner/studio-graph-src/src/studio.css",
+    "BRunner/studio-graph-src/src/workflowIntegrity.js",
+    "package-lock.json",
+    "package.json",
+    "studioBuildFingerprint.mjs",
+    "vite.studio.config.js"
+  ]
+}

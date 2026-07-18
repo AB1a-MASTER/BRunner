@@ -1,0 +1,60 @@
+{
+  "name": "[NEW 2026-07-17] Extension/Host Round-Trip Verification",
+  "description": "Foundation acceptance workflow for the live extension/companion request-reply path. The extension writes a probe through the host, uses metadata returned by that host response to issue a find request, then renders the second host response in Chrome.",
+  "tags": [
+    "new-2026-07-17",
+    "host-served-8765",
+    "verification",
+    "extension-host-roundtrip"
+  ],
+  "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "roundtrip_open_fixture",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
+      "friendlyName": "Open extension/host verification fixture"
+    },
+    {
+      "id": "roundtrip_extension_to_host_write",
+      "action": "approved.file.write",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "relativePath": "extension-host-roundtrip.txt",
+        "content": "BRunner extension-to-host probe v1",
+        "encoding": "utf-8",
+        "variableName": "roundtrip_write"
+      },
+      "friendlyName": "Extension sends a write request to the host"
+    },
+    {
+      "id": "roundtrip_host_to_extension_find",
+      "action": "approved.files.find",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "pattern": "{{roundtrip_write.filename}}",
+        "extensions": "txt",
+        "maxResults": 1,
+        "variableName": "roundtrip_find"
+      },
+      "friendlyName": "Extension uses the host write response in a second request"
+    },
+    {
+      "id": "roundtrip_render_host_response",
+      "action": "element.type",
+      "target": {
+        "strategy": "id",
+        "value": "name-input"
+      },
+      "config": {
+        "value": "{{roundtrip_write.filename}} | {{roundtrip_find.files.0.filename}} | {{roundtrip_find.count}}",
+        "verificationText": "extension-host-roundtrip.txt | extension-host-roundtrip.txt | 1"
+      },
+      "friendlyName": "Render the completed round trip in Chrome"
+    }
+  ]
+}

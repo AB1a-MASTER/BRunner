@@ -50,3 +50,49 @@ test("runtime state exposes recorded steps for Studio replay", () => {
     globalThis.chrome = previousChrome;
   }
 });
+
+test("runtime state restores a serializable checkpoint and reports later changes", async () => {
+  const previousChrome = globalThis.chrome;
+  const changes = [];
+  globalThis.chrome = {
+    runtime: {
+      sendMessage: async () => ({ ok: true }),
+    },
+  };
+
+  try {
+    const store = createRuntimeStateStore({
+      initialState: {
+        recording: {
+          isRecording: true,
+          sessionId: "recording-restored",
+          recordedSteps: [{ id: "step-restored" }],
+        },
+        execution: {
+          status: "interrupted",
+          runId: "run-restored",
+          logs: [{ sequence: 4, message: "restored" }],
+        },
+      },
+      onStateChanged: (state) => changes.push(state),
+    });
+
+    assert.equal(store.getState().recording.recordedStepCount, 1);
+    assert.equal(store.getState().execution.status, "interrupted");
+
+    store.appendExecutionLog({ message: "next" });
+    await Promise.resolve();
+
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].execution.logs.at(-1).sequence, 5);
+
+    const replacement = store.replaceState({
+      recording: { recordedSteps: [] },
+      execution: { status: "idle" },
+    });
+    assert.equal(replacement.execution.status, "idle");
+    assert.equal(replacement.recording.recordedStepCount, 0);
+  } finally {
+    globalThis.chrome = previousChrome;
+  }
+});

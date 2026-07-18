@@ -2,7 +2,7 @@
   "name": "[NEW 2026-07-02] Data Inspector Acceptance",
   "description": "Fresh host-served acceptance workflow. Seeds variables and produces scalar, table, and template outputs for the Data Inspector.",
   "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
-  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
   "variables": {
     "seed_name": "BRunner seed",
     "seed_object": {
@@ -17,7 +17,7 @@
     {
       "id": "inspector_acceptance_open",
       "action": "browser.navigate",
-      "url": "http://127.0.0.1:8765/test.html",
+      "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
       "friendlyName": "Open host-served acceptance page"
     },
     {

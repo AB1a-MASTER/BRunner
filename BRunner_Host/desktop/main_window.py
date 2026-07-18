@@ -13,26 +13,117 @@ from app_paths import (
     default_config_file,
     default_log_file,
 )
+from atomic_io import atomic_write_json
 from companion_service import HostServiceController
 from directory_registry import list_approved_directories
 from host_settings import (
-    format_pairing_key,
-    generate_pairing_key,
-    is_strong_pairing_key,
+    DEFAULT_PORT,
+    is_valid_profile_instance_id,
     load_or_create_config,
-    normalize_pairing_key,
+    normalize_profile_instance_id,
     save_config,
     unique_alias_id,
 )
+from product_version import APP_VERSION
+from windows_desktop import initialize_windows_dpi_awareness
 from window_validation import host_window_status
-from workflow_location import apply_workflow_location, restore_default_workflow_location
+from workflow_location import (
+    apply_workflow_location,
+    ensure_writable_directory,
+    restore_default_workflow_location,
+)
 from workflow_repository import WorkflowRepository
 
 
+def prepare_companion_storage(file_dialog, message_box, anchor_file=None):
+    anchor = Path(anchor_file or (Path(__file__).resolve().parents[1] / "app.py"))
+    base_dir = application_directory(anchor)
+    config_file = default_config_file(anchor)
+
+    try:
+        config = load_or_create_config(config_file, base_dir)
+        ensure_config_writable(config_file)
+    except Exception as error:
+        message_box.critical(
+            None,
+            "BRunner Startup",
+            "BRunner could not read, create, or update its configuration file:\n"
+            f"{config_file}\n\n"
+            "Make the application folder writable, or move the BRunner source folder "
+            "to a writable location, then restart BRunner.\n\n"
+            f"Details: {error}",
+        )
+        return False
+
+    workflows_dir = active_workflows_directory(config, base_dir)
+    try:
+        ensure_writable_directory(workflows_dir)
+        return True
+    except Exception as error:
+        message_box.warning(
+            None,
+            "Workflow Storage Unavailable",
+            "The configured workflow folder is not writable:\n"
+            f"{workflows_dir}\n\n"
+            "Choose a writable workflow folder to continue.\n\n"
+            f"Details: {error}",
+        )
+
+    selected = file_dialog.getExistingDirectory(
+        None,
+        "Choose a writable workflow folder",
+        str(Path.home()),
+    )
+    if not selected:
+        message_box.critical(
+            None,
+            "BRunner Startup",
+            "BRunner cannot start until workflow storage is writable. "
+            "Restart BRunner and choose a writable folder, or fix the configured "
+            "folder's permissions.",
+        )
+        return False
+
+    try:
+        apply_workflow_location(
+            config_file,
+            base_dir,
+            selected,
+            "use_new",
+        )
+    except Exception as error:
+        message_box.critical(
+            None,
+            "BRunner Startup",
+            "BRunner could not save the recovered workflow location. "
+            "Make both the chosen folder and the application folder writable, "
+            "then try again.\n\n"
+            f"Details: {error}",
+        )
+        return False
+    return True
+
+
+def ensure_config_writable(config_file):
+    path = Path(config_file)
+    with open(path, "a", encoding="utf-8"):
+        pass
+
+    probe = path.with_name(f".{path.name}.{os.getpid()}.write-test.tmp")
+    try:
+        probe.write_text("ok", encoding="utf-8")
+    finally:
+        try:
+            probe.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def run_companion_app():
+    initialize_windows_dpi_awareness()
     try:
         from PySide6.QtGui import QAction
-        from PySide6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
     except ImportError as error:
         raise SystemExit(
             "PySide6 is not installed. Install BRunner_Host/requirements.txt to run the companion app."
@@ -40,6 +131,8 @@ def run_companion_app():
 
     app = QApplication.instance() or QApplication([])
     app.setApplicationName("BRunner Companion")
+    if not prepare_companion_storage(QFileDialog, QMessageBox):
+        return 2
     window = BRunnerCompanionWindow(QAction)
     app.aboutToQuit.connect(window.shutdown)
     window.show()
@@ -49,6 +142,7 @@ def run_companion_app():
 
 class BRunnerCompanionWindow:
     def __new__(cls, action_class):
+        initialize_windows_dpi_awareness()
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import (
             QMainWindow,
@@ -102,13 +196,18 @@ class BRunnerCompanionWindow:
                 self._build_diagnostics_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit)
                 self._build_tray(QSystemTrayIcon, QMenu, action_class, QApplication)
                 self.refresh()
+                self.connection_timer = QTimer(self)
+                self.connection_timer.timeout.connect(self.refresh_connection_status)
+                self.connection_timer.start(1000)
 
             def _build_status_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox):
                 tab = QWidget()
                 layout = QVBoxLayout(tab)
+                self.version_state = QLabel(f"BRunner Companion version: {APP_VERSION}")
                 self.host_state = QLabel()
                 self.host_port = QLabel()
                 self.extension_state = QLabel()
+                layout.addWidget(self.version_state)
                 layout.addWidget(self.host_state)
                 layout.addWidget(self.host_port)
                 layout.addWidget(self.extension_state)
@@ -193,11 +292,17 @@ class BRunnerCompanionWindow:
                 threshold_row.addWidget(self.fallback_confidence)
                 threshold_row.addStretch(1)
                 layout.addLayout(threshold_row)
-                self.fallback_screenshots = QCheckBox("Capture diagnostics screenshots")
-                layout.addWidget(self.fallback_screenshots)
+                self.fallback_context_state = QLabel()
+                self.fallback_session_state = QLabel()
                 self.fallback_window_state = QLabel()
+                self.fallback_window_identity = QLabel()
                 self.fallback_screen_state = QLabel()
+                self.fallback_context_state.setWordWrap(True)
+                self.fallback_window_identity.setWordWrap(True)
+                layout.addWidget(self.fallback_context_state)
+                layout.addWidget(self.fallback_session_state)
                 layout.addWidget(self.fallback_window_state)
+                layout.addWidget(self.fallback_window_identity)
                 layout.addWidget(self.fallback_screen_state)
                 self.fallback_actions_table = QTableWidget(0, 3)
                 self.fallback_actions_table.setHorizontalHeaderLabels(["Action", "Description", "Status"])
@@ -219,24 +324,23 @@ class BRunnerCompanionWindow:
             def _build_pairing_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton):
                 tab = QWidget()
                 layout = QVBoxLayout(tab)
-                layout.addWidget(QLabel("Pair this host with one BRunner extension instance. Generate or paste the key from the extension, then save."))
+                layout.addWidget(QLabel("Pair this companion with one BRunner Chrome profile. Copy the profile instance ID from the extension sidebar, paste it here, and select Pair."))
                 self.pairing_state = QLabel()
                 layout.addWidget(self.pairing_state)
-                layout.addWidget(QLabel("Pairing key"))
-                self.pairing_key = QLineEdit()
-                self.pairing_key.setPlaceholderText("xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx")
-                self.pairing_key.setMaxLength(39)
-                layout.addWidget(self.pairing_key)
-                layout.addWidget(QLabel("WebSocket port"))
-                self.pairing_port = QLineEdit()
+                layout.addWidget(QLabel("Profile instance ID"))
+                self.profile_instance_id = QLineEdit()
+                self.profile_instance_id.setPlaceholderText("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx")
+                self.profile_instance_id.setMaxLength(36)
+                layout.addWidget(self.profile_instance_id)
+                layout.addWidget(QLabel("WebSocket port (fixed)"))
+                self.pairing_port = QLabel(str(DEFAULT_PORT))
                 layout.addWidget(self.pairing_port)
-                self.paired_extension = QLabel()
-                layout.addWidget(self.paired_extension)
+                self.pairing_connection = QLabel()
+                layout.addWidget(self.pairing_connection)
                 buttons = QHBoxLayout()
                 for label, handler in [
-                    ("Save Pairing", self.save_pairing_settings),
-                    ("Generate Host Key", self.regenerate_pairing_key),
-                    ("Copy Key", self.copy_pairing_key),
+                    ("Pair", self.pair_profile_instance),
+                    ("Copy ID", self.copy_profile_instance_id),
                     ("Unpair", self.unpair_extension),
                 ]:
                     button = QPushButton(label)
@@ -263,6 +367,12 @@ class BRunnerCompanionWindow:
                 refresh = QPushButton("Refresh Logs")
                 refresh.clicked.connect(self.refresh_logs)
                 buttons.addWidget(refresh)
+                open_logs = QPushButton("Open Logs")
+                open_logs.clicked.connect(self.open_logs)
+                buttons.addWidget(open_logs)
+                export = QPushButton("Export Diagnostics")
+                export.clicked.connect(self.export_diagnostics)
+                buttons.addWidget(export)
                 clear = QPushButton("Clear Logs")
                 clear.clicked.connect(self.clear_logs)
                 buttons.addWidget(clear)
@@ -274,15 +384,30 @@ class BRunnerCompanionWindow:
                 self.tray = QSystemTrayIcon(self)
                 self.tray.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
                 menu = QMenu()
-                open_action = QAction("Open BRunner", self)
-                open_action.triggered.connect(self.show_from_tray)
-                menu.addAction(open_action)
-                start_action = QAction("Start Host", self)
-                start_action.triggered.connect(self.start_host)
-                menu.addAction(start_action)
-                stop_action = QAction("Stop Host", self)
-                stop_action.triggered.connect(self.stop_host)
-                menu.addAction(stop_action)
+                self.tray_status_action = QAction("Host: checking", self)
+                self.tray_status_action.setEnabled(False)
+                menu.addAction(self.tray_status_action)
+                menu.addSeparator()
+                self.tray_open_action = QAction("Open BRunner", self)
+                self.tray_open_action.triggered.connect(self.show_from_tray)
+                menu.addAction(self.tray_open_action)
+                self.tray_open_workflows_action = QAction("Open Workflows Folder", self)
+                self.tray_open_workflows_action.triggered.connect(self.open_workflow_folder)
+                menu.addAction(self.tray_open_workflows_action)
+                self.tray_open_logs_action = QAction("Open Logs", self)
+                self.tray_open_logs_action.triggered.connect(self.open_logs)
+                menu.addAction(self.tray_open_logs_action)
+                menu.addSeparator()
+                self.tray_start_action = QAction("Start Host", self)
+                self.tray_start_action.triggered.connect(self.start_host)
+                menu.addAction(self.tray_start_action)
+                self.tray_restart_action = QAction("Restart Host", self)
+                self.tray_restart_action.triggered.connect(self.restart_host)
+                menu.addAction(self.tray_restart_action)
+                self.tray_stop_action = QAction("Stop Host", self)
+                self.tray_stop_action.triggered.connect(self.stop_host)
+                menu.addAction(self.tray_stop_action)
+                menu.addSeparator()
                 exit_action = QAction("Exit", self)
                 exit_action.triggered.connect(self.exit_app)
                 menu.addAction(exit_action)
@@ -295,30 +420,56 @@ class BRunnerCompanionWindow:
                 self.tray.show()
 
             def refresh(self):
-                self.config = load_or_create_config(self.config_file, self.base_dir)
+                self.refresh_connection_status()
                 self.repository = WorkflowRepository(active_workflows_directory(self.config, self.base_dir))
-                status = self.service.status(self.config)
-                external = " (already listening)" if status.get("external") else ""
-                self.host_state.setText(f"Host: {'running' if status['running'] else 'stopped'}{external}")
-                self.host_port.setText(f"WebSocket port: {status.get('port') or 'unknown'}")
-                paired = status.get("pairedExtensionId") or "not paired"
-                self.extension_state.setText(f"Extension: {paired}")
-                self.pairing_key.setText(format_pairing_key(self.config.get("pairingKey")))
-                self.pairing_port.setText(str(status.get("port") or "8999"))
-                self.pairing_state.setText(
-                    "Pairing: paired"
-                    if status.get("pairedExtensionId") else
-                    "Pairing: waiting for extension"
-                )
-                self.paired_extension.setText(
-                    f"Trusted extension fingerprint: {paired}"
-                )
                 host = self.config.get("host") if isinstance(self.config.get("host"), dict) else {}
                 self.start_with_app.setChecked(host.get("startWithApp") is not False)
                 self.refresh_workflows()
                 self.refresh_folders()
                 self.refresh_fallback()
                 self.refresh_logs()
+
+            def refresh_connection_status(self):
+                self.config = load_or_create_config(self.config_file, self.base_dir)
+                status = self.service.status(self.config)
+                running = status.get("running") is True
+                is_external = status.get("external") is True
+                external = " (already listening)" if is_external else ""
+                self.version_state.setText(f"BRunner Companion version: {APP_VERSION}")
+                self.host_state.setText(f"Host: {'running' if running else 'stopped'}{external}")
+                self.host_port.setText(f"WebSocket port: {status.get('port') or 'unknown'}")
+                paired = status.get("pairedInstanceId")
+                connected = status.get("extensionConnected") is True
+                self.extension_state.setText(
+                    "Extension: paired and connected"
+                    if connected else
+                    ("Extension: paired, disconnected" if paired else "Extension: not paired")
+                )
+                if not self.profile_instance_id.hasFocus():
+                    self.profile_instance_id.setText(paired or "")
+                self.pairing_port.setText(str(DEFAULT_PORT))
+                self.pairing_state.setText(
+                    "Pairing: paired"
+                    if paired else
+                    "Pairing: unpaired"
+                )
+                self.pairing_connection.setText(
+                    f"Connection: {'active' if connected else 'not active'}"
+                )
+                managed_check = getattr(self.service, "is_running", None)
+                try:
+                    managed = bool(managed_check()) if callable(managed_check) else running and not is_external
+                except Exception:
+                    managed = running and not is_external
+                state_text = "running (external)" if is_external else ("running" if running else "stopped")
+                connection_text = "extension connected" if connected else "extension disconnected"
+                self.tray_status_action.setText(f"Host: {state_text}; {connection_text}")
+                self.tray_start_action.setEnabled(not running)
+                self.tray_restart_action.setEnabled(managed)
+                self.tray_stop_action.setEnabled(managed)
+                self.tray.setToolTip(
+                    f"BRunner Companion {APP_VERSION} — Host {state_text}; {connection_text}"
+                )
 
             def refresh_workflows(self):
                 storage = self.config.get("workflowStorage") if isinstance(self.config.get("workflowStorage"), dict) else {}
@@ -365,29 +516,60 @@ class BRunnerCompanionWindow:
                 except (TypeError, ValueError):
                     confidence = 0.9
                 self.fallback_confidence.setValue(max(0.0, min(confidence, 1.0)))
-                self.fallback_screenshots.setChecked(fallback.get("captureDiagnosticsScreenshots") is True)
                 try:
                     status = host_window_status(self.config)
                 except Exception as error:
                     status = {
                         "foregroundWindow": None,
                         "screen": {"width": 0, "height": 0},
+                        "session": {"available": False, "interactive": False},
+                        "browserVerified": False,
+                        "contextAvailable": False,
+                        "contextError": str(error),
                         "supportedActions": [],
                     }
                     self.write_companion_log(f"Host fallback status unavailable: {error}")
+                context_available = status.get("contextAvailable") is True
+                context_error = str(status.get("contextError") or "").strip()
+                enabled = fallback.get("enabled") is not False
+                if not enabled:
+                    context_text = "Visible fallback: disabled"
+                elif context_available:
+                    context_text = "Visible fallback: ready"
+                else:
+                    context_text = f"Visible fallback blocked: {context_error or 'desktop context unavailable'}"
+                self.fallback_context_state.setText(context_text)
+                session = status.get("session") or {}
+                desktop_name = session.get("desktopName") or "unavailable"
+                session_state = "interactive" if session.get("interactive") is True else "locked or unavailable"
+                self.fallback_session_state.setText(
+                    f"Windows desktop: {desktop_name} ({session_state})"
+                )
                 window = status.get("foregroundWindow") or {}
                 title = window.get("title") or "unavailable"
                 self.fallback_window_state.setText(f"Foreground window: {title}")
+                process_name = window.get("processName") or "unknown process"
+                process_id = window.get("processId") or "unknown PID"
+                window_id = window.get("windowId") or "unknown window"
+                class_name = window.get("className") or "unknown class"
+                verified = "yes" if status.get("browserVerified") is True else "no"
+                self.fallback_window_identity.setText(
+                    "Verified Chrome/Chromium: "
+                    f"{verified} — {process_name} ({process_id}), window {window_id}, class {class_name}"
+                )
                 screen = status.get("screen") or {}
                 self.fallback_screen_state.setText(
-                    f"Screen: {screen.get('width', 0)} x {screen.get('height', 0)}"
+                    "Virtual screen: "
+                    f"{screen.get('width', 0)} x {screen.get('height', 0)} "
+                    f"at ({screen.get('left', 0)}, {screen.get('top', 0)})"
                 )
                 actions = status.get("supportedActions") or []
                 self.fallback_actions_table.setRowCount(len(actions))
+                action_status = "Ready" if enabled and context_available else "Blocked"
                 for row, action in enumerate(actions):
                     self.fallback_actions_table.setItem(row, 0, self.table_item_class(str(action)))
                     self.fallback_actions_table.setItem(row, 1, self.table_item_class(self.host_fallback_action_description(action)))
-                    self.fallback_actions_table.setItem(row, 2, self.table_item_class("Available"))
+                    self.fallback_actions_table.setItem(row, 2, self.table_item_class(action_status))
 
             def host_fallback_action_description(self, action):
                 descriptions = {
@@ -450,11 +632,78 @@ class BRunnerCompanionWindow:
                     return
                 self.refresh_logs()
 
+            def open_logs(self):
+                try:
+                    self.log_file.parent.mkdir(parents=True, exist_ok=True)
+                    self.log_file.touch(exist_ok=True)
+                    os.startfile(str(self.log_file))
+                except (AttributeError, OSError) as error:
+                    self.message_box.warning(self, "Diagnostics", f"Could not open the host log: {error}")
+
+            def diagnostics_payload(self):
+                try:
+                    service_status = self.service.status(self.config)
+                except Exception as error:
+                    service_status = {"error": str(error)}
+                try:
+                    fallback_status = host_window_status(self.config)
+                except Exception as error:
+                    fallback_status = {"contextAvailable": False, "contextError": str(error)}
+                try:
+                    recent_log = (
+                        self.log_file.read_text(encoding="utf-8", errors="replace")[-50000:]
+                        if self.log_file.exists()
+                        else ""
+                    )
+                except OSError as error:
+                    recent_log = f"Log unavailable: {error}"
+                return {
+                    "generatedAt": datetime.now().astimezone().isoformat(),
+                    "companionVersion": APP_VERSION,
+                    "pythonVersion": sys.version.split()[0],
+                    "platform": sys.platform,
+                    "serviceStatus": service_status,
+                    "fallbackStatus": fallback_status,
+                    "workflowDirectory": str(self.repository.workflows_dir),
+                    "configuration": self.config,
+                    "recentLog": recent_log,
+                }
+
+            def export_diagnostics_file(self, destination):
+                path = Path(destination)
+                if path.suffix.lower() != ".json":
+                    path = path.with_suffix(".json")
+                atomic_write_json(path, self.diagnostics_payload(), indent=2)
+                return path
+
+            def export_diagnostics(self):
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                selected, _filter = self.file_dialog.getSaveFileName(
+                    self,
+                    "Export BRunner diagnostics",
+                    str(self.base_dir / f"brunner-diagnostics-{stamp}.json"),
+                    "JSON files (*.json)",
+                )
+                if not selected:
+                    return
+                try:
+                    exported = self.export_diagnostics_file(selected)
+                except Exception as error:
+                    self.message_box.warning(self, "Diagnostics", f"Could not export diagnostics: {error}")
+                    return
+                self.write_companion_log(f"Diagnostics exported to {exported}.")
+                self.refresh_logs()
+                self.message_box.information(
+                    self,
+                    "Diagnostics",
+                    f"Diagnostics exported to:\n{exported}",
+                )
+
             def save_host_fallback_settings(self):
                 fallback = self.config.get("hostFallback") if isinstance(self.config.get("hostFallback"), dict) else {}
                 fallback["enabled"] = self.fallback_enabled.isChecked()
                 fallback["minimumCoordinateConfidence"] = float(self.fallback_confidence.value())
-                fallback["captureDiagnosticsScreenshots"] = self.fallback_screenshots.isChecked()
+                fallback.pop("captureDiagnosticsScreenshots", None)
                 self.config["hostFallback"] = fallback
                 try:
                     self.config = save_config(self.config_file, self.config)
@@ -464,65 +713,40 @@ class BRunnerCompanionWindow:
                 self.write_companion_log("Host fallback settings saved.")
                 self.refresh()
 
-            def save_pairing_settings(self):
-                key = normalize_pairing_key(self.pairing_key.text())
-                if not is_strong_pairing_key(key):
+            def pair_profile_instance(self):
+                profile_instance_id = normalize_profile_instance_id(
+                    self.profile_instance_id.text()
+                )
+                if not is_valid_profile_instance_id(profile_instance_id):
                     self.message_box.warning(
                         self,
                         "Pairing",
-                        "Pairing key must contain 32 hexadecimal characters. Hyphens are optional.",
+                        "Paste a valid profile instance ID from the extension sidebar.",
                     )
                     return
-                try:
-                    port = int(self.pairing_port.text().strip() or "8999")
-                except ValueError:
-                    self.message_box.warning(self, "Pairing", "Port must be a number.")
+                current = normalize_profile_instance_id(
+                    self.config.get("pairedInstanceId")
+                )
+                if current and current != profile_instance_id:
+                    self.message_box.warning(
+                        self,
+                        "Pairing",
+                        "Unpair the current Chrome profile before pairing another profile.",
+                    )
                     return
-                if port < 1 or port > 65535:
-                    self.message_box.warning(self, "Pairing", "Port must be between 1 and 65535.")
-                    return
-
-                host = self.config.get("host") if isinstance(self.config.get("host"), dict) else {}
-                old_port = int(host.get("port") or 8999)
-                host["port"] = port
-                self.config["host"] = host
-                old_key = normalize_pairing_key(self.config.get("pairingKey"))
-                self.config["pairingKey"] = key
-                if key != old_key:
-                    self.config["pairedExtensionId"] = None
+                self.config["pairedInstanceId"] = profile_instance_id
                 try:
                     self.config = save_config(self.config_file, self.config)
                 except Exception as error:
                     self.message_box.warning(self, "Pairing", str(error))
                     return
-                self.write_companion_log("Pairing settings saved.")
-                if key != old_key or port != old_port:
+                self.write_companion_log("Chrome profile paired.")
+                if profile_instance_id != current:
                     self.restart_for_pairing_change()
                 self.refresh()
 
-            def regenerate_pairing_key(self):
-                answer = self.message_box.question(
-                    self,
-                    "Pairing",
-                    "Generate a new host pairing key and unpair the current extension?",
-                    self.message_box.StandardButton.Yes | self.message_box.StandardButton.No,
-                    self.message_box.StandardButton.No,
-                )
-                if answer != self.message_box.StandardButton.Yes:
-                    return
-                self.config["pairingKey"] = generate_pairing_key()
-                self.config["pairedExtensionId"] = None
-                try:
-                    self.config = save_config(self.config_file, self.config)
-                except Exception as error:
-                    self.message_box.warning(self, "Pairing", str(error))
-                    return
-                self.write_companion_log("Pairing key regenerated; extension unpaired.")
-                self.restart_for_pairing_change()
-                self.refresh()
-
             def unpair_extension(self):
-                self.config["pairedExtensionId"] = None
+                self.config["pairedInstanceId"] = None
                 try:
                     self.config = save_config(self.config_file, self.config)
                 except Exception as error:
@@ -532,20 +756,30 @@ class BRunnerCompanionWindow:
                 self.restart_for_pairing_change()
                 self.refresh()
 
-            def copy_pairing_key(self):
-                QApplication.clipboard().setText(normalize_pairing_key(self.pairing_key.text()))
-                self.write_companion_log("Pairing key copied.")
+            def copy_profile_instance_id(self):
+                profile_instance_id = normalize_profile_instance_id(
+                    self.profile_instance_id.text()
+                )
+                if not is_valid_profile_instance_id(profile_instance_id):
+                    self.message_box.warning(
+                        self,
+                        "Pairing",
+                        "No valid profile instance ID is available to copy.",
+                    )
+                    return
+                QApplication.clipboard().setText(profile_instance_id)
+                self.write_companion_log("Profile instance ID copied.")
 
             def restart_for_pairing_change(self):
                 status = self.service.status(self.config)
                 if self.service.is_running():
                     self.service.restart(self.config)
                     self.write_companion_log(
-                        "Managed host restarted to apply pairing changes and revoke existing sessions."
+                        "Managed host restarted to apply pairing changes and close existing connections."
                     )
                 elif status.get("external"):
                     self.write_companion_log(
-                        "Pairing changed while an external host is listening; restart that host to revoke existing sessions."
+                        "Pairing changed while an external host is listening; restart that host to close existing connections."
                     )
 
             def save_startup_settings(self):
@@ -571,7 +805,15 @@ class BRunnerCompanionWindow:
                 return started
 
             def open_workflow_folder(self):
-                os.startfile(str(self.repository.workflows_dir))
+                try:
+                    self.repository.workflows_dir.mkdir(parents=True, exist_ok=True)
+                    os.startfile(str(self.repository.workflows_dir))
+                except (AttributeError, OSError) as error:
+                    self.message_box.warning(
+                        self,
+                        "Workflow Storage",
+                        f"Could not open the workflow folder: {error}",
+                    )
 
             def change_workflow_location(self):
                 selected = self.file_dialog.getExistingDirectory(
@@ -585,7 +827,7 @@ class BRunnerCompanionWindow:
                 if not migration:
                     return
                 try:
-                    apply_workflow_location(
+                    result = apply_workflow_location(
                         self.config_file,
                         self.base_dir,
                         selected,
@@ -594,14 +836,14 @@ class BRunnerCompanionWindow:
                 except Exception as error:
                     self.message_box.warning(self, "Workflow Storage", str(error))
                     return
-                self.refresh()
+                self.refresh_after_workflow_location_change(result)
 
             def use_default_workflow_location(self):
                 migration = self.ask_migration_mode()
                 if not migration:
                     return
                 try:
-                    restore_default_workflow_location(
+                    result = restore_default_workflow_location(
                         self.config_file,
                         self.base_dir,
                         migration,
@@ -609,7 +851,62 @@ class BRunnerCompanionWindow:
                 except Exception as error:
                     self.message_box.warning(self, "Workflow Storage", str(error))
                     return
+                self.refresh_after_workflow_location_change(result)
+
+            def refresh_after_workflow_location_change(self, result=None):
+                self.config = load_or_create_config(self.config_file, self.base_dir)
+                self.repository = WorkflowRepository(
+                    active_workflows_directory(self.config, self.base_dir)
+                )
+
+                managed_host_restarted = False
+                host_status = self.service.status(self.config)
+                if self.service.is_running():
+                    try:
+                        managed_host_restarted = bool(self.service.restart(self.config))
+                        if managed_host_restarted:
+                            self.write_companion_log(
+                                "Managed host restarted to apply the workflow storage location."
+                            )
+                        else:
+                            raise RuntimeError(
+                                self.service.last_message
+                                or "the managed host did not restart"
+                            )
+                    except Exception as error:
+                        self.write_companion_log(
+                            f"Managed host restart failed after workflow storage changed: {error}"
+                        )
+                        self.message_box.warning(
+                            self,
+                            "Workflow Storage",
+                            "The workflow location was saved, but the managed host could not be restarted. "
+                            "Restart the host before running workflows.",
+                        )
+                elif host_status.get("external"):
+                    message = (
+                        "The workflow location was saved, but an externally started host is still "
+                        "using the previous location. Restart that host before running workflows."
+                    )
+                    self.write_companion_log(message)
+                    self.message_box.warning(self, "Workflow Storage", message)
+
                 self.refresh()
+                if managed_host_restarted:
+                    self.refresh_logs_after_service_change()
+                cleanup_failures = (
+                    result.get("sourceCleanupFailures", [])
+                    if isinstance(result, dict)
+                    else []
+                )
+                if cleanup_failures:
+                    self.message_box.warning(
+                        self,
+                        "Workflow Storage",
+                        "The workflow location changed and all workflows were copied, "
+                        "but some source files could not be removed. The original files "
+                        "were left in place so no data was lost.",
+                    )
 
             def ask_migration_mode(self):
                 box = self.message_box(self)
@@ -827,6 +1124,7 @@ class BRunnerCompanionWindow:
                 if self._shutting_down:
                     return
                 self._shutting_down = True
+                self.connection_timer.stop()
                 self.tray.hide()
                 self.service.stop()
 

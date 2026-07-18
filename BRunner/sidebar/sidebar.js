@@ -18,9 +18,10 @@ const Messages = Object.freeze({
   GetRecordingState: "GET_RECORDING_STATE",
   RefreshWorkflowLists: "REFRESH_WORKFLOW_LISTS",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+  BridgeStatus: "BRIDGE_STATUS",
   GetNativePairing: "GET_NATIVE_PAIRING",
-  SaveNativePairing: "SAVE_NATIVE_PAIRING",
-  GenerateNativePairingKey: "GENERATE_NATIVE_PAIRING_KEY",
+  PairNativeProfile: "PAIR_NATIVE_PROFILE",
+  UnpairNativeProfile: "UNPAIR_NATIVE_PROFILE",
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
 });
@@ -28,9 +29,11 @@ const Messages = Object.freeze({
 let isRecording = false;
 let isWorkflowRunning = false;
 let activeWorkflowName = "";
+let activeWorkflowRunId = "";
 let workflowExecutionStatus = "idle";
 let selectedWorkflow = "";
 let allWorkflows = [];
+let bridgeReady = null;
 
 const mainSidebarView = document.getElementById("main-sidebar-view");
 const studioActiveView = document.getElementById("studio-active-view");
@@ -44,10 +47,10 @@ const openMapperInspectorButton = document.getElementById(
   "btn-open-mapper-inspector",
 );
 const hostPairingStatus = document.getElementById("host-pairing-status");
-const hostPairingKey = document.getElementById("host-pairing-key");
-const savePairingButton = document.getElementById("btn-save-pairing");
-const generatePairingButton = document.getElementById("btn-generate-pairing");
-const copyPairingButton = document.getElementById("btn-copy-pairing");
+const profileInstanceIdInput = document.getElementById("host-profile-instance-id");
+const pairProfileButton = document.getElementById("btn-pair-profile");
+const unpairProfileButton = document.getElementById("btn-unpair-profile");
+const copyProfileIdButton = document.getElementById("btn-copy-profile-id");
 const recordingTabPolicyInput = document.getElementById(
   "recording-tab-policy",
 );
@@ -71,9 +74,9 @@ function wireControls() {
   openMapperInspectorButton?.addEventListener("click", openMapperInspector);
   recordButton?.addEventListener("click", toggleRecording);
   playButton?.addEventListener("click", runSelectedWorkflow);
-  savePairingButton?.addEventListener("click", savePairingKey);
-  generatePairingButton?.addEventListener("click", generatePairingKey);
-  copyPairingButton?.addEventListener("click", copyPairingKey);
+  pairProfileButton?.addEventListener("click", pairCurrentProfile);
+  unpairProfileButton?.addEventListener("click", unpairCurrentProfile);
+  copyProfileIdButton?.addEventListener("click", copyProfileInstanceId);
 
   searchInput?.addEventListener("input", () => {
     renderWorkflowList(filterWorkflows(searchInput.value));
@@ -90,6 +93,15 @@ function wireRuntimeMessages() {
 
     if (request?.type === Messages.RuntimeStateChanged) {
       applyRuntimeState(request.state);
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    if (request?.type === Messages.BridgeStatus) {
+      applyPairingResponse({
+        ok: true,
+        bridge: request.bridge || request,
+      });
       sendResponse({ ok: true });
       return true;
     }
@@ -248,70 +260,83 @@ async function syncPairingState() {
   }
 }
 
-async function savePairingKey() {
-  const key = hostPairingKey?.value?.trim() || "";
-  if (!key) {
-    setPairingStatus("Host: enter a pairing key first.", true);
+async function pairCurrentProfile() {
+  setPairingStatus("Host: pairing this Chrome profile...");
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.PairNativeProfile,
+    });
+    applyPairingResponse(response);
+  } catch (error) {
+    setPairingStatus(`Host: pairing failed (${error.message || error})`, true);
+  }
+}
+
+async function unpairCurrentProfile() {
+  setPairingStatus("Host: unpairing this Chrome profile...");
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.UnpairNativeProfile,
+    });
+    applyPairingResponse(response);
+  } catch (error) {
+    setPairingStatus(`Host: unpair failed (${error.message || error})`, true);
+  }
+}
+
+async function copyProfileInstanceId() {
+  const profileInstanceId = profileInstanceIdInput?.value?.trim() || "";
+  if (!profileInstanceId) {
+    setPairingStatus("Host: profile instance ID is unavailable.", true);
     return;
   }
 
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: Messages.SaveNativePairing,
-      key,
-    });
-    applyPairingResponse(response);
-    refreshWorkflowList();
-  } catch (error) {
-    setPairingStatus(`Host: pairing save failed (${error.message || error})`, true);
-  }
-}
-
-async function generatePairingKey() {
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: Messages.GenerateNativePairingKey,
-    });
-    applyPairingResponse(response);
-    await copyPairingKey();
-  } catch (error) {
-    setPairingStatus(`Host: key generation failed (${error.message || error})`, true);
-  }
-}
-
-async function copyPairingKey() {
-  const key = hostPairingKey?.value?.trim() || "";
-  if (!key) {
-    setPairingStatus("Host: no pairing key to copy.", true);
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(key);
-    setPairingStatus("Host: pairing key copied. Paste it into the companion Pairing tab.");
+    await navigator.clipboard.writeText(profileInstanceId);
+    setPairingStatus("Host: profile instance ID copied.");
   } catch {
-    hostPairingKey?.select();
-    setPairingStatus("Host: pairing key selected. Copy it manually.");
+    profileInstanceIdInput?.select();
+    setPairingStatus("Host: profile instance ID selected. Copy it manually.");
   }
 }
 
 function applyPairingResponse(response) {
+  const bridge = response?.bridge || {};
+  const previousReady = bridgeReady;
+  bridgeReady = bridge.ready === true;
+  const profileInstanceId = response?.profileInstanceId || bridge.profileInstanceId || "";
+  if (profileInstanceIdInput && profileInstanceId) {
+    profileInstanceIdInput.value = profileInstanceId;
+  }
+
+  const state = response?.code || response?.pairingState || bridge.pairingState;
+  const detail = response?.error || bridge.pairingError || "";
   if (!response?.ok) {
-    setPairingStatus(`Host: ${response?.error || "pairing failed"}`, true);
-    return;
+    const message = state === "paired_to_other_profile"
+      ? "paired to another Chrome profile; unpair it first"
+      : detail || state || "pairing failed";
+    setPairingStatus(`Host: ${message}`, true);
+  } else if (bridge.ready) {
+    setPairingStatus("Host: ready (paired and connected)");
+  } else if (bridge.paired && bridge.socketConnected) {
+    setPairingStatus("Host: paired; checking capabilities...");
+  } else if (state === "paired_to_other_profile") {
+    setPairingStatus("Host: paired to another Chrome profile; unpair it first", true);
+  } else if (bridge.socketConnected) {
+    setPairingStatus(`Host: connected; ${detail || "select Pair to use this profile"}`);
+  } else {
+    setPairingStatus("Host: not connected");
   }
 
-  if (hostPairingKey) {
-    hostPairingKey.value = response.pairing?.key || "";
+  if (pairProfileButton) {
+    pairProfileButton.disabled = bridge.ready === true;
   }
-
-  const bridge = response.bridge || {};
-  const paired = bridge.authenticated
-    ? "authenticated"
-    : bridge.connected
-      ? `connected, not authenticated${bridge.authError ? ` (${bridge.authError})` : ""}`
-      : "not connected";
-  setPairingStatus(`Host: ${paired}`);
+  if (unpairProfileButton) {
+    unpairProfileButton.disabled = bridge.paired !== true;
+  }
+  if (previousReady === false && bridgeReady) {
+    refreshWorkflowList();
+  }
 }
 
 function setPairingStatus(text, isError = false) {
@@ -348,6 +373,7 @@ function applyRuntimeState(state) {
   const stopping = execution.status === "cancelling";
   isWorkflowRunning = running;
   activeWorkflowName = execution.workflowName || "";
+  activeWorkflowRunId = execution.runId || "";
   workflowExecutionStatus = execution.status || "idle";
 
   if (recordButton) recordButton.disabled = running;
@@ -555,6 +581,7 @@ async function stopRunningWorkflow() {
   try {
     const response = await chrome.runtime.sendMessage({
       type: Messages.StopWorkflow,
+      runId: activeWorkflowRunId,
     });
 
     if (!response?.ok) {

@@ -1,7 +1,6 @@
 {
-    "schemaVersion": 2,
-    "pairingKey": "ec2be507ecc8ed55621ad6f95383c793",
-    "pairedExtensionId": "fogahjgbnddmdafeceodembojchcdmop",
+    "schemaVersion": 3,
+    "pairedInstanceId": "8294efd5-12b5-464c-a403-9c60dfeeda88",
     "host": {
         "port": 8999,
         "startWithApp": true
@@ -22,11 +21,8 @@
     ],
     "hostFallback": {
         "enabled": true,
-        "minimumCoordinateConfidence": 0.9,
-        "captureDiagnosticsScreenshots": false
+        "minimumCoordinateConfidence": 0.9
     },
-    "pairing_key": "ec2be507ecc8ed55621ad6f95383c793",
-    "paired_extension_id": "fogahjgbnddmdafeceodembojchcdmop",
     "port": 8999,
     "local_file_access": {
         "enabled": true,

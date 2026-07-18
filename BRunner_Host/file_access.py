@@ -10,6 +10,12 @@ class LocalFileAccessError(ValueError):
     pass
 
 
+CANONICAL_LOCAL_FILE_REQUEST_ERROR = (
+    "Local file request requires directoryAlias and relativePath; "
+    "legacy raw paths are not accepted."
+)
+
+
 def resolve_allowed_file_path(config, base_dir, requested_path, max_bytes=MAX_LOCAL_FILE_BYTES):
     if isinstance(requested_path, dict):
         return resolve_approved_directory_file(
@@ -18,14 +24,6 @@ def resolve_allowed_file_path(config, base_dir, requested_path, max_bytes=MAX_LO
             requested_path,
             max_bytes,
         )
-
-    access = config.get("local_file_access")
-    if not isinstance(access, dict) or access.get("enabled") is not True:
-        raise LocalFileAccessError("Local file access is disabled in host config.")
-
-    allowed_roots = access.get("allowed_roots")
-    if not isinstance(allowed_roots, list) or not allowed_roots:
-        raise LocalFileAccessError("Local file access has no allowed roots.")
 
     raw_path = str(requested_path or "").strip()
     if not raw_path:
@@ -40,6 +38,64 @@ def resolve_allowed_file_path(config, base_dir, requested_path, max_bytes=MAX_LO
         resolved = candidate.resolve(strict=True)
     except (OSError, RuntimeError):
         raise LocalFileAccessError("Local file does not exist.")
+
+    if isinstance(config, dict) and "approvedDirectories" in config:
+        require_approved_path_read(config, base_path, resolved)
+    else:
+        require_legacy_path_read(config, base_path, resolved)
+
+    if not resolved.is_file():
+        raise LocalFileAccessError("Local file path is not a file.")
+
+    size = resolved.stat().st_size
+    if size > max_bytes:
+        raise LocalFileAccessError("Local file exceeds the safety limit.")
+
+    return resolved, size
+
+
+def require_approved_path_read(config, base_path, resolved):
+    directories = config.get("approvedDirectories")
+    if not isinstance(directories, list) or not directories:
+        raise LocalFileAccessError("Local file access has no approved directories.")
+
+    matching = []
+    readable = []
+    for directory in directories:
+        if not isinstance(directory, dict):
+            continue
+        try:
+            root = resolve_directory_path(base_path, directory.get("path"))
+        except LocalFileAccessError:
+            continue
+        if resolved != root and root not in resolved.parents:
+            continue
+        matching.append(directory)
+        if directory.get("read") is not True:
+            continue
+        readable.append(directory)
+        if (
+            directory.get("recursive") is not False
+            or resolved == root
+            or resolved.parent == root
+        ):
+            return
+
+    if not matching:
+        raise LocalFileAccessError("Local file is outside approved directories.")
+    if not readable:
+        raise LocalFileAccessError("Approved directory does not allow reads.")
+    raise LocalFileAccessError("Approved directory does not allow recursive access.")
+
+
+def require_legacy_path_read(config, base_path, resolved):
+    access = config.get("local_file_access") if isinstance(config, dict) else None
+    if not isinstance(access, dict) or access.get("enabled") is not True:
+        raise LocalFileAccessError("Local file access is disabled in host config.")
+
+    allowed_roots = access.get("allowed_roots")
+    if not isinstance(allowed_roots, list) or not allowed_roots:
+        raise LocalFileAccessError("Local file access has no allowed roots.")
 
     roots = []
     for root_value in allowed_roots:
@@ -57,29 +113,13 @@ def resolve_allowed_file_path(config, base_dir, requested_path, max_bytes=MAX_LO
     if not any(resolved == root or root in resolved.parents for root in roots):
         raise LocalFileAccessError("Local file is outside allowed roots.")
 
-    if not resolved.is_file():
-        raise LocalFileAccessError("Local file path is not a file.")
-
-    size = resolved.stat().st_size
-    if size > max_bytes:
-        raise LocalFileAccessError("Local file exceeds the safety limit.")
-
-    return resolved, size
-
 
 def resolve_approved_directory_file(config, base_dir, request, max_bytes=MAX_LOCAL_FILE_BYTES):
-    alias = str(request.get("directoryAlias") or request.get("alias") or "").strip()
-    relative_path = str(
-        request.get("relativePath")
-        or request.get("path")
-        or request.get("filePath")
-        or ""
-    ).strip()
+    alias = str(request.get("directoryAlias") or "").strip()
+    relative_path = str(request.get("relativePath") or "").strip()
 
-    if not alias:
-        return resolve_allowed_file_path(config, base_dir, relative_path, max_bytes)
-    if not relative_path:
-        raise LocalFileAccessError("Local file path is missing.")
+    if not alias or not relative_path:
+        raise LocalFileAccessError(CANONICAL_LOCAL_FILE_REQUEST_ERROR)
 
     directory = find_approved_directory(config, alias)
     if not directory:

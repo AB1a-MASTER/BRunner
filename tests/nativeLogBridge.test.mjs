@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { test } from "node:test";
 
-import { Messages, NativeCommands } from "../BRunner/core/constants.js";
+import { Defaults, Messages, NativeCommands } from "../BRunner/core/constants.js";
+import {
+  NativeBridgeClient,
+  isValidProfileInstanceId,
+  loadOrCreateProfileInstanceId,
+} from "../BRunner/core/nativeBridge.js";
 
 const root = new URL("../", import.meta.url);
 
@@ -73,29 +78,194 @@ test("approved-directory services expose canonical native commands", async () =>
   assert.match(bridge, /NativeCommands\.ListApprovedDirectories/);
 });
 
-test("native host pairing is storage-backed and commands wait for authentication", async () => {
-  const [constants, background, bridge, host] = await Promise.all([
+test("native host pairing uses a stable profile instance and accepted live session", async () => {
+  const [constants, background, bridge, host, coordinator] = await Promise.all([
     readFile(new URL("BRunner/core/constants.js", root), "utf8"),
     readFile(new URL("BRunner/background.js", root), "utf8"),
     readFile(new URL("BRunner/core/nativeBridge.js", root), "utf8"),
     readFile(new URL("BRunner_Host/brunner_host.py", root), "utf8"),
+    readFile(new URL("BRunner_Host/pairing_coordinator.py", root), "utf8"),
   ]);
   assert.match(constants, /GetNativePairing/);
-  assert.match(constants, /SaveNativePairing/);
-  assert.match(constants, /GenerateNativePairingKey/);
-  assert.match(constants, /NativePairingStorageKey/);
+  assert.match(constants, /PairNativeProfile/);
+  assert.match(constants, /UnpairNativeProfile/);
+  assert.match(constants, /ProfileInstanceStorageKey/);
+  assert.equal(NativeCommands.ProfileHello, "PROFILE_HELLO");
+  assert.equal(NativeCommands.PairProfile, "PAIR_PROFILE");
+  assert.equal(NativeCommands.UnpairProfile, "UNPAIR_PROFILE");
   assert.match(background, /case Messages\.GetNativePairing/);
-  assert.match(background, /case Messages\.SaveNativePairing/);
-  assert.match(background, /case Messages\.GenerateNativePairingKey/);
-  assert.match(bridge, /loadNativePairing/);
-  assert.match(bridge, /saveNativePairing/);
-  assert.match(bridge, /generateNativePairingKey/);
-  assert.match(bridge, /normalizeNativePairingKey/);
-  assert.match(bridge, /32 hexadecimal characters/);
-  assert.match(bridge, /waitForAuthentication/);
-  assert.match(bridge, /extensionId: globalThis\.chrome\?\.runtime\?\.id/);
-  assert.match(host, /pairedExtensionId/);
-  assert.match(host, /not paired with this host/);
+  assert.match(background, /case Messages\.PairNativeProfile/);
+  assert.match(background, /case Messages\.UnpairNativeProfile/);
+  assert.match(bridge, /loadOrCreateProfileInstanceId/);
+  assert.match(bridge, /waitForPairing/);
+  assert.match(bridge, /subscribeStatus/);
+  assert.match(bridge, /profileInstanceId/);
+  assert.match(
+    host,
+    /command in \{"PROFILE_HELLO", "PAIR_PROFILE", "UNPAIR_PROFILE"\}/,
+  );
+  assert.match(host, /await handle_profile_hello/);
+  assert.match(host, /await handle_pair_profile/);
+  assert.match(host, /await handle_unpair_profile/);
+  assert.match(coordinator, /paired_to_other_profile/);
+  assert.match(coordinator, /paired_connection_active/);
+});
+
+test("profile instance ID is generated once per extension storage profile", async () => {
+  const values = {};
+  let writes = 0;
+  const storage = {
+    async get(name) {
+      return { [name]: values[name] };
+    },
+    async set(update) {
+      Object.assign(values, update);
+      writes += 1;
+    },
+  };
+
+  const first = await loadOrCreateProfileInstanceId(storage);
+  const second = await loadOrCreateProfileInstanceId(storage);
+
+  assert.equal(first, second);
+  assert.equal(isValidProfileInstanceId(first), true);
+  assert.equal(values[Defaults.ProfileInstanceStorageKey], first);
+  assert.equal(writes, 1);
+});
+
+test("native bridge ignores delayed events from a replaced socket", () => {
+  const previousWebSocket = globalThis.WebSocket;
+  const sockets = [];
+
+  class FakeWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    constructor() {
+      this.readyState = FakeWebSocket.CONNECTING;
+      sockets.push(this);
+    }
+
+    close() {
+      this.readyState = FakeWebSocket.CLOSING;
+    }
+  }
+
+  globalThis.WebSocket = FakeWebSocket;
+  try {
+    const client = new NativeBridgeClient();
+    client.startProfileSession = () => {
+      client.isPaired = true;
+      client.pairingState = "paired_connected";
+      client.lastHello = { capabilities: ["workflow.list"] };
+      return Promise.resolve();
+    };
+
+    client.connect();
+    const oldSocket = sockets[0];
+    oldSocket.readyState = FakeWebSocket.CLOSING;
+
+    client.connect();
+    const currentSocket = sockets[1];
+    currentSocket.readyState = FakeWebSocket.OPEN;
+    currentSocket.onopen();
+
+    let rejected = false;
+    client.pendingRequests.set("current-request", {
+      reject: () => {
+        rejected = true;
+      },
+      timer: null,
+    });
+
+    oldSocket.onclose();
+    oldSocket.onerror(new Error("stale socket error"));
+    oldSocket.onmessage({ data: JSON.stringify({ id: "current-request", ok: true }) });
+
+    assert.equal(client.socket, currentSocket);
+    assert.equal(client.isConnected, true);
+    assert.equal(client.isPaired, true);
+    assert.equal(client.pairingState, "paired_connected");
+    assert.deepEqual(client.lastHello, { capabilities: ["workflow.list"] });
+    assert.equal(rejected, false);
+    assert.equal(client.pendingRequests.has("current-request"), true);
+  } finally {
+    globalThis.WebSocket = previousWebSocket;
+  }
+});
+
+test("native bridge keeps a healthy paired session after non-pairing command errors", () => {
+  const client = new NativeBridgeClient();
+  client.isConnected = true;
+  client.isPaired = true;
+  client.pairingState = "paired";
+  client.lastHello = { capabilities: ["workflow.list"] };
+
+  let commandError = null;
+  client.pendingRequests.set("command-error", {
+    reject: (error) => {
+      commandError = error;
+    },
+    timer: null,
+  });
+  client.handleMessage(JSON.stringify({
+    id: "command-error",
+    error: "Workflow payload is invalid.",
+    code: "validation_failed",
+  }));
+
+  assert.equal(commandError?.code, "validation_failed");
+  assert.equal(client.isPaired, true);
+  assert.equal(client.pairingState, "paired");
+  assert.deepEqual(client.lastHello, { capabilities: ["workflow.list"] });
+
+  client.pendingRequests.set("pairing-error", {
+    reject: () => {},
+    timer: null,
+  });
+  client.handleMessage(JSON.stringify({
+    id: "pairing-error",
+    error: "Pair this profile first.",
+    code: "pairing_required",
+    pairingState: "unpaired",
+  }));
+
+  assert.equal(client.isPaired, false);
+  assert.equal(client.pairingState, "unpaired");
+  assert.equal(client.lastHello, null);
+});
+
+test("native local-file bridge exposes canonical input without finalizing the provisional node", async () => {
+  const client = new NativeBridgeClient();
+  const requests = [];
+  client.request = async (command, payload) => {
+    requests.push({ command, payload });
+    return { ok: true };
+  };
+
+  await client.readLocalFile("AllowedFiles/sample.txt");
+  await client.readLocalFile({
+    directoryAlias: " imports ",
+    relativePath: " rows.csv ",
+  });
+
+  assert.deepEqual(requests, [
+    {
+      command: NativeCommands.ReadFile,
+      payload: { path: "AllowedFiles/sample.txt" },
+    },
+    {
+      command: NativeCommands.ReadFile,
+      payload: {
+        request: {
+          directoryAlias: "imports",
+          relativePath: "rows.csv",
+        },
+      },
+    },
+  ]);
 });
 
 test("extension lists approved directories for graph authoring", async () => {
@@ -158,7 +328,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(registry, /NativeHostRequirementModes\.Fallback/);
   assert.match(background, /shouldAllowVisibleHostFallback/);
   assert.match(background, /shouldAllowVisualMatchFallback/);
-  assert.match(background, /shouldPreferVisualMatchFallback/);
+  assert.doesNotMatch(background, /shouldPreferVisualMatchFallback/);
   assert.match(background, /NativeBridge\.hostWindow/);
   assert.match(background, /NativeBridge\.hostAction/);
   assert.match(background, /NativeBridge\.hostVisualMatch/);
@@ -171,9 +341,25 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(mapper, /PrepareHostFallback/);
   assert.match(mapper, /prepareHostFallback/);
   assert.match(mapper, /verifyHostFallback/);
-  assert.match(mapper, /clientPointToScreen/);
+  assert.match(mapper, /clientPoint/);
   assert.match(mapper, /clientBounds/);
-  assert.match(mapper, /sideUiInset/);
+  assert.match(mapper, /coordinateSpace: "css_viewport"/);
+  assert.match(background, /coordinateSpace: prepared\.coordinateSpace/);
+  assert.match(background, /clientPoint: prepared\.clientPoint/);
+  assert.match(background, /clientBounds: prepared\.clientBounds/);
+  assert.match(background, /devicePixelRatio: prepared\.devicePixelRatio/);
+  const fallbackSource = background.slice(
+    background.indexOf("async function executeVisibleHostFallback"),
+    background.indexOf("async function verifyVisibleHostFallback"),
+  );
+  assert.ok(
+    fallbackSource.indexOf("chrome.windows.update") <
+      fallbackSource.indexOf("Messages.PrepareHostFallback"),
+    "the browser window must be focused before coordinate preparation",
+  );
+  assert.doesNotMatch(fallbackSource, /point: prepared\.point/);
+  assert.doesNotMatch(fallbackSource, /target: prepared\.target/);
+  assert.doesNotMatch(fallbackSource, /cssWindow: prepared\.cssWindow/);
   assert.match(mapper, /assertPostActionVerification/);
   assert.match(workflow, /Visible Host Fallback Acceptance/);
   assert.match(workflow, /allowVisibleHostFallback/);
@@ -181,6 +367,39 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(workflow, /verificationText/);
   assert.match(fixture, /trusted-submit/);
   assert.match(fixture, /event\.isTrusted/);
+});
+
+test("typed host fallback focuses and verifies the resolved editable before host input", async () => {
+  const mapper = await readFile(
+    new URL("BRunner/content/mapper.js", root),
+    "utf8",
+  );
+  const prepareSource = mapper.slice(
+    mapper.indexOf("async prepareHostFallback"),
+    mapper.indexOf("async verifyHostFallback"),
+  );
+  const focusStart = mapper.indexOf("async focusHostFallbackTypeTarget");
+  const focusSource = mapper.slice(
+    focusStart,
+    mapper.indexOf("    assertPostActionVerification(step", focusStart),
+  );
+
+  assert.ok(
+    prepareSource.indexOf("element.scrollIntoView") <
+      prepareSource.indexOf("await this.focusHostFallbackTypeTarget(element)"),
+    "the target must be scrolled into view before focus is prepared",
+  );
+  assert.match(prepareSource, /if \(action === Actions\.ElementType\)/);
+  assert.match(prepareSource, /if \(!focusResult\.ok\)/);
+  assert.match(prepareSource, /focusResult\.reason/);
+  assert.match(focusSource, /element\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(focusSource, /await this\.delay\(0\)/);
+  assert.match(focusSource, /const activeElement = this\.getDeepActiveElement\(\)/);
+  assert.match(
+    focusSource,
+    /!this\.isElementOrComposedDescendant\(element, activeElement\)/,
+  );
+  assert.match(focusSource, /host_fallback_type_focus_failed/);
 });
 
 test("mapper graph traversal routes unresolved outcomes explicitly", async () => {
@@ -199,26 +418,50 @@ test("mapper graph traversal routes unresolved outcomes explicitly", async () =>
   assert.match(runtimeProjection, /runtimeStatus = "unresolved"/);
 });
 
-test("live acceptance workflows open the fixture harness explicitly", async () => {
+test("host-served workflows reference files exposed by the repository-root server", async () => {
   const workflowDir = new URL("BRunner_Host/Workflows/", root);
   const filenames = (await readdir(workflowDir))
-    .filter((filename) => filename.endsWith("_acceptance.json"));
-
-  assert.ok(filenames.length >= 8);
+    .filter((filename) => filename.endsWith(".json"));
+  const workflows = [];
 
   for (const filename of filenames) {
     const workflow = JSON.parse(await readFile(new URL(filename, workflowDir), "utf8"));
-    assert.match(workflow.name, /^\[NEW 2026-07-02\]/, filename);
-    assert.deepEqual(
-      workflow.tags,
-      ["new-2026-07-02", "host-served-8765", "acceptance"],
+    if (workflow.tags?.includes("host-served-8765")) {
+      workflows.push({ filename, workflow });
+    }
+  }
+
+  assert.ok(workflows.length >= 12);
+
+  for (const { filename, workflow } of workflows) {
+    assert.match(workflow.name, /^\[NEW 2026-07-\d{2}\]/, filename);
+    assert.ok(workflow.tags.includes("host-served-8765"), filename);
+    assert.equal(
+      workflow.boundDomain,
+      "http://127.0.0.1:8765/BRunner_Host/test.html",
       filename,
     );
-    assert.equal(workflow.boundDomain, "http://127.0.0.1:8765/test.html", filename);
     assert.equal(Array.isArray(workflow.steps), true, filename);
     assert.equal(workflow.steps[0]?.action, "browser.navigate", filename);
-    assert.equal(workflow.steps[0]?.url, "http://127.0.0.1:8765/test.html", filename);
-    assert.doesNotMatch(JSON.stringify(workflow), /\/BRunner\/test\.html/, filename);
+    assert.equal(
+      workflow.steps[0]?.url,
+      "http://127.0.0.1:8765/BRunner_Host/test.html",
+      filename,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(workflow),
+      /127\.0\.0\.1:8765\/(?:test\.html|BRunner\/test\.html)/,
+      filename,
+    );
+
+    const localUrls = JSON.stringify(workflow).match(
+      /http:\/\/127\.0\.0\.1:8765\/[^"\\]+/g,
+    ) || [];
+    for (const value of new Set(localUrls)) {
+      const pathname = new URL(value).pathname.replace(/^\/+/, "");
+      const content = await readFile(new URL(pathname, root));
+      assert.ok(content.length > 0, `${filename}: ${value}`);
+    }
   }
 });
 
@@ -293,9 +536,27 @@ test("mapper acceptance page covers tracking and ambiguity fixtures", async () =
   assert.match(mapperHarness, /BRunner Mapper Acceptance Harness/);
   assert.match(mapperHarness, /data-testid="profile-save"/);
   assert.match(mapperHarness, /data-testid="billing-save"/);
-  assert.match(mapperHarness, /Apply Drift/);
+  assert.match(mapperHarness, /data-testid="profile-help"/);
+  assert.match(mapperHarness, /data-testid="billing-auto-renew"[\s\S]*type="checkbox"/);
+  assert.match(mapperHarness, /data-testid="billing-monthly"[\s\S]*type="radio"/);
+  assert.match(mapperHarness, /Apply ID\/Class Drift/);
+  assert.match(mapperHarness, /Apply Text\/Label Drift/);
+  assert.match(mapperHarness, /Apply Layout Drift/);
+  assert.match(mapperHarness, /Apply Container Drift/);
+  assert.match(mapperHarness, /Replace With Weak Lookalike/);
+  assert.match(mapperHarness, /Remove Primary Locator/);
+  assert.match(mapperHarness, /Add Equal Duplicate/);
+  assert.match(mapperHarness, /Create Close-Score Pair/);
+  assert.match(mapperHarness, /data-testid="capability-input"/);
+  assert.match(mapperHarness, /data-testid="capability-button"/);
   assert.match(mapperHarness, /customElements\.define\("shadow-mapper-card"/);
   assert.match(mapperHarness, /attachShadow\(\{ mode: "open" \}\)/);
+  assert.match(mapperHarness, /customElements\.define\("closed-shadow-mapper-card"/);
+  assert.match(mapperHarness, /attachShadow\(\{ mode: "closed" \}\)/);
+  assert.match(mapperHarness, /id="protected-frame"/);
+  assert.match(mapperHarness, /history\.pushState/);
+  assert.match(mapperHarness, /window\.addEventListener\("popstate"/);
+  assert.match(mapperHarness, /searchParams\.set\("route", route\)/);
   assert.match(mapperHarness, /mutation storm started/);
   assert.match(mapperHarness, /materialMutationCount/);
 });
@@ -314,11 +575,20 @@ test("mapper stress page covers static dynamic infinite and shadow fixtures", as
   assert.match(stressHarness, /customElements\.define\("shadow-stress-card"/);
   assert.match(stressHarness, /attachShadow\(\{ mode: "open" \}\)/);
   assert.match(stressHarness, /materialMutationCount/);
+  assert.match(stressHarness, /Run Finite Mutation Count/);
+  assert.match(stressHarness, /Reset Mutation Region/);
   assert.match(stressHarness, /appendFeedItems/);
+  assert.match(stressHarness, /Append Unkeyed Twins/);
+  assert.match(stressHarness, /Remove First Feed Item/);
+  assert.match(stressHarness, /Replace Loaded Feed Window/);
+  assert.match(stressHarness, /Reset Repeated Records/);
+  assert.match(stressHarness, /data-testid="unkeyed-feed"/);
+  assert.match(stressHarness, /Generate Large Control Set/);
+  assert.match(stressHarness, /data-testid="large-control-container"/);
   assert.match(stressHarness, /data-testid="mapper-same-origin-frame"/);
   assert.match(stressHarness, /mapper_frame_child\.html/);
   assert.match(frameHarness, /data-testid="frame-save"/);
-  assert.match(frameHarness, /Same-origin frame form/);
+  assert.match(frameHarness, /Mapper frame form/);
 });
 
 test("mapper platform profile page covers chat and social fixtures", async () => {
@@ -339,6 +609,7 @@ test("mapper platform profile page covers chat and social fixtures", async () =>
   assert.match(platformHarness, /data-testid="message-loaded-window"/);
   assert.match(platformHarness, /Swap Active Thread/);
   assert.match(platformHarness, /Load Older Messages/);
+  assert.match(platformHarness, /Replace Message Window/);
   assert.match(platformHarness, /tick-chat-ephemeral/);
   assert.match(platformHarness, /data-platform-profile="social"/);
   assert.match(platformHarness, /data-testid="home-feed-region"/);
@@ -346,6 +617,28 @@ test("mapper platform profile page covers chat and social fixtures", async () =>
   assert.match(platformHarness, /data-testid="social-loaded-window"/);
   assert.match(platformHarness, /data-testid="global-comment-composer"/);
   assert.match(platformHarness, /Append Feed Window/);
+  assert.match(platformHarness, /Replace Social Window/);
   assert.match(platformHarness, /tick-social-ephemeral/);
   assert.match(platformHarness, /loadedWindowIndex/);
+});
+
+test("mapper acceptance fixture inline scripts parse", async () => {
+  const fixturePaths = [
+    "BRunner_Host/mapper_test.html",
+    "BRunner_Host/mapper_stress_test.html",
+    "BRunner_Host/mapper_platform_profiles_test.html",
+    "BRunner_Host/mapper_frame_child.html",
+  ];
+
+  for (const fixturePath of fixturePaths) {
+    const source = await readFile(new URL(fixturePath, root), "utf8");
+    const scripts = [...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
+    assert.ok(scripts.length > 0, fixturePath);
+    scripts.forEach((match, index) => {
+      assert.doesNotThrow(
+        () => new Function(match[1]),
+        `${fixturePath} inline script ${index + 1}`,
+      );
+    });
+  }
 });

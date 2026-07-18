@@ -1,4 +1,4 @@
-from window_validation import HostFallbackError, validate_host_action
+from window_validation import HostFallbackError, revalidate_host_action, validate_host_action
 
 
 def execute_host_action(config, payload=None, adapter=None):
@@ -6,6 +6,7 @@ def execute_host_action(config, payload=None, adapter=None):
     validated = validate_host_action(config, payload, provider)
     request = payload if isinstance(payload, dict) else {}
     action = validated["action"]
+    validated = revalidate_host_action(config, request, validated, provider)
 
     if action == "move":
         provider.moveTo(validated["x"], validated["y"])
@@ -18,6 +19,7 @@ def execute_host_action(config, payload=None, adapter=None):
     elif action == "scroll":
         amount = int_value(request.get("amount") or request.get("deltaY") or request.get("scrollY") or -1)
         provider.moveTo(validated["x"], validated["y"])
+        validated = revalidate_host_action(config, request, validated, provider)
         provider.scroll(amount)
     elif action == "type":
         text = str(request.get("text") or request.get("value") or "")
@@ -44,6 +46,9 @@ def execute_host_action(config, payload=None, adapter=None):
         "x": validated.get("x"),
         "y": validated.get("y"),
         "coordinateConfidence": validated.get("coordinateConfidence"),
+        "coordinateSpace": validated.get("coordinateSpace"),
+        "sourceCoordinateSpace": validated.get("sourceCoordinateSpace"),
+        "coordinateMapping": validated.get("coordinateMapping"),
         "foregroundWindow": validated.get("foregroundWindow"),
     }
 
@@ -77,5 +82,6 @@ def number_or_default(value, default):
 
 
 def default_adapter():
-    import pyautogui
-    return pyautogui
+    from windows_desktop import WindowsDesktopAdapter
+
+    return WindowsDesktopAdapter()

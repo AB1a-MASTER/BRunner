@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { createMapperCoordinator } from "../BRunner/core/mapperCoordinator.js";
 import { ChromeMapStore } from "../BRunner/core/mapStore.js";
+import { normalizePageProfile } from "../BRunner/mapper/core.js";
 
 test("mapper coordinator persists recorded facts as workflow page maps", async () => {
   const storage = createMemoryStorage();
@@ -181,6 +182,287 @@ test("mapper coordinator marks missing execution records as handled not_found", 
   assert.equal(executable.mapperContext.reason, "component_record_missing");
 });
 
+test("mapper coordinator exposes node-neutral scan/get/ref/resolve/revalidate/refresh APIs", async () => {
+  const storage = createMemoryStorage();
+  const store = new ChromeMapStore(storage);
+  let tick = 0;
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => `2026-07-04T00:0${tick++}:00.000Z`,
+  });
+  const initialFact = recordedStep({
+    componentId: "source-save",
+    componentUid: "api-save-uid",
+    locator: "#save",
+  }).mapperFact;
+  const scanned = await coordinator.scanPage({
+    workflowId: "node-neutral-api",
+    page: { url: "https://example.com/account", title: "Account" },
+    componentFacts: [initialFact],
+  });
+  const found = await coordinator.getPageMap("node-neutral-api", {
+    pageProfileKey: scanned.pageMap.pageProfileKey,
+  });
+  const componentRef = await coordinator.createComponentRef(
+    "node-neutral-api",
+    { pageProfileKey: found.pageProfileKey },
+    found.components[0].componentId,
+  );
+  const resolved = await coordinator.resolveComponent({
+    componentRef,
+    candidateFacts: [initialFact],
+    requirements: { action: "element.click" },
+  });
+  const revalidated = await coordinator.revalidateComponent({
+    componentRef,
+    candidateFacts: [initialFact],
+    requirements: { action: "element.click" },
+  });
+  const refreshed = await coordinator.refreshPageMap({
+    workflowId: "node-neutral-api",
+    page: { url: "https://example.com/account", title: "Account" },
+    componentFacts: [{
+      ...initialFact,
+      locatorCandidates: [{
+        strategy: "css_selector",
+        value: "#save-new",
+        reliability: 95,
+        selectedAtCapture: true,
+      }],
+    }],
+  });
+
+  assert.equal(componentRef.workflowId, "node-neutral-api");
+  assert.equal(resolved.state, "resolved");
+  assert.equal(revalidated.state, "resolved");
+  assert.equal(revalidated.operation, "revalidate");
+  assert.equal(refreshed.pageMap.components[0].componentId, componentRef.componentId);
+  assert.equal(Object.hasOwn(scanned, "node"), false);
+});
+
+test("node-neutral APIs retain and resolve extension-accessible cross-origin frame contexts", async () => {
+  const store = new ChromeMapStore(createMemoryStorage());
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => "2026-07-04T00:00:00.000Z",
+  });
+  const frameScope = {
+    access: "cross_origin",
+    path: "isolated/frame_checkout/instance_1",
+    depth: 1,
+    contextKey: "frame_checkout",
+    frameContextId: "frame_checkout_instance_1",
+    frameIdHint: 12,
+    extensionAccessible: true,
+  };
+  const baseFact = recordedStep({
+    componentId: "checkout-pay",
+    componentUid: "checkout-pay-uid",
+    locator: "#pay",
+    accessibleName: "Pay",
+  }).mapperFact;
+  const framedFact = {
+    ...baseFact,
+    fingerprint: {
+      ...baseFact.fingerprint,
+      structural: {
+        ...baseFact.fingerprint.structural,
+        frameScope,
+      },
+    },
+  };
+  const scanned = await coordinator.scanPage({
+    workflowId: "cross-origin-api",
+    page: { url: "https://merchant.example/checkout" },
+    componentFacts: [framedFact],
+  });
+  const componentRef = await coordinator.createComponentRef(
+    "cross-origin-api",
+    { pageProfileKey: scanned.pageMap.pageProfileKey },
+    scanned.pageMap.components[0].componentId,
+  );
+  const resolved = await coordinator.resolveComponent({
+    componentRef,
+    candidateFacts: [framedFact],
+    requirements: { action: "element.click" },
+  });
+  const revalidated = await coordinator.revalidateComponent({
+    componentRef,
+    candidateFacts: [framedFact],
+    requirements: { action: "element.click" },
+    frameContexts: [frameScope],
+  });
+  const unreachable = await coordinator.revalidateComponent({
+    componentRef,
+    candidateFacts: [],
+    requirements: { action: "element.click" },
+    frameContexts: [],
+  });
+  const refreshed = await coordinator.refreshPageMap({
+    workflowId: "cross-origin-api",
+    page: { url: "https://merchant.example/checkout" },
+    componentFacts: [framedFact],
+  });
+
+  assert.equal(resolved.state, "resolved");
+  assert.equal(revalidated.state, "resolved");
+  assert.equal(unreachable.state, "protected_unsupported");
+  assert.equal(unreachable.reason, "cross_origin_frame_unreachable");
+  assert.equal(
+    refreshed.pageMap.components[0].fingerprint.structural.frameScope.frameContextId,
+    "frame_checkout_instance_1",
+  );
+  assert.equal(refreshed.pageMap.components[0].componentId, componentRef.componentId);
+});
+
+test("mapper coordinator preserves concurrent page scans in one workflow", async () => {
+  const storage = createMemoryStorage({ yieldBeforeSet: true });
+  const store = new ChromeMapStore(storage);
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => "2026-07-04T00:00:00.000Z",
+  });
+  const scan = (page, locator) => coordinator.scanPage({
+    workflowId: "concurrent-pages",
+    page: { url: `https://example.com/${page}`, title: page },
+    componentFacts: [recordedStep({
+      componentId: `${page}-component`,
+      componentUid: `${page}-uid`,
+      locator,
+      url: `https://example.com/${page}`,
+      pageProfileKey: `example_com::${page}`,
+    }).mapperFact],
+  });
+
+  await Promise.all([
+    scan("first", "#first"),
+    scan("second", "#second"),
+  ]);
+
+  const state = await store.getWorkflowMapperState("concurrent-pages");
+  const expectedPageKeys = ["first", "second"]
+    .map((page) => normalizePageProfile(`https://example.com/${page}`).pageKey)
+    .sort();
+  assert.deepEqual(
+    state.maps.map((map) => map.pageProfileKey).sort(),
+    expectedPageKeys,
+  );
+  assert.equal(state.storage.revision, "2");
+});
+
+test("mapper coordinator rejects cross-workflow and cross-site component references", async () => {
+  const store = new ChromeMapStore(createMemoryStorage());
+  const coordinator = createMapperCoordinator({ mapStore: store });
+  const fact = recordedStep({
+    componentId: "route-save",
+    componentUid: "route-save-uid",
+    locator: "#route-save",
+    url: "https://example.com/route-a",
+    pageProfileKey: "example_com::route_a",
+  }).mapperFact;
+  const scanned = await coordinator.scanPage({
+    workflowId: "workflow-a",
+    page: { url: "https://example.com/route-a" },
+    componentFacts: [fact],
+  });
+  const ref = await coordinator.createComponentRef(
+    "workflow-a",
+    { pageProfileKey: scanned.pageMap.pageProfileKey },
+    scanned.pageMap.components[0].componentId,
+  );
+
+  const workflowMismatch = await coordinator.resolveComponent({
+    workflowId: "workflow-b",
+    componentRef: ref,
+    pageMap: scanned.pageMap,
+    candidateFacts: [fact],
+  });
+  const siteMismatch = await coordinator.resolveComponent({
+    workflowId: "workflow-a",
+    componentRef: { ...ref, siteKey: "other_example" },
+    pageMap: scanned.pageMap,
+    candidateFacts: [fact],
+  });
+
+  assert.equal(workflowMismatch.state, "map_stale");
+  assert.equal(workflowMismatch.reason, "workflow_mismatch");
+  assert.equal(siteMismatch.state, "map_stale");
+  assert.equal(siteMismatch.reason, "site_key_mismatch");
+});
+
+test("mapper version lookup cannot bypass site or route constraints", async () => {
+  const store = new ChromeMapStore(createMemoryStorage());
+  const coordinator = createMapperCoordinator({ mapStore: store });
+  const scanned = await coordinator.scanPage({
+    workflowId: "version-route-isolation",
+    page: { url: "https://example.com/route-a" },
+    componentFacts: [recordedStep({
+      componentId: "route-a-save",
+      componentUid: "route-a-save-uid",
+      locator: "#route-save",
+      url: "https://example.com/route-a",
+      pageProfileKey: "example_com::route_a",
+    }).mapperFact],
+  });
+
+  assert.equal(await coordinator.getPageMap("version-route-isolation", {
+    mapVersionId: scanned.pageMap.mapVersionId,
+    pageProfileKey: "example_com::route_b",
+  }), null);
+  assert.equal(await coordinator.getPageMap("version-route-isolation", {
+    mapVersionId: scanned.pageMap.mapVersionId,
+    siteKey: "other_example",
+  }), null);
+  assert.equal((await coordinator.getPageMap("version-route-isolation", {
+    mapVersionId: scanned.pageMap.mapVersionId,
+    pageProfileKey: scanned.pageMap.pageProfileKey,
+    siteKey: scanned.pageMap.siteKey,
+  })).mapVersionId, scanned.pageMap.mapVersionId);
+});
+
+test("mapper coordinator discards a page snapshot older than the stored current map", async () => {
+  const store = new ChromeMapStore(createMemoryStorage());
+  const coordinator = createMapperCoordinator({ mapStore: store });
+  const page = { url: "https://example.com/freshness" };
+  const newestFact = recordedStep({
+    componentId: "newest",
+    componentUid: "newest-uid",
+    locator: "#newest",
+    url: page.url,
+    pageProfileKey: "example_com::freshness",
+  }).mapperFact;
+  const staleFact = recordedStep({
+    componentId: "stale",
+    componentUid: "stale-uid",
+    locator: "#stale",
+    url: page.url,
+    pageProfileKey: "example_com::freshness",
+  }).mapperFact;
+
+  const newest = await coordinator.scanPage({
+    workflowId: "snapshot-freshness",
+    page: { ...page, capturedAt: "2026-07-17T00:02:00.000Z" },
+    componentFacts: [newestFact],
+    settings: { maxVersions: 1 },
+  });
+  const stale = await coordinator.scanPage({
+    workflowId: "snapshot-freshness",
+    page: { ...page, capturedAt: "2026-07-17T00:01:00.000Z" },
+    componentFacts: [staleFact],
+    settings: { maxVersions: 1 },
+  });
+  const stored = await coordinator.getPageMap("snapshot-freshness", {
+    pageProfileKey: newest.pageMap.pageProfileKey,
+  });
+
+  assert.equal(stale.persisted, false);
+  assert.equal(stale.reason, "stale_snapshot");
+  assert.equal(stale.pageMap.createdAt, "2026-07-17T00:02:00.000Z");
+  assert.equal(stored.createdAt, "2026-07-17T00:02:00.000Z");
+  assert.equal(stored.components.some((component) => component.componentUid === "newest-uid"), true);
+  assert.equal(stored.components.some((component) => component.componentUid === "stale-uid"), false);
+});
+
 test("mapper coordinator retains bounded page map history", async () => {
   const storage = createMemoryStorage();
   const store = new ChromeMapStore(storage);
@@ -260,17 +542,64 @@ test("mapper coordinator isolates changes by page profile within the same site",
   );
 
   const state = await store.getWorkflowMapperState("recording-pages");
-  const loginMaps = state.maps.filter((map) => map.pageProfileKey === "example_com::login");
-  const homeMaps = state.maps.filter((map) => map.pageProfileKey === "example_com::home");
+  const loginPageKey = normalizePageProfile("https://example.com/login").pageKey;
+  const homePageKey = normalizePageProfile("https://example.com/home").pageKey;
+  const loginMaps = state.maps.filter((map) => map.pageProfileKey === loginPageKey);
+  const homeMaps = state.maps.filter((map) => map.pageProfileKey === homePageKey);
 
-  assert.equal(login.mapper.pageProfileKey, "example_com::login");
-  assert.equal(home.mapper.pageProfileKey, "example_com::home");
+  assert.equal(login.mapper.pageProfileKey, loginPageKey);
+  assert.equal(home.mapper.pageProfileKey, homePageKey);
   assert.equal(loginMaps.length, 2);
   assert.equal(homeMaps.length, 1);
   assert.equal(homeMaps[0].components[0].componentId, home.componentRef.componentId);
   assert.equal(homeMaps[0].components[0].status, "new");
   assert.equal(loginMaps.at(-1).components[0].componentId, login.componentRef.componentId);
   assert.equal(loginMaps.at(-1).components[0].status, "changed");
+});
+
+test("recorded facts use the workflow query policy for collision-safe page identity", async () => {
+  const store = new ChromeMapStore(createMemoryStorage());
+  await store.saveWorkflowMapperState("recording-routes", {
+    workflowId: "recording-routes",
+    settings: {
+      queryAllowlist: ["route"],
+    },
+    maps: [],
+  });
+  let tick = 0;
+  const coordinator = createMapperCoordinator({
+    mapStore: store,
+    clock: () => `2026-07-04T00:1${tick++}:00.000Z`,
+  });
+  const accountUrl = "https://example.com/app?route=account-settings&utm=ignored";
+  const billingUrl = "https://example.com/app?route=account_settings&utm=ignored";
+
+  const account = await coordinator.reconcileRecordedStep(recordedStep({
+    componentId: "pending_account",
+    componentUid: "account-route",
+    locator: "#account",
+    url: accountUrl,
+    pageProfileKey: "example_com::app",
+  }), { sessionId: "recording-routes" });
+  const billing = await coordinator.reconcileRecordedStep(recordedStep({
+    componentId: "pending_billing",
+    componentUid: "billing-route",
+    locator: "#billing",
+    url: billingUrl,
+    pageProfileKey: "example_com::app",
+  }), { sessionId: "recording-routes" });
+  const state = await store.getWorkflowMapperState("recording-routes");
+
+  assert.equal(
+    account.mapper.pageProfileKey,
+    normalizePageProfile(accountUrl, { queryAllowlist: ["route"] }).pageKey,
+  );
+  assert.equal(
+    billing.mapper.pageProfileKey,
+    normalizePageProfile(billingUrl, { queryAllowlist: ["route"] }).pageKey,
+  );
+  assert.notEqual(account.mapper.pageProfileKey, billing.mapper.pageProfileKey);
+  assert.equal(state.maps.length, 2);
 });
 
 test("mapper coordinator persists runtime resolver reliability outcomes", async () => {
@@ -314,18 +643,20 @@ test("mapper coordinator persists runtime resolver reliability outcomes", async 
   assert.equal(pageMap.reliabilityMetrics.runtime.attemptCount, 1);
   assert.equal(pageMap.reliabilityMetrics.runtime.fallbackRecoveryCount, 1);
   assert.equal(pageMap.resolverAttempts.length, 1);
-  assert.equal(pageMap.resolverAttempts[0].redaction.rawLocatorStored, false);
-  assert.equal(pageMap.resolverAttempts[0].selected.primaryStrategy, "css_selector");
-  assert.equal(Object.hasOwn(pageMap.resolverAttempts[0].selected, "primary"), false);
+  assert.equal(Object.hasOwn(pageMap.resolverAttempts[0], "redaction"), false);
+  assert.equal(pageMap.resolverAttempts[0].selected.primary.strategy, "css_selector");
+  assert.equal(pageMap.resolverAttempts[0].selected.primary.value, "#email-new");
 });
 
-function createMemoryStorage() {
+function createMemoryStorage({ yieldBeforeSet = false } = {}) {
   const memory = {};
   return {
     async get(key) {
+      if (key === null) return structuredClone(memory);
       return { [key]: memory[key] };
     },
     async set(value) {
+      if (yieldBeforeSet) await Promise.resolve();
       Object.assign(memory, value);
     },
   };

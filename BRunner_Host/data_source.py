@@ -6,8 +6,11 @@ from file_access import LocalFileAccessError, resolve_allowed_file_path
 
 
 MAX_DATA_SOURCE_BYTES = 1 * 1024 * 1024
-DEFAULT_MAX_ROWS = 5000
-DEFAULT_MAX_COLUMNS = 100
+MAX_DATA_SOURCE_ROWS = 5000
+MAX_DATA_SOURCE_COLUMNS = 100
+
+DEFAULT_MAX_ROWS = MAX_DATA_SOURCE_ROWS
+DEFAULT_MAX_COLUMNS = MAX_DATA_SOURCE_COLUMNS
 
 
 class DataSourceError(ValueError):
@@ -23,19 +26,31 @@ def read_data_source(config, base_dir, source):
         or source.get("path")
         or source.get("filePath")
     )
-    resolved, size = resolve_allowed_file_path(
-        config,
-        base_dir,
-        requested_path,
-        int(source.get("maxBytes") or MAX_DATA_SOURCE_BYTES),
+    max_bytes = normalize_limit(
+        source.get("maxBytes"),
+        MAX_DATA_SOURCE_BYTES,
+        "byte",
+        MAX_DATA_SOURCE_BYTES,
     )
-    encoding = normalize_encoding(source.get("encoding") or "utf-8-sig")
-    max_rows = normalize_limit(source.get("maxRows"), DEFAULT_MAX_ROWS, "row")
+    max_rows = normalize_limit(
+        source.get("maxRows"),
+        DEFAULT_MAX_ROWS,
+        "row",
+        MAX_DATA_SOURCE_ROWS,
+    )
     max_columns = normalize_limit(
         source.get("maxColumns"),
         DEFAULT_MAX_COLUMNS,
         "column",
+        MAX_DATA_SOURCE_COLUMNS,
     )
+    resolved, size = resolve_allowed_file_path(
+        config,
+        base_dir,
+        requested_path,
+        max_bytes,
+    )
+    encoding = normalize_encoding(source.get("encoding") or "utf-8-sig")
     fmt = normalize_format(source.get("format"), resolved.name)
 
     try:
@@ -231,7 +246,7 @@ def normalize_encoding(value):
     return encoding
 
 
-def normalize_limit(value, default, label):
+def normalize_limit(value, default, label, hard_max):
     if value in (None, ""):
         return default
     try:
@@ -240,4 +255,4 @@ def normalize_limit(value, default, label):
         raise DataSourceError(f"Data source {label} limit is invalid.")
     if limit < 1:
         raise DataSourceError(f"Data source {label} limit must be positive.")
-    return limit
+    return min(limit, hard_max)

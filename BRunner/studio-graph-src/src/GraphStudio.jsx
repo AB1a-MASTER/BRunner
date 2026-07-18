@@ -58,9 +58,16 @@ import {
   normalizeNativeHostRequirement,
 } from "../../core/nativeHostRequirements.js";
 import { summarizeValue } from "../../core/variableInspector.js";
+import {
+  createRecoverableGraphDraft,
+  createSerializedSaveQueue,
+  hashWorkflowSnapshot,
+  reconcileGraphSaveResponse,
+} from "./workflowIntegrity.js";
 
 const NODE_TYPES = { brunner: GraphNode };
 const EDGE_TYPES = { removable: RemovableEdge };
+const GRAPH_STUDIO_DRAFT_KEY = "brunner.studio.draft.graph.v1";
 const MAPPER_ATTENTION_DEFINITION = Object.freeze({
   type: MapperAttentionNodeType,
   version: 1,
@@ -89,6 +96,7 @@ const Messages = Object.freeze({
   ListApprovedDirectories: "OS_LIST_APPROVED_DIRECTORIES",
   StudioReceiveStep: "STUDIO_RECEIVE_STEP",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+  BridgeStatus: "BRIDGE_STATUS",
   ToggleRecording: "TOGGLE_RECORDING",
 });
 
@@ -110,6 +118,7 @@ function GraphStudioCanvas() {
   const [sourceSchema, setSourceSchema] = useState(2);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [draftRecoveryStatus, setDraftRecoveryStatus] = useState("pending");
   const [notice, setNotice] = useState({ kind: "neutral", text: "New v2 workflow" });
   const [uiPreferences, setUiPreferences] = useState(DEFAULT_STUDIO_PREFERENCES);
   const [logFilterNodeId, setLogFilterNodeId] = useState("");
@@ -136,6 +145,18 @@ function GraphStudioCanvas() {
   const recordedStepKeysRef = useRef(new Set());
   const recordedSessionRef = useRef("");
   const initialSessionLoadedRef = useRef(false);
+  const draftRecoveryCheckedRef = useRef(false);
+  const hostReadyRef = useRef(false);
+  const hostTransitionRevisionRef = useRef(0);
+  const mutationRevisionRef = useRef(0);
+  const draftPersistTimerRef = useRef(0);
+  const draftStateRef = useRef(null);
+  const dirtyRef = useRef(false);
+  const busyRef = useRef(false);
+  const readOnlyRef = useRef(false);
+  const executionActiveRef = useRef(false);
+  const saveQueueRef = useRef(null);
+  if (!saveQueueRef.current) saveQueueRef.current = createSerializedSaveQueue();
   const { screenToFlowPosition, fitView, getNodes, getEdges } = useReactFlow();
   const readOnly = sourceSchema === 1;
   const executionActive = ["starting", "running", "cancelling"].includes(execution.status);
@@ -159,6 +180,19 @@ function GraphStudioCanvas() {
   );
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
   const selectedNodeCount = nodes.filter((node) => node.selected).length;
+  dirtyRef.current = dirty;
+  busyRef.current = busy;
+  readOnlyRef.current = readOnly;
+  executionActiveRef.current = executionActive;
+  draftStateRef.current = {
+    revision: mutationRevisionRef.current,
+    loadedFilename,
+    workflowName,
+    sourceSchema,
+    metadata,
+    nodes,
+    edges,
+  };
 
   useEffect(() => {
     let active = true;
@@ -193,32 +227,57 @@ function GraphStudioCanvas() {
     }
   }, []);
 
+  const loadApprovedDirectories = useCallback(async () => {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.ListApprovedDirectories,
+    });
+    return Array.isArray(response?.directories) ? response.directories : [];
+  }, []);
+
+  const applyBridgeStatus = useCallback(async (bridge = {}, { refresh = false } = {}) => {
+    const connected = bridge?.ready === true || bridge?.connected === true;
+    const previousReady = hostReadyRef.current;
+    const transitionRevision = hostTransitionRevisionRef.current + 1;
+    hostTransitionRevisionRef.current = transitionRevision;
+    hostReadyRef.current = connected;
+    const pairingState = String(bridge?.pairingState || "");
+    const checking = bridge?.socketConnected === true && (
+      bridge?.paired === true || ["connecting", "checking"].includes(pairingState)
+    );
+
+    setHostStatus(connected ? "connected" : checking ? "checking" : "disconnected");
+    setHostCapabilities(
+      connected && Array.isArray(bridge?.capabilities) ? bridge.capabilities : [],
+    );
+    if (!connected) {
+      setApprovedDirectories([]);
+      return false;
+    }
+
+    if (refresh || !previousReady) {
+      const [, directories] = await Promise.all([
+        refreshWorkflows(),
+        loadApprovedDirectories().catch(() => []),
+      ]);
+      if (
+        hostReadyRef.current &&
+        hostTransitionRevisionRef.current === transitionRevision
+      ) {
+        setApprovedDirectories(directories);
+      }
+    }
+    return true;
+  }, [loadApprovedDirectories, refreshWorkflows]);
+
   const checkHostStatus = useCallback(async () => {
     setHostStatus("checking");
     try {
       const response = await chrome.runtime.sendMessage({ type: Messages.CheckBridgeStatus });
-      const connected = Boolean(response?.connected);
-      setHostStatus(connected ? "connected" : "disconnected");
-      setHostCapabilities(Array.isArray(response?.capabilities) ? response.capabilities : []);
-      if (connected) await refreshWorkflows();
-      if (connected) {
-        try {
-          const directories = await chrome.runtime.sendMessage({ type: Messages.ListApprovedDirectories });
-          setApprovedDirectories(Array.isArray(directories?.directories) ? directories.directories : []);
-        } catch {
-          setApprovedDirectories([]);
-        }
-      } else {
-        setApprovedDirectories([]);
-      }
-      return connected;
+      return await applyBridgeStatus(response, { refresh: true });
     } catch {
-      setHostStatus("disconnected");
-      setHostCapabilities([]);
-      setApprovedDirectories([]);
-      return false;
+      return await applyBridgeStatus({ connected: false, ready: false });
     }
-  }, [refreshWorkflows]);
+  }, [applyBridgeStatus]);
 
   useEffect(() => {
     let active = true;
@@ -258,6 +317,9 @@ function GraphStudioCanvas() {
       if (request?.type === Messages.RuntimeStateChanged) {
         applyRuntimeState(request.state);
       }
+      if (request?.type === Messages.BridgeStatus) {
+        void applyBridgeStatus(request.bridge || request);
+      }
     };
     chrome.runtime.onMessage.addListener(listener);
     chrome.runtime.sendMessage({ type: Messages.GetRuntimeState })
@@ -266,7 +328,7 @@ function GraphStudioCanvas() {
       })
       .catch(() => {});
     return () => chrome.runtime.onMessage.removeListener(listener);
-  }, []);
+  }, [applyBridgeStatus]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -329,9 +391,120 @@ function GraphStudioCanvas() {
     }
   }, [logFilterNodeId, nodes]);
 
+  const captureRecoverableDraft = useCallback(() => {
+    return createRecoverableGraphDraft(draftStateRef.current || {});
+  }, []);
+
+  const persistRecoverableDraft = useCallback(async () => {
+    if (!dirtyRef.current) return false;
+    const draft = captureRecoverableDraft();
+    await chrome.storage.local.set({ [GRAPH_STUDIO_DRAFT_KEY]: draft });
+    return true;
+  }, [captureRecoverableDraft]);
+
+  const clearRecoverableDraft = useCallback(async () => {
+    window.clearTimeout(draftPersistTimerRef.current);
+    draftPersistTimerRef.current = 0;
+    await chrome.storage.local.remove(GRAPH_STUDIO_DRAFT_KEY);
+  }, []);
+
+  const scheduleRecoverableDraft = useCallback(() => {
+    window.clearTimeout(draftPersistTimerRef.current);
+    draftPersistTimerRef.current = window.setTimeout(() => {
+      void persistRecoverableDraft().catch((error) => {
+        setNotice({
+          kind: "error",
+          text: `Local draft backup failed: ${error.message || error}`,
+        });
+      });
+    }, 180);
+  }, [persistRecoverableDraft]);
+
   const markDirty = useCallback(() => {
-    if (!readOnly) setDirty(true);
-  }, [readOnly]);
+    if (readOnlyRef.current) return;
+    mutationRevisionRef.current += 1;
+    if (draftStateRef.current) {
+      draftStateRef.current.revision = mutationRevisionRef.current;
+    }
+    dirtyRef.current = true;
+    setDirty(true);
+    scheduleRecoverableDraft();
+  }, [scheduleRecoverableDraft]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      if (!dirtyRef.current) return;
+      void persistRecoverableDraft().catch(() => {});
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const onPageHide = () => {
+      if (dirtyRef.current) void persistRecoverableDraft().catch(() => {});
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [persistRecoverableDraft]);
+
+  useEffect(() => {
+    if (draftRecoveryCheckedRef.current || !definitionsByType.size) return;
+    draftRecoveryCheckedRef.current = true;
+    let active = true;
+    chrome.storage.local.get(GRAPH_STUDIO_DRAFT_KEY)
+      .then(async (stored) => {
+        if (!active) return;
+        const draft = stored?.[GRAPH_STUDIO_DRAFT_KEY];
+        if (draft?.studio !== "graph" || !Array.isArray(draft.nodes) || !Array.isArray(draft.edges)) {
+          setDraftRecoveryStatus("ready");
+          return;
+        }
+        const label = draft.workflowName || draft.loadedFilename || "Untitled";
+        if (!window.confirm(`Recover unsaved Graph Studio draft "${label}"?`)) {
+          await clearRecoverableDraft();
+          if (active) setDraftRecoveryStatus("ready");
+          return;
+        }
+        const draftReadOnly = Number(draft.sourceSchema) === 1;
+        const restoredNodes = draft.nodes.map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            definition: definitionsByType.get(node.data?.definition?.type || node.type) || node.data?.definition,
+            readOnly: draftReadOnly,
+            onMutate: markDirty,
+          },
+        }));
+        const restoredEdges = draft.edges.map((edge) => ({
+          ...edge,
+          data: { ...edge.data, readOnly: draftReadOnly, onMutate: markDirty },
+        }));
+        mutationRevisionRef.current = Math.max(1, Number(draft.revision) || 1);
+        initialSessionLoadedRef.current = true;
+        setNodes(restoredNodes);
+        setEdges(restoredEdges);
+        setSelectedNodeId("");
+        setLoadedFilename(String(draft.loadedFilename || ""));
+        setSelectedFile(String(draft.loadedFilename || ""));
+        setWorkflowName(String(draft.workflowName || "Untitled"));
+        setMetadata(draft.metadata || createNewWorkflowMetadata());
+        setSourceSchema(Number(draft.sourceSchema) || 2);
+        dirtyRef.current = true;
+        setDirty(true);
+        setNotice({ kind: "warning", text: "Recovered unsaved graph draft" });
+        setDraftRecoveryStatus("restored");
+        window.setTimeout(() => fitView({ padding: 0.18, duration: 250 }), 0);
+      })
+      .catch((error) => {
+        if (!active) return;
+        initialSessionLoadedRef.current = true;
+        setDraftRecoveryStatus("blocked");
+        setNotice({ kind: "error", text: `Draft recovery failed: ${error.message || error}` });
+      });
+    return () => { active = false; };
+  }, [clearRecoverableDraft, definitionsByType, fitView, markDirty, setEdges, setNodes]);
 
   const selectCanvasNode = useCallback((nodeId) => {
     setNodes((current) => current.every((node) => node.selected === (node.id === nodeId))
@@ -397,13 +570,13 @@ function GraphStudioCanvas() {
         collapsed: false,
         layoutDirection,
         readOnly: false,
-        onMutate: () => setDirty(true),
+        onMutate: markDirty,
       },
     }));
     setSelectedNodeId(id);
     window.setTimeout(() => selectCanvasNode(id), 0);
-    setDirty(true);
-  }, [canvasInteraction.canEdit, layoutDirection, selectCanvasNode, setNodes]);
+    markDirty();
+  }, [canvasInteraction.canEdit, layoutDirection, markDirty, selectCanvasNode, setNodes]);
 
   const addFromPalette = useCallback((definition) => {
     createNode(definition, { x: 120 + nodes.length * 28, y: 100 + nodes.length * 110 });
@@ -436,7 +609,7 @@ function GraphStudioCanvas() {
           ...sourceNode.data,
           readOnly: false,
           layoutDirection,
-          onMutate: () => setDirty(true),
+          onMutate: markDirty,
         },
       };
       const sourceIds = new Set(currentEdges
@@ -461,7 +634,7 @@ function GraphStudioCanvas() {
           targetHandle: "input",
           type: "removable",
           animated: false,
-          data: { readOnly: false, onMutate: () => setDirty(true) },
+          data: { readOnly: false, onMutate: markDirty },
         });
       }
       if (mapperAttention?.node) {
@@ -473,18 +646,18 @@ function GraphStudioCanvas() {
           targetHandle: "input",
           type: "removable",
           animated: false,
-          data: { readOnly: false, onMutate: () => setDirty(true) },
+          data: { readOnly: false, onMutate: markDirty },
         });
       }
       setNodes(nextNodes);
       setEdges(nextEdges);
       setSelectedNodeId(id);
-      setDirty(true);
+      markDirty();
       window.setTimeout(() => fitView({ padding: 0.18, duration: 220 }), 0);
     } catch (error) {
       setNotice({ kind: "error", text: `Could not add recorded node: ${error.message || error}` });
     }
-  }, [definitionsByType, fitView, getEdges, getNodes, layoutDirection, setEdges, setNodes]);
+  }, [definitionsByType, fitView, getEdges, getNodes, layoutDirection, markDirty, setEdges, setNodes]);
 
   useEffect(() => {
     if (!definitionsByType.size || !Array.isArray(recording.recordedSteps)) return;
@@ -506,10 +679,10 @@ function GraphStudioCanvas() {
       id: `edge-${connection.source}-${connection.sourceHandle || "success"}-${connection.target}`,
       type: "removable",
       animated: false,
-      data: { readOnly: false, onMutate: () => setDirty(true) },
+      data: { readOnly: false, onMutate: markDirty },
     }, current));
-    setDirty(true);
-  }, [canvasInteraction.canEdit, setEdges]);
+    markDirty();
+  }, [canvasInteraction.canEdit, markDirty, setEdges]);
 
   const onDrop = useCallback((event) => {
     event.preventDefault();
@@ -525,15 +698,22 @@ function GraphStudioCanvas() {
     setNodes((current) => current.map((node) => node.id === selectedNodeId
       ? { ...node, data: { ...node.data, ...patch } }
       : node));
-    setDirty(true);
-  }, [canvasInteraction.canEdit, selectedNodeId, setNodes]);
+    markDirty();
+  }, [canvasInteraction.canEdit, markDirty, selectedNodeId, setNodes]);
 
   const confirmDiscard = useCallback(() => {
-    return !dirty || window.confirm("Discard unsaved graph changes?");
-  }, [dirty]);
+    return !dirtyRef.current || window.confirm("Discard unsaved graph changes?");
+  }, []);
 
-  const newWorkflow = useCallback(() => {
+  const newWorkflow = useCallback(async () => {
+    if (saveQueueRef.current.pending > 0) {
+      setNotice({ kind: "warning", text: "Wait for the current save to finish" });
+      return;
+    }
     if (!confirmDiscard()) return;
+    await clearRecoverableDraft().catch(() => {});
+    mutationRevisionRef.current += 1;
+    dirtyRef.current = false;
     setNodes([]);
     setEdges([]);
     setSelectedNodeId("");
@@ -547,13 +727,19 @@ function GraphStudioCanvas() {
       activeWorkflowFilename: "",
       activeStudio: StudioKind.Graph,
     }).catch(() => {});
-  }, [confirmDiscard, setEdges, setNodes]);
+  }, [clearRecoverableDraft, confirmDiscard, setEdges, setNodes]);
 
   const loadWorkflow = useCallback(async (filenameOverride = "") => {
     const filename = typeof filenameOverride === "string" && filenameOverride
       ? filenameOverride
       : selectedFile;
+    if (saveQueueRef.current.pending > 0) {
+      setNotice({ kind: "warning", text: "Wait for the current save to finish before loading" });
+      return false;
+    }
     if (!filename || !definitions.length || !confirmDiscard()) return;
+    const loadStartedAtRevision = mutationRevisionRef.current;
+    busyRef.current = true;
     setBusy(true);
     setNotice({ kind: "neutral", text: `Loading ${selectedFile}…` });
     try {
@@ -562,15 +748,20 @@ function GraphStudioCanvas() {
         filename,
       });
       if (!isSuccess(response)) throw new Error(response?.error || "Could not load workflow.");
+      if (
+        dirtyRef.current
+        && mutationRevisionRef.current !== loadStartedAtRevision
+        && !window.confirm(`Discard changes made while loading "${filename}"?`)
+      ) return false;
       const content = response.content || response.workflow || response.data || response;
       const model = workflowToCanvas(content, definitionsByType);
       setNodes(model.nodes.map((node) => ({
         ...node,
-        data: { ...node.data, onMutate: () => setDirty(true) },
+        data: { ...node.data, onMutate: markDirty },
       })));
       setEdges(model.edges.map((edge) => ({
         ...edge,
-        data: { ...edge.data, onMutate: () => setDirty(true) },
+        data: { ...edge.data, onMutate: markDirty },
       })));
       setSelectedNodeId("");
       setLoadedFilename(filename);
@@ -579,7 +770,10 @@ function GraphStudioCanvas() {
         : (model.metadata.name || stripJson(filename)));
       setMetadata(model.metadata);
       setSourceSchema(model.sourceSchema);
+      mutationRevisionRef.current += 1;
+      dirtyRef.current = false;
       setDirty(false);
+      await clearRecoverableDraft().catch(() => {});
       setNotice(model.readOnly
         ? { kind: "warning", text: "Legacy v1 loaded read-only · upgrade required to edit" }
         : { kind: "success", text: "Graph loaded" });
@@ -588,16 +782,20 @@ function GraphStudioCanvas() {
         activeStudio: StudioKind.Graph,
       }).catch(() => {});
       window.setTimeout(() => fitView({ padding: 0.18, duration: 250 }), 0);
+      return true;
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
+      return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  }, [confirmDiscard, definitions.length, definitionsByType, fitView, selectedFile, setEdges, setNodes]);
+  }, [clearRecoverableDraft, confirmDiscard, definitions.length, definitionsByType, fitView, markDirty, selectedFile, setEdges, setNodes]);
 
   useEffect(() => {
     if (
       initialSessionLoadedRef.current ||
+      draftRecoveryStatus !== "ready" ||
       hostStatus !== "connected" ||
       !definitions.length ||
       busy ||
@@ -611,7 +809,7 @@ function GraphStudioCanvas() {
         void loadWorkflow(session.activeWorkflowFilename);
       })
       .catch(() => {});
-  }, [busy, definitions.length, hostStatus, loadWorkflow, loadedFilename]);
+  }, [busy, definitions.length, draftRecoveryStatus, hostStatus, loadWorkflow, loadedFilename]);
 
   useEffect(() => {
     const listener = (changes, areaName) => {
@@ -633,6 +831,7 @@ function GraphStudioCanvas() {
     const requestedName = window.prompt("Name the duplicated workflow", `${base}_copy`);
     if (!requestedName?.trim()) return;
     const newFilename = ensureWorkflowFilename(requestedName.trim());
+    busyRef.current = true;
     setBusy(true);
     try {
       const response = await chrome.runtime.sendMessage({
@@ -647,13 +846,22 @@ function GraphStudioCanvas() {
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, [busy, hostStatus, refreshWorkflows, selectedFile]);
 
   const deleteWorkflow = useCallback(async () => {
     if (!selectedFile || busy || hostStatus !== "connected") return;
+    if (readOnly && loadedFilename === selectedFile) {
+      setNotice({
+        kind: "error",
+        text: "Upgrade this legacy workflow before deleting its only saved copy.",
+      });
+      return;
+    }
     if (!window.confirm(`Delete ${selectedFile}? This cannot be undone.`)) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const response = await chrome.runtime.sendMessage({
@@ -663,16 +871,17 @@ function GraphStudioCanvas() {
       if (!isSuccess(response)) throw new Error(response?.error || "Could not delete workflow.");
       if (loadedFilename === selectedFile) {
         setLoadedFilename("");
-        setDirty(true);
+        markDirty();
       }
       setNotice({ kind: "success", text: `Deleted ${selectedFile}` });
       await refreshWorkflows();
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  }, [busy, hostStatus, loadedFilename, refreshWorkflows, selectedFile]);
+  }, [busy, hostStatus, loadedFilename, readOnly, refreshWorkflows, selectedFile]);
 
   const createGraphContent = useCallback(() => canvasToGraphWorkflow(nodes, edges, {
     ...metadata,
@@ -702,48 +911,145 @@ function GraphStudioCanvas() {
       ...current,
       settings: { ...current.settings, graphLayoutDirection: nextDirection },
     }));
-    if (!readOnly) setDirty(true);
+    if (!readOnly) markDirty();
     window.setTimeout(() => fitView({ padding: 0.18, duration: 250 }), 0);
-  }, [edges, fitView, layoutDirection, readOnly, setNodes]);
+  }, [edges, fitView, layoutDirection, markDirty, readOnly, setNodes]);
 
-  const saveWorkflow = useCallback(async () => {
-    if (readOnly || busy || executionActive) return;
-    setBusy(true);
+  const captureGraphSaveSnapshot = useCallback(() => {
+    const draft = draftStateRef.current;
+    const content = canvasToGraphWorkflow(draft.nodes, draft.edges, {
+      ...draft.metadata,
+      name: draft.workflowName,
+    });
+    return {
+      revision: mutationRevisionRef.current,
+      fingerprint: hashWorkflowSnapshot({ workflowName: draft.workflowName, content }),
+      content,
+      loadedFilename: draft.loadedFilename,
+      workflowName: draft.workflowName,
+    };
+  }, []);
+
+  const performGraphSave = useCallback(async () => {
     try {
-      const content = createGraphContent();
-      const desiredFilename = ensureWorkflowFilename(workflowName);
-      const rename = Boolean(loadedFilename && loadedFilename !== desiredFilename);
+      const submitted = captureGraphSaveSnapshot();
+      const desiredFilename = ensureWorkflowFilename(submitted.workflowName);
+      const rename = Boolean(submitted.loadedFilename && submitted.loadedFilename !== desiredFilename);
       const response = await chrome.runtime.sendMessage(rename
         ? {
             type: Messages.RenameWorkflow,
-            filename: loadedFilename,
+            filename: submitted.loadedFilename,
             newFilename: desiredFilename,
-            content,
+            content: submitted.content,
           }
         : {
             type: Messages.SaveWorkflow,
             filename: desiredFilename,
-            content,
+            content: submitted.content,
           });
       if (!isSuccess(response)) throw new Error(response?.error || "Could not save workflow.");
       const savedFilename = response.newFilename || response.filename || desiredFilename;
+      if (draftStateRef.current) draftStateRef.current.loadedFilename = savedFilename;
       setLoadedFilename(savedFilename);
       setSelectedFile(savedFilename);
-      setWorkflowName(stripJson(savedFilename));
-      setMetadata((current) => ({ ...current, name: stripJson(savedFilename) }));
-      setDirty(false);
-      setNotice({ kind: "success", text: `Saved ${savedFilename}` });
+      let current = null;
+      try {
+        current = captureGraphSaveSnapshot();
+      } catch {
+        current = { revision: mutationRevisionRef.current, fingerprint: "" };
+      }
+      const reconciliation = reconcileGraphSaveResponse({
+        submitted,
+        current,
+        savedFilename,
+        responseWorkflowName: response.name,
+      });
+      if (reconciliation.applyResponseWorkflowName) {
+        const normalizedMetadata = {
+          ...(draftStateRef.current?.metadata || {}),
+          name: reconciliation.normalizedWorkflowName,
+        };
+        if (reconciliation.responseChangesWorkflowName) {
+          mutationRevisionRef.current += 1;
+        }
+        if (draftStateRef.current) {
+          draftStateRef.current = {
+            ...draftStateRef.current,
+            revision: mutationRevisionRef.current,
+            workflowName: reconciliation.normalizedWorkflowName,
+            metadata: normalizedMetadata,
+          };
+        }
+        setWorkflowName(reconciliation.normalizedWorkflowName);
+        setMetadata(normalizedMetadata);
+      }
+      if (reconciliation.clearDirty) {
+        dirtyRef.current = false;
+        setDirty(false);
+        await clearRecoverableDraft().catch(() => {});
+        setNotice({ kind: "success", text: `Saved ${savedFilename}` });
+      } else {
+        dirtyRef.current = true;
+        setDirty(true);
+        await persistRecoverableDraft().catch(() => {});
+        setNotice({
+          kind: "warning",
+          text: reconciliation.reason === "response_normalized_name"
+            ? `Saved ${savedFilename}; the normalized workflow name needs another save`
+            : `Saved ${savedFilename}; newer edits remain unsaved`,
+        });
+      }
       await saveStudioSession({
         activeWorkflowFilename: savedFilename,
         activeStudio: StudioKind.Graph,
       }).catch(() => {});
       await refreshWorkflows();
+      return true;
     } catch (error) {
-      setNotice({ kind: "error", text: error.message || String(error) });
-    } finally {
-      setBusy(false);
+      dirtyRef.current = true;
+      setDirty(true);
+      await persistRecoverableDraft().catch(() => {});
+      setNotice({ kind: "error", text: `Save failed; draft kept locally. ${error.message || error}` });
+      return false;
     }
-  }, [busy, createGraphContent, executionActive, loadedFilename, readOnly, refreshWorkflows, workflowName]);
+  }, [captureGraphSaveSnapshot, clearRecoverableDraft, persistRecoverableDraft, refreshWorkflows]);
+
+  const saveWorkflow = useCallback(() => {
+    if (readOnlyRef.current || executionActiveRef.current || hostStatus !== "connected") {
+      return Promise.resolve(false);
+    }
+    if (busyRef.current && saveQueueRef.current.pending === 0) return Promise.resolve(false);
+    busyRef.current = true;
+    setBusy(true);
+    const queued = saveQueueRef.current.enqueue(performGraphSave);
+    return queued.finally(() => {
+      if (saveQueueRef.current.pending === 0) {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    });
+  }, [hostStatus, performGraphSave]);
+
+  const openSequentialStudio = useCallback(async (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const destination = event.currentTarget.href;
+    if (saveQueueRef.current.pending > 0) {
+      setNotice({ kind: "warning", text: "Wait for the current save to finish before switching Studios" });
+      return;
+    }
+    if (!confirmDiscard()) return;
+    if (dirtyRef.current) {
+      dirtyRef.current = false;
+      setDirty(false);
+      await clearRecoverableDraft().catch(() => {});
+    }
+    await saveStudioSession({
+      activeWorkflowFilename: draftStateRef.current?.loadedFilename || "",
+      activeStudio: StudioKind.Sequential,
+    }).catch(() => {});
+    window.location.assign(destination);
+  }, [clearRecoverableDraft, confirmDiscard]);
 
   const toggleRecording = useCallback(async () => {
     if (executionActive) return;
@@ -819,7 +1125,10 @@ function GraphStudioCanvas() {
     if (executionActive) {
       if (execution.status !== "running") return;
       try {
-        const response = await chrome.runtime.sendMessage({ type: Messages.StopWorkflow });
+        const response = await chrome.runtime.sendMessage({
+          type: Messages.StopWorkflow,
+          runId: execution.runId || "",
+        });
         if (!response?.ok) throw new Error(response?.error || "Could not stop workflow.");
       } catch (error) {
         setNotice({ kind: "error", text: error.message || String(error) });
@@ -859,7 +1168,7 @@ function GraphStudioCanvas() {
         : current);
       setNotice({ kind: "error", text: error.message || String(error) });
     }
-  }, [createGraphContent, execution.status, executionActive, nodes.length, workflowName]);
+  }, [createGraphContent, execution.runId, execution.status, executionActive, nodes.length, workflowName]);
 
   const upgradeWorkflow = useCallback(async () => {
     if (!readOnly || !loadedFilename || busy) return;
@@ -867,6 +1176,7 @@ function GraphStudioCanvas() {
       `Upgrade ${loadedFilename} to graph schema v2?\n\nThe original will be retained as ${loadedFilename}.v1.bak.`,
     );
     if (!confirmed) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const content = createGraphContent();
@@ -885,7 +1195,10 @@ function GraphStudioCanvas() {
         ...edge,
         data: { ...edge.data, readOnly: false },
       })));
+      mutationRevisionRef.current += 1;
+      dirtyRef.current = false;
       setDirty(false);
+      await clearRecoverableDraft().catch(() => {});
       setNotice({
         kind: "success",
         text: `Upgraded · backup ${response.backupFilename || `${loadedFilename}.v1.bak`}`,
@@ -893,9 +1206,10 @@ function GraphStudioCanvas() {
     } catch (error) {
       setNotice({ kind: "error", text: error.message || String(error) });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  }, [busy, createGraphContent, loadedFilename, readOnly, setNodes]);
+  }, [busy, clearRecoverableDraft, createGraphContent, loadedFilename, readOnly, setEdges, setNodes]);
 
   return (
     <div className={`graph-shell${logsOpen ? " logs-open" : ""}`}>
@@ -906,6 +1220,7 @@ function GraphStudioCanvas() {
         hostStatus={hostStatus}
         onRetryHost={checkHostStatus}
         onNew={newWorkflow}
+        onOpenSequential={openSequentialStudio}
         files={files}
         selectedFile={selectedFile}
         onSelectedFile={setSelectedFile}
@@ -913,6 +1228,9 @@ function GraphStudioCanvas() {
         onRefresh={refreshWorkflows}
         onDuplicate={duplicateWorkflow}
         onDelete={deleteWorkflow}
+        canSave={canSave}
+        dirty={dirty}
+        onSave={saveWorkflow}
         density={uiPreferences.density}
         onDensity={(density) => updateUiPreferences({ density })}
         recording={recording}
@@ -987,10 +1305,10 @@ function GraphStudioCanvas() {
           readOnly={!canvasInteraction.canEdit}
           navigationMode={canvasInteraction.effectiveTool === CanvasTool.Hand}
           workflowName={workflowName}
-          onWorkflowName={(name) => { if (!readOnly) { setWorkflowName(name); setDirty(true); } }}
+          onWorkflowName={(name) => { if (!readOnly) { setWorkflowName(name); markDirty(); } }}
           metadata={metadata}
           variables={execution.variables || []}
-          onMetadata={(patch) => { if (!readOnly) { setMetadata((current) => ({ ...current, ...patch })); setDirty(true); } }}
+          onMetadata={(patch) => { if (!readOnly) { setMetadata((current) => ({ ...current, ...patch })); markDirty(); } }}
           nodeCount={nodes.length}
           edgeCount={edges.length}
           dirty={dirty}
@@ -1058,7 +1376,7 @@ function StudioCommandBar(props) {
       <nav className="command-group identity-group" aria-label="Identity and navigation">
         <div className="brand-lockup"><img className="brand-mark" src={studioIcon} alt="" /><div><strong>BRunner</strong><span>Graph Studio</span></div></div>
         <button type="button" className="command-button" onClick={props.onNew} disabled={props.busy || props.executionActive || props.recordingActive} title="Create a new workflow"><PlusIcon /><span>New</span></button>
-        <a href="../studio/index.html" className="command-button" title="Open Sequential Studio"><SequenceIcon /><span>Sequential</span></a>
+        <a href="../studio/index.html" className="command-button" onClick={props.onOpenSequential} title="Open Sequential Studio"><SequenceIcon /><span>Sequential</span></a>
       </nav>
 
       <div className={`host-connection host-${props.hostStatus}`} role="status" aria-live="polite">
@@ -1095,6 +1413,7 @@ function StudioCommandBar(props) {
           <button type="button" className="command-button icon-command" onClick={props.onDuplicate} disabled={props.hostStatus !== "connected" || !props.selectedFile || props.busy || props.executionActive || props.recordingActive} aria-label="Duplicate selected workflow" title="Duplicate selected workflow"><DuplicateIcon /></button>
           <button type="button" className="command-button icon-command danger-command" onClick={props.onDelete} disabled={props.hostStatus !== "connected" || !props.selectedFile || props.busy || props.executionActive || props.recordingActive} aria-label="Delete selected workflow" title="Delete selected workflow"><DeleteIcon /></button>
           <button type="button" className="command-button icon-command" onClick={props.onRefresh} disabled={props.hostStatus !== "connected" || props.busy || props.executionActive} aria-label="Refresh saved workflows" title="Refresh saved workflows"><RefreshIcon /></button>
+          <button type="button" className="command-button icon-command" onClick={props.onSave} disabled={!props.canSave} aria-label="Save workflow changes" title={props.dirty ? "Save workflow changes" : "No unsaved workflow changes"}><SaveLogIcon /></button>
         </section>
 
         <section className="command-group execution-group" aria-label="Execution controls">
@@ -1134,7 +1453,7 @@ function ExecutionLogPanel({ logs, nodes, filterNodeId, onFilterNodeId, onSelect
         <button type="button" className="panel-collapse-button" onClick={onCollapse} aria-label="Hide Execution Logs" aria-expanded="true" title="Hide Execution Logs"><CollapsePanelIcon direction="down" /></button>
       </div>
       <div className="execution-log-list" role="log" aria-live="polite" aria-relevant="additions">
-        {!visibleLogs.length && <p className="execution-log-empty">{logs.length ? "No events match this node." : "Run the graph to see bounded, secret-safe execution history."}</p>}
+        {!visibleLogs.length && <p className="execution-log-empty">{logs.length ? "No events match this node." : "Run the graph to see local execution history."}</p>}
         {visibleLogs.map((entry) => (
           <article className={`execution-log-entry log-${entry.status}`} key={entry.id}>
             <time dateTime={entry.timestamp}>{new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>

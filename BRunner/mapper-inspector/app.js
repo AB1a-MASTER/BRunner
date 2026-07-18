@@ -35,6 +35,7 @@ const state = {
   hoverRestoreTimer: null,
   highlightRequestId: 0,
   activeResolutionKey: "",
+  resolutionAction: "",
   graphView: {
     orientation: "vertical",
     scale: 0.86,
@@ -1111,6 +1112,7 @@ function pagePathFromProfileKey(pageProfileKey = "") {
   const [, page = "", query = ""] = String(pageProfileKey || "").split("::");
   if (!page || page === "home") return "/";
   const path = `/${page.replace(/_+/g, "/")}`;
+  if (/^identity_v2_[0-9a-f]{32}$/.test(query)) return path;
   return query ? `${path}?${query.replace(/_+/g, "=")}` : path;
 }
 
@@ -1134,7 +1136,6 @@ function renderPolicyPanel() {
   const siteOverride = settings.siteOverrides?.[map.siteKey] || {};
   const pageOverride = settings.pageOverrides?.[map.pageProfileKey] || {};
   const effective = effectivePolicy(entry);
-  const sensitive = isSensitiveEntry(entry);
 
   els.policy.innerHTML = `
     ${renderPlatformProfileSummary(map)}
@@ -1143,7 +1144,6 @@ function renderPolicyPanel() {
     ${renderReliabilitySummary(entry)}
     <div class="policy-grid">
       <div>
-        <span class="badge ${sensitive ? "sensitive-badge" : ""}">${sensitive ? "sensitive" : "normal"}</span>
         <span class="badge">${escapeHtml(effective.mode || "automatic")}</span>
       </div>
       <label>
@@ -1177,18 +1177,6 @@ function renderPolicyPanel() {
         Mutation limit
         <input id="policy-mutation-limit" type="number" min="1" max="500" value="${Number(settings.materialMutationLimit) || 50}">
       </label>
-      <label>
-        Site sensitivity
-        <select id="policy-site-sensitive">
-          ${policyBooleanOverrideOptions(siteOverride.sensitive)}
-        </select>
-      </label>
-      <label>
-        Page sensitivity
-        <select id="policy-page-sensitive">
-          ${policyBooleanOverrideOptions(pageOverride.sensitive)}
-        </select>
-      </label>
       <button id="btn-save-policy" type="button">Save policy</button>
     </div>
   `;
@@ -1203,17 +1191,6 @@ function policyOverrideOptions(value = "") {
     ["explicit", "Manual map only"],
   ].map(([optionValue, label]) => {
     return `<option value="${optionValue}" ${value === optionValue ? "selected" : ""}>${label}</option>`;
-  }).join("");
-}
-
-function policyBooleanOverrideOptions(value) {
-  const selected = value === true ? "true" : value === false ? "false" : "";
-  return [
-    ["", "Inherit"],
-    ["false", "Normal"],
-    ["true", "Sensitive"],
-  ].map(([optionValue, label]) => {
-    return `<option value="${optionValue}" ${selected === optionValue ? "selected" : ""}>${label}</option>`;
   }).join("");
 }
 
@@ -1948,7 +1925,7 @@ function frameStructureLabel(part = "") {
     .split("/")
     .filter(Boolean)
     .at(-1) || "frame";
-  return `${access === "cross_origin" ? "protected" : "frame"} ${leaf}`;
+  return `${access === "cross_origin" ? "isolated frame" : "frame"} ${leaf}`;
 }
 
 function structureNodeHtml(node, level = 0, parentKey = "") {
@@ -2088,6 +2065,7 @@ async function selectContainerTarget(key = "", encodedTarget = "") {
     const response = await chrome.runtime.sendMessage({
       type: Messages.HighlightMapperComponent,
       pageMap: entry.pageMap,
+      settings: entry.settings || {},
       containerTarget,
       highlightRequestId,
     });
@@ -2191,7 +2169,6 @@ function renderDetail(lastResolution = null) {
     return;
   }
 
-  const sensitive = isSensitiveEntry(entry);
   const resolution = lastResolution || resolutionForComponent(component, entry);
   const activeResolution = state.activeResolutionKey === componentResolutionKey(entry, component);
   els.detail.className = "component-detail";
@@ -2200,7 +2177,7 @@ function renderDetail(lastResolution = null) {
       <h3>Identity</h3>
       <div><strong>${escapeHtml(component.displayAlias || componentShortName(component))}</strong></div>
       <div><code>${escapeHtml(component.componentId)}</code></div>
-      <div>${statusHtml(component.status)} ${component.reviewRequired ? `<span class="badge">review</span>` : ""} ${componentIsHidden(component) ? `<span class="badge hidden-badge">hidden</span>` : ""} ${componentIsDynamicContext(component) ? `<span class="badge dynamic-badge">dynamic context</span>` : ""} ${sensitive ? `<span class="badge sensitive-badge">redacted</span>` : ""}</div>
+      <div>${statusHtml(component.status)} ${component.reviewRequired ? `<span class="badge">review</span>` : ""} ${componentIsHidden(component) ? `<span class="badge hidden-badge">hidden</span>` : ""} ${componentIsDynamicContext(component) ? `<span class="badge dynamic-badge">dynamic context</span>` : ""}</div>
     </div>
     <div class="detail-block detail-actions">
       <label>
@@ -2208,6 +2185,16 @@ function renderDetail(lastResolution = null) {
         <input id="component-alias" type="text" value="${escapeAttr(component.displayAlias || "")}" placeholder="${escapeAttr(componentShortName(component))}">
       </label>
       <button id="btn-save-alias" type="button">Save alias</button>
+      <label>
+        Resolution requirement
+        <select id="component-resolution-action">
+          <option value="" ${state.resolutionAction === "" ? "selected" : ""}>Mapped/default capability</option>
+          <option value="element.click" ${state.resolutionAction === "element.click" ? "selected" : ""}>Click</option>
+          <option value="element.type" ${state.resolutionAction === "element.type" ? "selected" : ""}>Type/input</option>
+          <option value="element.select" ${state.resolutionAction === "element.select" ? "selected" : ""}>Select</option>
+          <option value="element.toggle" ${state.resolutionAction === "element.toggle" ? "selected" : ""}>Toggle</option>
+        </select>
+      </label>
       <button id="btn-check-live-resolution" type="button" ${activeResolution ? "disabled" : ""}>
         ${activeResolution ? "Checking live resolution..." : "Check live resolution"}
       </button>
@@ -2215,19 +2202,19 @@ function renderDetail(lastResolution = null) {
     </div>
     <div class="detail-block">
       <h3>Locator</h3>
-      <pre>${escapeHtml(jsonForDisplay(component.primaryLocator || {}, sensitive))}</pre>
+      <pre>${escapeHtml(jsonForDisplay(component.primaryLocator || {}))}</pre>
     </div>
     <div class="detail-block">
       <h3>Fallback Locators</h3>
-      <pre>${escapeHtml(jsonForDisplay(component.fallbackLocators || [], sensitive))}</pre>
+      <pre>${escapeHtml(jsonForDisplay(component.fallbackLocators || []))}</pre>
     </div>
     <div class="detail-block">
       <h3>Capabilities</h3>
-      <pre>${escapeHtml(jsonForDisplay(component.expectedCapabilities || [], false))}</pre>
+      <pre>${escapeHtml(jsonForDisplay(component.expectedCapabilities || []))}</pre>
     </div>
     <div class="detail-block">
       <h3>History</h3>
-      <pre>${escapeHtml(jsonForDisplay(component.historicalLinks || [], false))}</pre>
+      <pre>${escapeHtml(jsonForDisplay(component.historicalLinks || []))}</pre>
     </div>
     ${renderComponentRegionDynamics(component)}
     ${renderComponentFrameScope(component)}
@@ -2237,12 +2224,12 @@ function renderDetail(lastResolution = null) {
     ${resolution ? `
       <div class="detail-block">
         <h3>Live Resolution</h3>
-        <pre>${escapeHtml(jsonForDisplay(resolution, sensitive))}</pre>
+        <pre>${escapeHtml(jsonForDisplay(resolution))}</pre>
       </div>
       ${resolution.resolverLog ? `
         <div class="detail-block">
           <h3>Resolver Log</h3>
-          <pre>${escapeHtml(jsonForDisplay(resolution.resolverLog, sensitive))}</pre>
+          <pre>${escapeHtml(jsonForDisplay(resolution.resolverLog))}</pre>
         </div>
       ` : ""}
       ${renderLiveCandidateLinks(resolution, component)}
@@ -2250,6 +2237,9 @@ function renderDetail(lastResolution = null) {
   `;
 
   document.getElementById("btn-save-alias")?.addEventListener("click", saveComponentAlias);
+  document.getElementById("component-resolution-action")?.addEventListener("change", (event) => {
+    state.resolutionAction = event.target.value || "";
+  });
   document.getElementById("btn-check-live-resolution")?.addEventListener("click", checkLiveResolution);
   document.getElementById("btn-accept-review")?.addEventListener("click", acceptCurrentMapping);
   els.detail.querySelectorAll("[data-link-attempt-index]").forEach((button) => {
@@ -2260,7 +2250,6 @@ function renderDetail(lastResolution = null) {
 }
 
 function renderLiveCandidateLinks(resolution = {}, component = {}) {
-  const sensitive = isSensitiveEntry(selectedEntry());
   const attempts = Array.isArray(resolution.attempts) ? resolution.attempts : [];
   const linkable = attempts
     .map((attempt, index) => ({ attempt, index }))
@@ -2273,7 +2262,7 @@ function renderLiveCandidateLinks(resolution = {}, component = {}) {
       <h3>Candidate Link</h3>
       ${linkable.map(({ attempt, index }) => `
         <button type="button" data-link-attempt-index="${index}">
-          Link ${escapeHtml(sensitive ? `candidate ${index + 1}` : attempt.displayName || attempt.componentId || `candidate ${index + 1}`)}
+          Link ${escapeHtml(attempt.displayName || attempt.componentId || `candidate ${index + 1}`)}
           ${attempt.score !== undefined ? `(${Number(attempt.score)})` : ""}
         </button>
       `).join("")}
@@ -2301,7 +2290,7 @@ function renderPlatformProfileSummary(map = {}) {
         ${Number(loaded.messages) ? metricPillHtml("Messages", Number(loaded.messages) || 0) : ""}
         ${Number(loaded.feedCards) ? metricPillHtml("Cards", Number(loaded.feedCards) || 0) : ""}
       </div>
-      <div class="metric-footnote">Profile metadata is redacted counts only.</div>
+      <div class="metric-footnote">Profile metadata and mapper evidence are stored locally.</div>
     </div>
   `;
 }
@@ -2316,9 +2305,9 @@ function renderFrameSummary(map = {}) {
       <h3>Frames</h3>
       <div class="metric-grid">
         ${metricPillHtml("Same origin", sameOrigin)}
-        ${metricPillHtml("Protected", crossOrigin)}
+        ${metricPillHtml("Cross-origin accessible", crossOrigin)}
       </div>
-      <div class="metric-footnote">Same-origin frames are mapped by stable frame path; cross-origin frames stay protected.</div>
+      <div class="metric-footnote">Accessible frames are mapped as isolated contexts and routed by frame-targeted messaging.</div>
     </div>
   `;
 }
@@ -2400,6 +2389,9 @@ function renderComponentFrameScope(component = {}) {
       <div class="metric-grid">
         ${metricPillHtml("Access", scope.access || "unknown")}
         ${metricPillHtml("Depth", Number(scope.depth) || 0)}
+        ${scope.access === "cross_origin"
+          ? metricPillHtml("Extension", scope.extensionAccessible ? "reachable" : "protected")
+          : ""}
       </div>
       <div class="metric-footnote">${escapeHtml(scope.path)}</div>
     </div>
@@ -2447,7 +2439,7 @@ function renderComponentPlatformScope(component = {}) {
         ${scope.scopeSource ? metricPillHtml("Source", scope.scopeSource) : ""}
         ${scope.confidence ? metricPillHtml("Confidence", `${Number(scope.confidence) || 0}%`) : ""}
       </div>
-      <div class="metric-footnote">Sanitized structural scope; page content is not stored here.</div>
+      <div class="metric-footnote">Contextual scope is captured with the local mapper data.</div>
     </div>
   `;
 }
@@ -2499,7 +2491,6 @@ function renderReliabilitySummary(entry = selectedEntry()) {
       <div class="metric-footnote">
         ${Number(runtime.attemptCount) || 0} runtime attempt(s)
         ${runtime.lastAttemptAt ? ` | last ${escapeHtml(shortTimestamp(runtime.lastAttemptAt))}` : ""}
-        | redacted ${metrics.redaction?.rawTextStored === false && metrics.redaction?.rawLocatorStored === false ? "on" : "unknown"}
       </div>
     </div>
   `;
@@ -2765,12 +2756,14 @@ async function checkLiveResolution() {
   const component = selectedComponent();
   if (!entry || !component) return;
 
+  state.resolutionAction = document.getElementById("component-resolution-action")?.value || "";
   const targetKey = componentResolutionKey(entry, component);
   state.activeResolutionKey = targetKey;
   renderDetail();
   try {
     await highlightComponent(entry, component, null, {
       statusPrefix: "Live resolution",
+      actionOverride: state.resolutionAction,
     });
   } finally {
     if (state.activeResolutionKey === targetKey) {
@@ -2822,7 +2815,9 @@ async function highlightComponent(entry, component, requestId = null, options = 
     const response = await chrome.runtime.sendMessage({
       type: Messages.HighlightMapperComponent,
       pageMap: entry.pageMap,
+      settings: entry.settings || {},
       component,
+      actionOverride: options.actionOverride || "",
       highlightRequestId,
     });
     if (requestId !== null && requestId !== state.hoverHighlightRequestId) return;
@@ -2854,6 +2849,7 @@ async function clearWebsiteHighlight(entry = selectedEntry()) {
     await chrome.runtime.sendMessage({
       type: Messages.HighlightMapperComponent,
       pageMap: entry.pageMap,
+      settings: entry.settings || {},
       component: null,
       highlightRequestId,
     });
@@ -2987,12 +2983,10 @@ async function savePolicy() {
     const siteOverride = applyPolicyOverrideValues(
       entry.settings?.siteOverrides?.[entry.pageMap.siteKey] || {},
       document.getElementById("policy-site-mode")?.value || "",
-      document.getElementById("policy-site-sensitive")?.value || "",
     );
     const pageOverride = applyPolicyOverrideValues(
       entry.settings?.pageOverrides?.[entry.pageMap.pageProfileKey] || {},
       document.getElementById("policy-page-mode")?.value || "",
-      document.getElementById("policy-page-sensitive")?.value || "",
     );
     const nextSettings = {
       ...(entry.settings || {}),
@@ -3022,13 +3016,10 @@ async function savePolicy() {
   }
 }
 
-function applyPolicyOverrideValues(current = {}, mode = "", sensitive = "") {
+function applyPolicyOverrideValues(current = {}, mode = "") {
   const next = { ...(current || {}) };
   if (mode) next.mode = mode;
   else delete next.mode;
-  if (sensitive === "true") next.sensitive = true;
-  else if (sensitive === "false") next.sensitive = false;
-  else delete next.sensitive;
   return next;
 }
 
@@ -3262,43 +3253,8 @@ function effectivePolicy(entry = null) {
   };
 }
 
-function isSensitiveEntry(entry = null) {
-  return effectivePolicy(entry).sensitive === true;
-}
-
-function jsonForDisplay(value, sensitive = false) {
-  const prepared = sensitive ? redactSensitive(value) : value;
-  return JSON.stringify(prepared, null, 2);
-}
-
-function redactSensitive(value, key = "") {
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSensitive(item, key));
-  }
-  if (!value || typeof value !== "object") {
-    return shouldRedactKey(key) && typeof value === "string" && value
-      ? "[redacted]"
-      : value;
-  }
-
-  return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
-    entryKey,
-    redactSensitive(entryValue, entryKey),
-  ]));
-}
-
-function shouldRedactKey(key = "") {
-  return [
-    "value",
-    "accessibleName",
-    "stableText",
-    "labelText",
-    "placeholder",
-    "title",
-    "href",
-    "nearbyLabel",
-    "displayName",
-  ].includes(key);
+function jsonForDisplay(value) {
+  return JSON.stringify(value, null, 2);
 }
 
 function splitCsv(value = "") {

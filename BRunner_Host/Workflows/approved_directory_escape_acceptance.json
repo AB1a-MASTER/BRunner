@@ -1,0 +1,35 @@
+{
+  "name": "[NEW 2026-07-17] Approved Directory Escape Refusal Acceptance",
+  "description": "Expected-failure probe for a disposable approved folder. Passing means the host rejects the parent-directory write with 'Output file is outside approved directory.' and no brunner-escape-probe.txt file appears beside the approved folder.",
+  "tags": [
+    "new-2026-07-17",
+    "host-served-8765",
+    "acceptance",
+    "expected-failure"
+  ],
+  "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
+  "variables": {},
+  "settings": {
+    "reuseExistingTabs": false
+  },
+  "steps": [
+    {
+      "id": "approved_directory_escape_open",
+      "action": "browser.navigate",
+      "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
+      "friendlyName": "Open host-served acceptance page"
+    },
+    {
+      "id": "approved_directory_escape_probe",
+      "action": "approved.file.write",
+      "config": {
+        "directoryAlias": "allowedfiles",
+        "relativePath": "../brunner-escape-probe.txt",
+        "content": "this write must be refused",
+        "encoding": "utf-8",
+        "variableName": "escape_probe_result"
+      },
+      "friendlyName": "Expect parent-directory escape refusal"
+    }
+  ]
+}

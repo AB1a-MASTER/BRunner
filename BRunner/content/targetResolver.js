@@ -3,6 +3,10 @@
 // Loaded before mapper.js by manifest.json.
 
 (function () {
+  const DEFAULT_TARGET_RESOLUTION_MAX_WORK = 10000;
+  const MAX_TARGET_RESOLUTION_MAX_WORK = 50000;
+  const MAX_TARGET_RESOLUTION_CANDIDATES = 32;
+
   const TargetStrategies = Object.freeze({
     Id: "id",
     Name: "name",
@@ -17,8 +21,9 @@
     FallbackHash: "fallback_hash",
   });
 
-  function buildElementTarget(element, ctrlHash = "") {
+  function buildElementTarget(element, ctrlHash = "", options = {}) {
     const candidates = [];
+    const workBudget = options.workBudget || createTargetWorkBudget(options.maxWork);
 
     if (!isElement(element)) {
       return {
@@ -28,6 +33,18 @@
         snapshot: null,
       };
     }
+    const form = boundedClosest(
+      element,
+      "form",
+      workBudget,
+      "target_form_ancestor",
+    );
+    const targetOptions = {
+      ...options,
+      workBudget,
+      form,
+      formResolved: true,
+    };
 
     addCandidate(
       candidates,
@@ -36,10 +53,13 @@
       110,
     );
 
-    const labelText = getAssociatedLabelText(element);
+    const labelText = getAssociatedLabelText(element, targetOptions);
     addCandidate(candidates, TargetStrategies.LabelText, labelText, 108);
 
-    const stableText = getStableElementText(element);
+    const stableText = getStableElementText(element, {
+      ...targetOptions,
+      skipSelector: options.skipSelector,
+    });
     addCandidate(candidates, TargetStrategies.Text, stableText, 104);
 
     const role = element.getAttribute("role");
@@ -77,13 +97,13 @@
       addCandidate(candidates, attr, element.getAttribute(attr), 88);
     }
 
-    const formContextSelector = buildFormContextSelector(element);
+    const formContextSelector = buildFormContextSelector(element, targetOptions);
     addCandidate(candidates, "form_context", formContextSelector, 72);
 
-    const cssSelector = buildStableCssSelector(element);
+    const cssSelector = buildStableCssSelector(element, targetOptions);
     addCandidate(candidates, TargetStrategies.CssSelector, cssSelector, 68);
 
-    const domPath = buildDomPath(element);
+    const domPath = buildDomPath(element, targetOptions);
     addCandidate(candidates, "dom_path", domPath, 55);
 
     if (ctrlHash) {
@@ -96,7 +116,8 @@
       primary: uniqueCandidates[0] || null,
       candidates: uniqueCandidates,
       fallbacks: uniqueCandidates.slice(1),
-      snapshot: buildElementSnapshot(element),
+      snapshot: buildElementSnapshot(element, targetOptions),
+      overflow: workBudget?.overflow === true,
     };
   }
 
@@ -127,7 +148,7 @@
       .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
   }
 
-  function buildDomPath(element) {
+  function buildDomPath(element, options = {}) {
     if (!isElement(element)) return "";
 
     const parts = [];
@@ -143,24 +164,33 @@
       if (!parent) break;
 
       const tag = current.tagName.toLowerCase();
-      const index = Array.from(parent.children).indexOf(current);
+      const index = getElementSiblingIndex(current, options.workBudget, "target_dom_path_sibling");
+      if (index < 0) return "";
 
       parts.unshift(`${tag}:${index}`);
       current = parent;
     }
 
+    // A DOM path is resolved from document.documentElement. Returning only the
+    // last ten segments would therefore point at an unrelated element (or
+    // nothing) when the target is nested more deeply. Deep paths are a normal
+    // page shape, so omit this fallback without failing the shared work budget.
+    if (current !== document.documentElement) return "";
+
     return parts.join("/");
   }
 
-  function buildFormContextSelector(element) {
+  function buildFormContextSelector(element, options = {}) {
     if (!isElement(element)) return "";
 
-    const form = element.closest("form");
+    const form = options.formResolved === true
+      ? options.form || null
+      : boundedClosest(element, "form", options.workBudget, "target_form_ancestor");
     if (!form) return "";
 
     const elementTag = element.tagName.toLowerCase();
     const elementType = element.getAttribute("type");
-    const elementText = getStableElementText(element);
+    const elementText = getStableElementText(element, options);
 
     const formId = form.id ? `#${cssEscape(form.id)}` : "";
     const formName = form.getAttribute("name")
@@ -188,20 +218,23 @@
     return "";
   }
 
-  function resolveRecordedTarget(stepOrTarget, controlsTree = null) {
+  function resolveRecordedTarget(stepOrTarget, controlsTree = null, options = {}) {
     const target = normalizeTargetInput(stepOrTarget);
     const attempts = [];
+    const workBudget = options.workBudget || createTargetWorkBudget(options.maxWork);
 
-    const candidates = dedupeCandidates([
-      ...(target.primary ? [target.primary] : []),
-      ...(Array.isArray(target.candidates) ? target.candidates : []),
-      ...(Array.isArray(target.fallbacks) ? target.fallbacks : []),
-    ]);
+    const candidates = collectBoundedTargetCandidates(target, workBudget);
+    if (workBudget.overflow) {
+      return targetWorkOverflowResolution(attempts, workBudget);
+    }
 
     for (const candidate of candidates) {
-      const element = resolveByStrategy(candidate);
+      const element = resolveByStrategy(candidate, { workBudget });
+      if (workBudget.overflow) {
+        return targetWorkOverflowResolution(attempts, workBudget);
+      }
       const compatible =
-        element && snapshotLooksCompatible(element, target.snapshot);
+        element && snapshotLooksCompatible(element, target.snapshot, { workBudget });
 
       attempts.push({
         stage: "direct",
@@ -232,7 +265,11 @@
       controlsTree,
       candidates,
       target.snapshot,
+      { workBudget },
     );
+    if (workBudget.overflow) {
+      return targetWorkOverflowResolution(attempts, workBudget);
+    }
 
     const controlsTreeAttempted =
       controlsTreeMatch.mode !== "controls_tree_unavailable";
@@ -256,7 +293,10 @@
       };
     }
 
-    const fuzzy = resolveBySnapshotFuzzy(target.snapshot);
+    const fuzzy = resolveBySnapshotFuzzy(target.snapshot, { workBudget });
+    if (workBudget.overflow) {
+      return targetWorkOverflowResolution(attempts, workBudget);
+    }
 
     attempts.push({
       stage: "document_fuzzy",
@@ -291,8 +331,8 @@
     };
   }
 
-  function resolveFromControlsTree(controlsTree, candidates, snapshot) {
-    const controls = normalizeControlsTree(controlsTree);
+  function resolveFromControlsTree(controlsTree, candidates, snapshot, options = {}) {
+    const controls = normalizeControlsTree(controlsTree, options);
 
     if (controls.length === 0) {
       return {
@@ -312,12 +352,20 @@
     });
 
     for (const candidate of hashCandidates) {
-      const control = controls.find((item) => item.id === candidate.value);
+      if (!consumeWork(options.workBudget, "target_controls_hash")) break;
+      let control = null;
+      for (const item of controls) {
+        if (!consumeWork(options.workBudget, "target_controls_hash_entry")) break;
+        if (item?.id === candidate.value) {
+          control = item;
+          break;
+        }
+      }
 
       if (
         control?.element &&
         isVisibleElement(control.element) &&
-        snapshotLooksCompatible(control.element, snapshot)
+        snapshotLooksCompatible(control.element, snapshot, options)
       ) {
         return {
           element: control.element,
@@ -346,9 +394,10 @@
     };
 
     for (const control of controls) {
+      if (!consumeWork(options.workBudget, "target_controls_fuzzy")) break;
       if (!control?.element || !isVisibleElement(control.element)) continue;
 
-      const result = scoreElementAgainstSnapshot(control.element, snapshot);
+      const result = scoreElementAgainstSnapshot(control.element, snapshot, options);
 
       if (result.score > best.score) {
         best = {
@@ -378,9 +427,14 @@
     };
   }
 
-  function normalizeControlsTree(controlsTree) {
+  function normalizeControlsTree(controlsTree, options = {}) {
     if (controlsTree instanceof Map) {
-      return Array.from(controlsTree.values());
+      const controls = [];
+      for (const control of controlsTree.values()) {
+        if (!consumeWork(options.workBudget, "target_controls_tree_normalize")) break;
+        controls.push(control);
+      }
+      return controls;
     }
 
     if (Array.isArray(controlsTree)) {
@@ -388,6 +442,32 @@
     }
 
     return [];
+  }
+
+  function collectBoundedTargetCandidates(target = {}, workBudget = null) {
+    const candidates = [];
+    const seen = new Set();
+    const append = (candidate) => {
+      if (!candidate) return true;
+      const key = `${candidate.strategy}::${candidate.value}`;
+      if (seen.has(key)) return true;
+      if (candidates.length >= MAX_TARGET_RESOLUTION_CANDIDATES) {
+        failWorkBudget(workBudget, "target_locator_candidate_budget");
+        return false;
+      }
+      if (!consumeWork(workBudget, "target_locator_candidate")) return false;
+      seen.add(key);
+      candidates.push(candidate);
+      return true;
+    };
+    if (!append(target.primary)) return [];
+    for (const source of [target.candidates, target.fallbacks]) {
+      if (!Array.isArray(source)) continue;
+      for (let index = 0; index < source.length; index += 1) {
+        if (!append(source[index])) return [];
+      }
+    }
+    return dedupeCandidates(candidates);
   }
 
   function candidateConfidence(candidate = {}) {
@@ -413,6 +493,76 @@
     };
 
     return scores[strategy] || 50;
+  }
+
+  function createTargetWorkBudget(value) {
+    const parsed = Number(value);
+    const maxWork = Number.isInteger(parsed)
+      ? Math.min(MAX_TARGET_RESOLUTION_MAX_WORK, Math.max(1, parsed))
+      : DEFAULT_TARGET_RESOLUTION_MAX_WORK;
+    const budget = {
+      maxWork,
+      workCount: 0,
+      overflow: false,
+      overflowAt: "",
+      consume(kind = "target_resolution_work", count = 1) {
+        if (budget.overflow) return false;
+        const amount = Math.max(1, Number(count) || 1);
+        if (budget.workCount + amount > budget.maxWork) {
+          budget.overflow = true;
+          budget.overflowAt = String(kind || "target_resolution_work");
+          return false;
+        }
+        budget.workCount += amount;
+        return true;
+      },
+      fail(kind = "target_resolution_work") {
+        budget.overflow = true;
+        budget.overflowAt ||= String(kind || "target_resolution_work");
+        return false;
+      },
+    };
+    return budget;
+  }
+
+  function consumeWork(workBudget, kind, count = 1) {
+    if (!workBudget) return true;
+    if (typeof workBudget.consume === "function") {
+      return workBudget.consume(kind, count);
+    }
+    return workBudget.overflow !== true;
+  }
+
+  function failWorkBudget(workBudget, kind) {
+    if (!workBudget) return false;
+    if (typeof workBudget.fail === "function") return workBudget.fail(kind);
+    workBudget.overflow = true;
+    workBudget.overflowAt ||= String(kind || "target_resolution_work");
+    return false;
+  }
+
+  function targetWorkOverflowResolution(attempts = [], workBudget = {}) {
+    return {
+      element: null,
+      strategy: null,
+      value: null,
+      confidence: 0,
+      mode: "work_budget_exceeded",
+      mapperState: "protected_unsupported",
+      mapperReason: "component_scan_overflow",
+      attempts,
+      controlsTreeAttempted: false,
+      fuzzyAttempted: false,
+      scanDiagnostics: {
+        version: "mapper.scan.v1",
+        overflow: true,
+        reason: "component_scan_overflow",
+        overflowKind: "target_resolution_work_budget",
+        workCount: Number(workBudget.workCount || 0),
+        maxWork: Number(workBudget.maxWork || 0),
+        overflowAt: String(workBudget.overflowAt || "target_resolution_work"),
+      },
+    };
   }
 
   function normalizeTargetInput(stepOrTarget) {
@@ -458,12 +608,7 @@
 
       return {
         primary,
-        candidates: [
-          primary,
-          ...(Array.isArray(stepOrTarget.targetFallbacks)
-            ? stepOrTarget.targetFallbacks
-            : []),
-        ],
+        candidates: [primary],
         fallbacks: Array.isArray(stepOrTarget.targetFallbacks)
           ? stepOrTarget.targetFallbacks
           : [],
@@ -509,12 +654,7 @@
 
       return {
         primary,
-        candidates: [
-          primary,
-          ...(Array.isArray(stepOrTarget.targetFallbacks)
-            ? stepOrTarget.targetFallbacks
-            : []),
-        ],
+        candidates: [primary],
         fallbacks: Array.isArray(stepOrTarget.targetFallbacks)
           ? stepOrTarget.targetFallbacks
           : [],
@@ -538,7 +678,7 @@
     return TargetStrategies.FallbackHash;
   }
 
-  function resolveByStrategy(candidate) {
+  function resolveByStrategy(candidate, options = {}) {
     if (!candidate || !candidate.strategy) return null;
 
     const strategy = candidate.strategy;
@@ -551,75 +691,56 @@
         return document.getElementById(value);
 
       case TargetStrategies.Name:
-        return firstVisible(document.getElementsByName(value));
+        return findFirstVisibleMatching(`[name="${escapeCssString(value)}"]`, options);
 
       case TargetStrategies.AriaLabel:
-        return firstVisible(
-          document.querySelectorAll(`[aria-label="${escapeCssString(value)}"]`),
-        );
+        return findFirstVisibleMatching(`[aria-label="${escapeCssString(value)}"]`, options);
 
       case TargetStrategies.DataTestId:
       case TargetStrategies.DataTest:
       case TargetStrategies.DataQa:
-        return firstVisible(
-          document.querySelectorAll(
-            `[${strategy}="${escapeCssString(value)}"]`,
-          ),
-        );
+        return findFirstVisibleMatching(`[${strategy}="${escapeCssString(value)}"]`, options);
 
       case TargetStrategies.LabelText:
-        return resolveByLabelText(value);
+        return resolveByLabelText(value, options);
 
       case TargetStrategies.Text:
-        return resolveByText(value);
+        return resolveByText(value, options);
 
       case TargetStrategies.CssSelector:
-        return safeQuerySelector(value);
+        return findFirstVisibleMatching(value, options);
 
       case TargetStrategies.CtrlHash:
       case TargetStrategies.FallbackHash:
         return resolveByCtrlHash(value);
 
       case "placeholder":
-        return firstVisible(
-          document.querySelectorAll(
-            `[placeholder="${escapeCssString(value)}"]`,
-          ),
-        );
+        return findFirstVisibleMatching(`[placeholder="${escapeCssString(value)}"]`, options);
 
       case "title":
-        return firstVisible(
-          document.querySelectorAll(`[title="${escapeCssString(value)}"]`),
-        );
+        return findFirstVisibleMatching(`[title="${escapeCssString(value)}"]`, options);
 
       case "data-cy":
       case "data-automation-id":
       case "data-component":
-        return firstVisible(
-          document.querySelectorAll(
-            `[${strategy}="${escapeCssString(value)}"]`,
-          ),
-        );
+        return findFirstVisibleMatching(`[${strategy}="${escapeCssString(value)}"]`, options);
 
       case "role_text": {
         const [role, text] = value.split("::");
-        return firstVisible(
-          Array.from(
-            document.querySelectorAll(`[role="${escapeCssString(role)}"]`),
-          ).filter((element) => {
-            return (
-              normalizeText(getStableElementText(element)) ===
-              normalizeText(text)
-            );
-          }),
-        );
+        return findFirstVisibleMatching(`[role="${escapeCssString(role)}"]`, {
+          ...options,
+          predicate: (element) => {
+            return normalizeText(getStableElementText(element, options)) ===
+              normalizeText(text);
+          },
+        });
       }
 
       case "form_context":
-        return resolveByFormContext(value);
+        return resolveByFormContext(value, options);
 
       case "dom_path":
-        return resolveByDomPath(value);
+        return resolveByDomPath(value, options);
 
       default:
         return null;
@@ -636,12 +757,15 @@
     );
   }
 
-  function resolveByLabelText(value) {
+  function resolveByLabelText(value, options = {}) {
     const expected = normalizeText(value);
 
-    const labels = Array.from(document.querySelectorAll("label"));
+    const labels = enumerateBoundedElements("label", options);
     for (const label of labels) {
-      const text = normalizeText(label.innerText || label.textContent || "");
+      const text = normalizeText(getBoundedElementText(label, {
+        ...options,
+        maxChars: 160,
+      }));
 
       if (text !== expected) continue;
 
@@ -651,8 +775,9 @@
         if (isVisibleElement(byFor)) return byFor;
       }
 
-      const nestedControl = label.querySelector(
+      const nestedControl = findFirstVisibleMatching(
         "input, textarea, select, button, [role='button'], [contenteditable='true']",
+        { ...options, root: label },
       );
 
       if (isVisibleElement(nestedControl)) return nestedControl;
@@ -661,7 +786,7 @@
     return null;
   }
 
-  function resolveByText(value) {
+  function resolveByText(value, options = {}) {
     const expected = normalizeText(value);
 
     const selectors = [
@@ -674,16 +799,13 @@
       "select",
     ];
 
-    const elements = Array.from(document.querySelectorAll(selectors.join(",")));
-
-    return (
-      elements.find((element) => {
-        if (!isVisibleElement(element)) return false;
-
-        const text = getStableElementText(element);
+    return findFirstVisibleMatching(selectors.join(","), {
+      ...options,
+      predicate: (element) => {
+        const text = getStableElementText(element, options);
         return normalizeText(text) === expected;
-      }) || null
-    );
+      },
+    });
   }
 
   function firstVisible(collection) {
@@ -699,7 +821,7 @@
     }
   }
 
-  function buildElementSnapshot(element) {
+  function buildElementSnapshot(element, options = {}) {
     if (!isElement(element)) return null;
 
     const rect = element.getBoundingClientRect();
@@ -713,12 +835,12 @@
       ariaLabel: element.getAttribute("aria-label") || "",
       placeholder: element.getAttribute("placeholder") || "",
       title: element.getAttribute("title") || "",
-      text: getStableElementText(element),
+      text: getStableElementText(element, options),
       value: getSafeValue(element),
       href: element.getAttribute("href") || "",
       classes: Array.from(element.classList || []).slice(0, 8),
-      domPath: buildDomPath(element),
-      nearbyText: getNearbyText(element),
+      domPath: buildDomPath(element, options),
+      nearbyText: getNearbyText(element, options),
       bounds: {
         x: Math.round(rect.left),
         y: Math.round(rect.top),
@@ -728,30 +850,38 @@
     };
   }
 
-  function getAssociatedLabelText(element) {
+  function getAssociatedLabelText(element, options = {}) {
     if (!isElement(element)) return "";
 
-    if (element.id) {
-      const label = document.querySelector(
-        `label[for="${escapeCssString(element.id)}"]`,
-      );
-
-      const text = cleanValue(label?.innerText || label?.textContent || "");
+    const labels = element.labels || [];
+    for (let index = 0; index < Number(labels.length || 0); index += 1) {
+      if (!consumeWork(options.workBudget, "target_label_reference")) return "";
+      const label = labels[index];
+      const text = getBoundedElementText(label, {
+        ...options,
+        maxChars: 160,
+      });
       if (text) return text;
     }
 
-    const wrappingLabel = element.closest("label");
+    const wrappingLabel = boundedClosest(
+      element,
+      "label",
+      options.workBudget,
+      "target_label_ancestor",
+    );
     if (wrappingLabel) {
-      const text = cleanValue(
-        wrappingLabel.innerText || wrappingLabel.textContent || "",
-      );
+      const text = getBoundedElementText(wrappingLabel, {
+        ...options,
+        maxChars: 160,
+      });
       if (text) return text;
     }
 
     return "";
   }
 
-  function getStableElementText(element) {
+  function getStableElementText(element, options = {}) {
     if (!isElement(element)) return "";
 
     const tag = element.tagName.toLowerCase();
@@ -773,7 +903,10 @@
 
     if (!isTextSafe) return "";
 
-    const text = cleanValue(element.innerText || element.textContent || "");
+    const text = getBoundedElementText(element, {
+      ...options,
+      maxChars: 81,
+    });
 
     if (!text) return "";
     if (text.length > 80) return "";
@@ -781,7 +914,7 @@
     return text;
   }
 
-  function buildStableCssSelector(element) {
+  function buildStableCssSelector(element, options = {}) {
     if (!isElement(element)) return "";
 
     if (element.id) {
@@ -790,6 +923,7 @@
 
     const parts = [];
     let current = element;
+    let anchored = false;
 
     while (
       current &&
@@ -802,6 +936,7 @@
       if (name) {
         part += `[name="${escapeCssString(name)}"]`;
         parts.unshift(part);
+        anchored = true;
         break;
       }
 
@@ -819,18 +954,19 @@
 
         part += `[${attrName}="${escapeCssString(testId)}"]`;
         parts.unshift(part);
+        anchored = true;
         break;
       }
 
       const parent = current.parentElement;
 
       if (parent) {
-        const siblings = Array.from(parent.children).filter(
-          (sibling) => sibling.tagName === current.tagName,
+        const siblingPosition = getSameTagSiblingPosition(
+          current,
+          options.workBudget,
         );
-
-        if (siblings.length > 1) {
-          const index = siblings.indexOf(current) + 1;
+        if (siblingPosition.count > 1) {
+          const index = siblingPosition.index;
           part += `:nth-of-type(${index})`;
         }
       }
@@ -839,7 +975,158 @@
       current = parent;
     }
 
+    // An unanchored selector is only valid when it reaches the document root.
+    // Silently returning the final five segments can select an arbitrary match
+    // elsewhere on the page, so omit that locator instead.
+    if (!anchored && current) return "";
+
     return parts.join(" > ");
+  }
+
+  function boundedClosest(element, selector, workBudget, kind = "target_ancestor") {
+    if (!isElement(element) || !selector) return null;
+    let current = element;
+    while (current) {
+      if (!consumeWork(workBudget, kind)) return null;
+      try {
+        if (current.matches(selector)) return current;
+      } catch {
+        return null;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function getElementSiblingIndex(element, workBudget, kind = "target_sibling") {
+    const parent = element?.parentElement;
+    if (!parent) return 0;
+    let index = 0;
+    let current = parent.firstElementChild;
+    while (current) {
+      if (!consumeWork(workBudget, kind)) return -1;
+      if (current === element) return index;
+      index += 1;
+      current = current.nextElementSibling;
+    }
+    return -1;
+  }
+
+  function getSameTagSiblingPosition(element, workBudget) {
+    const parent = element?.parentElement;
+    if (!parent) return { count: 1, index: 1 };
+    let count = 0;
+    let index = 0;
+    let current = parent.firstElementChild;
+    while (current) {
+      if (!consumeWork(workBudget, "target_css_sibling")) {
+        return { count: 0, index: 0 };
+      }
+      if (current.tagName === element.tagName) {
+        count += 1;
+        if (current === element) index = count;
+      }
+      current = current.nextElementSibling;
+    }
+    return { count, index };
+  }
+
+  function getBoundedElementText(element, options = {}) {
+    if (!isElement(element)) return "";
+    const workBudget = options.workBudget || createTargetWorkBudget(options.maxWork);
+    const maxChars = Math.min(1000, Math.max(1, Number(options.maxChars) || 300));
+    const skipSelector = [
+      "script",
+      "style",
+      "noscript",
+      "template",
+      options.skipSelector || "",
+    ].filter(Boolean).join(",");
+    let text = "";
+    let current = element.firstChild || null;
+
+    while (current) {
+      if (!consumeWork(workBudget, "target_text_descendant")) return "";
+      const isElementNode = current.nodeType === 1;
+      const skipChildren = isElementNode && (() => {
+        try {
+          return current.matches?.(skipSelector) === true;
+        } catch {
+          return false;
+        }
+      })();
+      if (current.nodeType === 3) {
+        text += ` ${String(current.nodeValue || "").slice(0, maxChars + 1)}`;
+        if (cleanValue(text).replace(/\s+/g, " ").length > maxChars) break;
+      }
+
+      if (!skipChildren && current.firstChild) {
+        current = current.firstChild;
+        continue;
+      }
+      while (current && current !== element && !current.nextSibling) {
+        current = current.parentNode;
+      }
+      current = !current || current === element ? null : current.nextSibling;
+    }
+
+    const normalized = cleanValue(text).replace(/\s+/g, " ");
+    return normalized.slice(0, maxChars + 1);
+  }
+
+  function enumerateBoundedElements(selector, options = {}) {
+    const elements = [];
+    const root = options.root || document;
+    let walker;
+    try {
+      const ownerDocument = root.ownerDocument || document;
+      walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      root.documentElement?.matches?.(selector);
+    } catch {
+      return elements;
+    }
+    let element = walker.nextNode();
+    while (element) {
+      if (!consumeWork(options.workBudget, "target_dom_visit")) break;
+      try {
+        if (element.matches?.(selector)) elements.push(element);
+      } catch {
+        return [];
+      }
+      element = walker.nextNode();
+    }
+    return elements;
+  }
+
+  function findFirstVisibleMatching(selector, options = {}) {
+    const root = options.root || document;
+    let walker;
+    try {
+      const ownerDocument = root.ownerDocument || document;
+      walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      root.documentElement?.matches?.(selector);
+    } catch {
+      return null;
+    }
+    let element = walker.nextNode();
+    while (element) {
+      if (!consumeWork(options.workBudget, "target_dom_visit")) return null;
+      let matches = false;
+      try {
+        matches = element.matches?.(selector) === true;
+      } catch {
+        return null;
+      }
+      if (
+        matches &&
+        (options.includeHidden === true || isVisibleElement(element)) &&
+        (typeof options.predicate !== "function" || options.predicate(element))
+      ) {
+        return element;
+      }
+      element = walker.nextNode();
+    }
+    return null;
   }
 
   function isElement(value) {
@@ -898,23 +1185,32 @@
     return "";
   }
 
-  function getNearbyText(element) {
+  function getNearbyText(element, options = {}) {
     if (!isElement(element)) return "";
 
-    const container =
-      element.closest("form") ||
-      element.closest("section") ||
-      element.closest("main") ||
-      element.parentElement;
+    let container = options.formResolved === true ? options.form || null : null;
+    if (!container) {
+      let section = null;
+      let main = null;
+      let current = element;
+      while (current) {
+        if (!consumeWork(options.workBudget, "target_nearby_ancestor")) return "";
+        if (!section && current.matches?.("section")) section = current;
+        if (!main && current.matches?.("main")) main = current;
+        current = current.parentElement;
+      }
+      container = section || main || element.parentElement;
+    }
 
     if (!container) return "";
 
-    return cleanValue(container.innerText || container.textContent || "")
-      .replace(/\s+/g, " ")
-      .slice(0, 300);
+    return getBoundedElementText(container, {
+      ...options,
+      maxChars: 300,
+    });
   }
 
-  function snapshotLooksCompatible(element, snapshot) {
+  function snapshotLooksCompatible(element, snapshot, options = {}) {
     if (!snapshot || !isElement(element)) return true;
 
     let score = 0;
@@ -936,7 +1232,7 @@
     if (snapshot.text) {
       possible += 2;
       if (
-        normalizeText(getStableElementText(element)) ===
+        normalizeText(getStableElementText(element, options)) ===
         normalizeText(snapshot.text)
       ) {
         score += 2;
@@ -969,7 +1265,7 @@
     return score / possible >= 0.45;
   }
 
-  function resolveBySnapshotFuzzy(snapshot) {
+  function resolveBySnapshotFuzzy(snapshot, options = {}) {
     if (!snapshot) {
       return {
         element: null,
@@ -978,8 +1274,7 @@
       };
     }
 
-    const candidates = Array.from(
-      document.querySelectorAll(
+    const candidates = enumerateBoundedElements(
         [
           "button",
           "a",
@@ -991,8 +1286,8 @@
           "[role='textbox']",
           "[contenteditable='true']",
         ].join(","),
-      ),
-    ).filter(isVisibleElement);
+      options,
+    );
 
     let best = {
       element: null,
@@ -1001,7 +1296,9 @@
     };
 
     for (const element of candidates) {
-      const result = scoreElementAgainstSnapshot(element, snapshot);
+      if (!consumeWork(options.workBudget, "target_fuzzy_candidate")) break;
+      if (!isVisibleElement(element)) continue;
+      const result = scoreElementAgainstSnapshot(element, snapshot, options);
 
       if (result.score > best.score) {
         best = {
@@ -1023,7 +1320,7 @@
     return best;
   }
 
-  function scoreElementAgainstSnapshot(element, snapshot) {
+  function scoreElementAgainstSnapshot(element, snapshot, options = {}) {
     let score = 0;
     const reasons = [];
 
@@ -1050,7 +1347,7 @@
 
     if (
       snapshot.text &&
-      normalizeText(getStableElementText(element)) ===
+      normalizeText(getStableElementText(element, options)) ===
         normalizeText(snapshot.text)
     ) {
       score += 25;
@@ -1084,7 +1381,7 @@
       reasons.push("name");
     }
 
-    const nearbyText = getNearbyText(element);
+    const nearbyText = getNearbyText(element, options);
 
     if (
       snapshot.nearbyText &&
@@ -1125,29 +1422,29 @@
     return overlap / Math.max(wordsA.size, wordsB.size);
   }
 
-  function resolveByFormContext(value) {
+  function resolveByFormContext(value, options = {}) {
     if (!value) return null;
 
     // Only use normal CSS part. Custom ::text(...) is intentionally ignored here.
     const cssPart = value.replace(/::text\(.*\)$/i, "");
 
-    return safeQuerySelector(cssPart);
+    return findFirstVisibleMatching(cssPart, options);
   }
 
-  function resolveByDomPath(path) {
+  function resolveByDomPath(path, options = {}) {
     if (!path) return null;
 
     const parts = String(path).split("/").filter(Boolean);
     let current = document.documentElement;
 
     for (const part of parts) {
+      if (!consumeWork(options.workBudget, "target_saved_dom_path")) return null;
       const [tag, indexText] = part.split(":");
       const index = Number(indexText);
 
       if (!current || !tag || Number.isNaN(index)) return null;
 
-      const children = Array.from(current.children);
-      const next = children[index];
+      const next = current.children?.[index];
 
       if (!next || next.tagName.toLowerCase() !== tag) {
         return null;
@@ -1166,6 +1463,7 @@
     resolveFromControlsTree,
     resolveByStrategy,
     getStableElementText,
+    getBoundedElementText,
     buildStableCssSelector,
   };
 })();

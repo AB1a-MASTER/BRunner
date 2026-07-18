@@ -71,6 +71,7 @@
       <div class="toolbar">
         <button id="swap-active-thread" type="button">Swap Active Thread</button>
         <button id="load-older-messages" type="button">Load Older Messages</button>
+        <button id="replace-message-window" type="button">Replace Message Window</button>
         <button id="tick-chat-ephemeral" type="button">Tick Chat Ephemeral Data</button>
       </div>
       <div class="app-shell" data-testid="chat-app-shell" aria-label="Chat application shell">
@@ -116,6 +117,7 @@
       <h2>Social Feed Fixture</h2>
       <div class="toolbar">
         <button id="append-feed-window" type="button">Append Feed Window</button>
+        <button id="replace-social-window" type="button">Replace Social Window</button>
         <button id="tick-social-ephemeral" type="button">Tick Social Ephemeral Data</button>
       </div>
       <div class="social-shell" data-testid="social-app-shell" aria-label="Social application shell">
@@ -158,14 +160,15 @@
       activeThread: "alpha",
       chatTick: 0,
       socialTick: 0,
-      loadedMessageStart: 1,
+      loadedMessageStart: 4,
       loadedMessageCount: 5,
       loadedPostCount: 0,
+      socialWindowGeneration: 1,
     };
 
     const messagesByThread = {
-      alpha: ["Kickoff notes", "Design review", "Release checklist", "Mapper profile", "Thread scoped send"],
-      beta: ["Account setup", "Regression notes", "Fixture coverage", "Unread marker", "Thread scoped attach"],
+      alpha: ["Early kickoff", "Initial scope", "First review", "Kickoff notes", "Design review", "Release checklist", "Mapper profile", "Thread scoped send"],
+      beta: ["Early setup", "Initial audit", "First regression", "Account setup", "Regression notes", "Fixture coverage", "Unread marker", "Thread scoped attach"],
     };
 
     const logPlatform = (message) => {
@@ -216,7 +219,7 @@
 
     function setActiveThread(threadId) {
       platformState.activeThread = threadId;
-      platformState.loadedMessageStart = 1;
+      platformState.loadedMessageStart = 4;
       document.querySelector("[data-testid='active-thread-region']").dataset.activeThread = threadId;
       setText("#active-thread-title", threadId === "alpha" ? "Project Alpha" : "Project Beta");
       document.querySelectorAll(".thread-row").forEach((row) => {
@@ -228,6 +231,7 @@
 
     function appendFeedCards(count = 3) {
       const feed = document.querySelector("#feed-window");
+      feed.dataset.loadedWindowGeneration = String(platformState.socialWindowGeneration);
       for (let index = 0; index < count; index += 1) {
         platformState.loadedPostCount += 1;
         const postId = platformState.loadedPostCount;
@@ -262,9 +266,14 @@
 
     document.querySelector("#load-older-messages").addEventListener("click", () => {
       platformState.loadedMessageStart = Math.max(1, platformState.loadedMessageStart - 1);
-      platformState.loadedMessageCount += 1;
       renderMessages();
-      logPlatform(`message loaded window count=${platformState.loadedMessageCount}`);
+      logPlatform(`message loaded window start=${platformState.loadedMessageStart}`);
+    });
+
+    document.querySelector("#replace-message-window").addEventListener("click", () => {
+      platformState.loadedMessageStart = platformState.loadedMessageStart === 1 ? 4 : 1;
+      renderMessages();
+      logPlatform(`message window replaced start=${platformState.loadedMessageStart}`);
     });
 
     document.querySelector("#tick-chat-ephemeral").addEventListener("click", () => {
@@ -275,6 +284,13 @@
     });
 
     document.querySelector("#append-feed-window").addEventListener("click", () => appendFeedCards(3));
+
+    document.querySelector("#replace-social-window").addEventListener("click", () => {
+      platformState.socialWindowGeneration += 1;
+      document.querySelector("#feed-window").replaceChildren();
+      appendFeedCards(4);
+      logPlatform(`social loaded window replaced generation=${platformState.socialWindowGeneration}`);
+    });
 
     document.querySelector("#tick-social-ephemeral").addEventListener("click", () => {
       platformState.socialTick += 1;

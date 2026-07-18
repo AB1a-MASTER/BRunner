@@ -7,7 +7,13 @@ import sys
 HOST_DIR = Path(__file__).resolve().parents[1] / "BRunner_Host"
 sys.path.insert(0, str(HOST_DIR))
 
-from data_source import DataSourceError, read_data_source
+from data_source import (
+    DataSourceError,
+    MAX_DATA_SOURCE_BYTES,
+    MAX_DATA_SOURCE_COLUMNS,
+    MAX_DATA_SOURCE_ROWS,
+    read_data_source,
+)
 
 
 class DataSourceTests(unittest.TestCase):
@@ -235,6 +241,145 @@ class DataSourceTests(unittest.TestCase):
         self.assertEqual(result["data"], [{"id": 1, "name": "Ada"}])
         self.assertEqual(result["filename"], "alias.csv")
 
+    def test_scalar_path_uses_matching_alias_policy_with_multiple_aliases(self):
+        denied = self.base_dir / "denied"
+        readable = self.base_dir / "readable"
+        denied.mkdir()
+        readable.mkdir()
+        denied_file = denied / "denied.txt"
+        readable_file = readable / "readable.txt"
+        denied_file.write_text("blocked\n", encoding="utf-8")
+        readable_file.write_text("allowed\n", encoding="utf-8")
+        config = {
+            "approvedDirectories": [
+                {
+                    "id": "denied",
+                    "path": str(denied),
+                    "read": False,
+                    "recursive": True,
+                },
+                {
+                    "id": "readable",
+                    "path": str(readable),
+                    "read": True,
+                    "recursive": True,
+                },
+            ],
+            "local_file_access": {
+                "enabled": True,
+                "allowed_roots": [str(denied), str(readable)],
+            },
+        }
+
+        result = read_data_source(
+            config,
+            self.base_dir,
+            {"relativePath": str(readable_file), "format": "txt"},
+        )
+        self.assertEqual(result["data"], ["allowed"])
+
+        with self.assertRaisesRegex(Exception, "does not allow reads"):
+            read_data_source(
+                config,
+                self.base_dir,
+                {"relativePath": str(denied_file), "format": "txt"},
+            )
+
+    def test_scalar_path_honors_non_recursive_alias(self):
+        direct = self.allowed / "direct.txt"
+        child = self.allowed / "child"
+        nested = child / "nested.txt"
+        child.mkdir()
+        direct.write_text("direct\n", encoding="utf-8")
+        nested.write_text("nested\n", encoding="utf-8")
+        config = {
+            "approvedDirectories": [{
+                "id": "imports",
+                "path": str(self.allowed),
+                "read": True,
+                "recursive": False,
+            }],
+            "local_file_access": {
+                "enabled": True,
+                "allowed_roots": [str(self.allowed)],
+            },
+        }
+
+        result = read_data_source(
+            config,
+            self.base_dir,
+            {"relativePath": str(direct), "format": "txt"},
+        )
+        self.assertEqual(result["data"], ["direct"])
+
+        with self.assertRaisesRegex(Exception, "recursive"):
+            read_data_source(
+                config,
+                self.base_dir,
+                {"relativePath": str(nested), "format": "txt"},
+            )
+
+    def test_scalar_path_accepts_an_authorized_overlapping_alias(self):
+        child = self.allowed / "child"
+        child.mkdir()
+        nested = child / "nested.txt"
+        nested.write_text("nested\n", encoding="utf-8")
+        config = {
+            "approvedDirectories": [
+                {
+                    "id": "denied-parent",
+                    "path": str(self.allowed),
+                    "read": False,
+                    "recursive": True,
+                },
+                {
+                    "id": "readable-child",
+                    "path": str(child),
+                    "read": True,
+                    "recursive": False,
+                },
+            ],
+            "local_file_access": {
+                "enabled": True,
+                "allowed_roots": [str(self.allowed), str(child)],
+            },
+        }
+
+        result = read_data_source(
+            config,
+            self.base_dir,
+            {"relativePath": str(nested), "format": "txt"},
+        )
+
+        self.assertEqual(result["data"], ["nested"])
+
+    def test_scalar_path_falls_back_to_legacy_roots_only_when_alias_key_is_absent(self):
+        source = self.allowed / "legacy.txt"
+        source.write_text("legacy\n", encoding="utf-8")
+        legacy = {
+            "local_file_access": {
+                "enabled": True,
+                "allowed_roots": [str(self.allowed)],
+            },
+        }
+
+        result = read_data_source(
+            legacy,
+            self.base_dir,
+            {"relativePath": str(source), "format": "txt"},
+        )
+        self.assertEqual(result["data"], ["legacy"])
+
+        for approved in ([], None):
+            config = {**legacy, "approvedDirectories": approved}
+            with self.subTest(approved=approved):
+                with self.assertRaisesRegex(Exception, "no approved directories"):
+                    read_data_source(
+                        config,
+                        self.base_dir,
+                        {"relativePath": str(source), "format": "txt"},
+                    )
+
     def test_row_limit_fails(self):
         (self.allowed / "list.txt").write_text("1\n2\n", encoding="utf-8")
 
@@ -314,6 +459,62 @@ class DataSourceTests(unittest.TestCase):
                     "relativePath": str(self.allowed / "large.txt"),
                     "format": "txt",
                     "maxBytes": 4,
+                },
+            )
+
+    def test_oversized_byte_override_is_clamped_to_hard_ceiling(self):
+        (self.allowed / "too-large.txt").write_bytes(
+            b"x" * (MAX_DATA_SOURCE_BYTES + 1)
+        )
+
+        with self.assertRaisesRegex(Exception, "safety limit"):
+            read_data_source(
+                self.config,
+                self.base_dir,
+                {
+                    "relativePath": str(self.allowed / "too-large.txt"),
+                    "format": "txt",
+                    "maxBytes": MAX_DATA_SOURCE_BYTES * 100,
+                },
+            )
+
+    def test_oversized_row_override_is_clamped_to_hard_ceiling(self):
+        (self.allowed / "too-many-rows.txt").write_text(
+            "x\n" * (MAX_DATA_SOURCE_ROWS + 1),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(DataSourceError, "row limit"):
+            read_data_source(
+                self.config,
+                self.base_dir,
+                {
+                    "relativePath": str(self.allowed / "too-many-rows.txt"),
+                    "format": "txt",
+                    "maxRows": MAX_DATA_SOURCE_ROWS * 100,
+                },
+            )
+
+    def test_oversized_column_override_is_clamped_to_hard_ceiling(self):
+        columns = ",".join(
+            f'"column_{index}": {index}'
+            for index in range(MAX_DATA_SOURCE_COLUMNS + 1)
+        )
+        (self.allowed / "too-many-columns.json").write_text(
+            "{" + columns + "}",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(DataSourceError, "column limit"):
+            read_data_source(
+                self.config,
+                self.base_dir,
+                {
+                    "relativePath": str(
+                        self.allowed / "too-many-columns.json"
+                    ),
+                    "format": "json",
+                    "maxColumns": MAX_DATA_SOURCE_COLUMNS * 100,
                 },
             )
 

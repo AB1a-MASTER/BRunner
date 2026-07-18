@@ -32,7 +32,11 @@ test("recorder emits mapper component refs from live DOM facts", async () => {
   assert.match(source, /getMapperFrameScope/);
   assert.match(source, /mapper\.frame_scope\.v1/);
   assert.match(source, /pageWindow = window\.top/);
-  assert.match(source, /cross_origin_frame_unsupported/);
+  assert.match(source, /extensionAccessible:\s*true/);
+  assert.match(source, /contextKey/);
+  assert.match(source, /cross_origin_frame_unreachable/);
+  assert.match(source, /identityAmbiguous/);
+  assert.match(source, /cross_origin_frame_context_ambiguous/);
   assert.match(source, /highlightMapperContainer/);
   assert.match(source, /container_path_unique/);
   assert.match(source, /container_path_ambiguous/);
@@ -45,7 +49,7 @@ test("recorder emits mapper component refs from live DOM facts", async () => {
   assert.match(source, /detectKnownMapperPlatformProfile/);
   assert.match(source, /web\.whatsapp\.com/);
   assert.match(source, /hasExplicitMapperPlatformRoots/);
-  assert.match(source, /if \(this\.hasExplicitMapperPlatformRoots\(\)\) return null/);
+  assert.match(source, /if \(hasExplicitPlatformRoots\) return null/);
   assert.match(source, /getInferredChatPlatformScope/);
   assert.match(source, /getInferredSocialPlatformScope/);
   assert.match(source, /const profileControls = !chatShell/);
@@ -102,6 +106,7 @@ test("mapper content scripts run in frames for path-scoped routing", async () =>
   });
   assert.equal(mapperScript.all_frames, true);
   assert.equal(mapperScript.match_about_blank, true);
+  assert.equal(mapperScript.match_origin_as_fallback, true);
 });
 
 test("content execution resolves mapper context before legacy targets", async () => {
@@ -118,7 +123,9 @@ test("content execution resolves mapper context before legacy targets", async ()
   assert.match(source, /mapper_resolved_with_fallback|resolved_with_fallback/);
   assert.match(source, /withMapperRuntimeResolution/);
   assert.match(source, /createMapperRuntimeResolutionOutcome/);
-  assert.match(source, /rawLocatorStored:\s*false/);
+  assert.match(source, /normalizeMapperRuntimeCandidate/);
+  assert.match(source, /displayName:\s*candidate\.displayName/);
+  assert.doesNotMatch(source, /rawLocatorStored|rawTextStored|redactMapperRuntimeCandidate/);
 });
 
 test("background persists mapper runtime resolver outcomes", async () => {

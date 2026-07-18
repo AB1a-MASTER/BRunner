@@ -11,14 +11,14 @@ import {
 } from "./core/constants.js";
 import {
   NativeBridge,
-  generateNativePairingKey,
-  loadNativePairing,
-  saveNativePairing,
+  loadOrCreateProfileInstanceId,
 } from "./core/nativeBridge.js";
 import { createRecordingController } from "./core/recordingController.js";
 import { createChromeMapStore } from "./core/mapStore.js";
 import { createMapperCoordinator } from "./core/mapperCoordinator.js";
 import { createRuntimeStateStore } from "./core/runtimeState.js";
+import { createRuntimeSessionCoordinator } from "./core/runtimeSession.js";
+import { createBridgeStatusTransitionTracker } from "./core/bridgeStatus.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
 import { getNodeDefinition, getNodeDefinitions } from "./core/nodeRegistry.js";
 import {
@@ -66,6 +66,9 @@ import {
   createDefaultMapperSettings,
   deserializeWorkflowMapperState,
   MapperMapStatuses,
+  normalizeMapperSettings,
+  normalizePageProfile,
+  pageMapMatchesUrl,
 } from "./mapper/core.js";
 import {
   createTab,
@@ -78,16 +81,33 @@ import {
   normalizeNavigationUrl,
 } from "./core/tabUtils.js";
 
-const runtimeState = createRuntimeStateStore();
+const runtimeSession = createRuntimeSessionCoordinator({
+  onPersistenceError: (error) => {
+    console.warn("[BRunner] Runtime session checkpoint failed:", error);
+  },
+});
+let runtimeSessionReady = null;
+const runtimeState = createRuntimeStateStore({
+  onStateChanged: (state) => {
+    if (!runtimeSessionReady) return;
+    runtimeSession
+      .checkpointRuntime(state, recordingController.getState())
+      .catch(() => {});
+  },
+});
 let activeRun = null;
 let offscreenClipboardCreation = null;
+const MAPPER_FRAME_CONTEXT_BUDGET = 100;
 const mapperStore = createChromeMapStore();
 const mapperCoordinator = createMapperCoordinator({ mapStore: mapperStore });
+const bridgeStatusTransitions = createBridgeStatusTransitionTracker();
 
 const recordingController = createRecordingController({
   nativeBridge: NativeBridge,
   onStateChanged: (recording) => runtimeState.updateRecording(recording),
 });
+
+runtimeSessionReady = initializeRuntimeLifecycle();
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[BRunner] Orchestration Engine initialized.");
@@ -117,6 +137,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({
         ok: false,
         error: error.message || String(error),
+        code: error.code || null,
+        pairingState: error.pairingState || null,
         diagnostics: error.diagnostics || null,
       });
     });
@@ -127,38 +149,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete") return;
 
-  recordingController.handleTabCompleted(tabId, tab).catch((error) => {
-    console.warn("[BRunner] Recording tab sync failed:", error);
-  });
+  runtimeSessionReady
+    .then(() => recordingController.handleTabCompleted(tabId, tab))
+    .catch((error) => {
+      console.warn("[BRunner] Recording tab sync failed:", error);
+    });
 });
 
 chrome.tabs.onCreated.addListener((tab) => {
-  recordingController.handleTabCreated(tab).catch((error) => {
-    console.warn("[BRunner] Recording new-tab tracking failed:", error);
-  });
+  runtimeSessionReady
+    .then(() => recordingController.handleTabCreated(tab))
+    .catch((error) => {
+      console.warn("[BRunner] Recording new-tab tracking failed:", error);
+    });
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
-  recordingController.handleTabActivated(activeInfo).catch((error) => {
-    console.warn("[BRunner] Recording tab activation failed:", error);
-  });
+  runtimeSessionReady
+    .then(() => recordingController.handleTabActivated(activeInfo))
+    .catch((error) => {
+      console.warn("[BRunner] Recording tab activation failed:", error);
+    });
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  recordingController.handleTabRemoved(tabId);
+  runtimeSessionReady
+    .then(() => recordingController.handleTabRemoved(tabId))
+    .catch((error) => {
+      console.warn("[BRunner] Recording tab removal sync failed:", error);
+    });
 });
 
 async function handleMessage(request, sender) {
+  await runtimeSessionReady;
   const type = request?.type || request?.command;
 
   switch (type) {
     case Messages.CheckBridgeStatus:
-      if (NativeBridge.getStatus().connected) {
-        try {
+      try {
+        await NativeBridge.refreshProfileSession();
+        if (NativeBridge.getStatus().paired) {
           await NativeBridge.hostHello();
-        } catch (error) {
-          console.warn("[BRunner] Native host hello failed:", error);
         }
+      } catch (error) {
+        console.warn("[BRunner] Native host readiness check failed:", error);
       }
       return {
         ok: true,
@@ -166,37 +200,27 @@ async function handleMessage(request, sender) {
       };
 
     case Messages.GetNativePairing: {
-      const pairing = await loadNativePairing();
+      const profileInstanceId = await loadOrCreateProfileInstanceId();
+      try {
+        await NativeBridge.refreshProfileSession();
+        if (NativeBridge.getStatus().paired) {
+          await NativeBridge.hostHello();
+        }
+      } catch {
+        // The returned bridge state explains why the companion is not ready.
+      }
       return {
         ok: true,
-        pairing,
+        profileInstanceId,
         bridge: NativeBridge.getStatus(),
-        extensionId: chrome.runtime.id,
       };
     }
 
-    case Messages.SaveNativePairing: {
-      const pairing = await saveNativePairing({ key: request.key });
-      NativeBridge.connect();
-      return {
-        ok: true,
-        pairing,
-        bridge: NativeBridge.getStatus(),
-        extensionId: chrome.runtime.id,
-      };
-    }
+    case Messages.PairNativeProfile:
+      return await updateNativeProfilePairing(() => NativeBridge.pairProfile());
 
-    case Messages.GenerateNativePairingKey: {
-      const key = generateNativePairingKey();
-      const pairing = await saveNativePairing({ key });
-      NativeBridge.connect();
-      return {
-        ok: true,
-        pairing,
-        bridge: NativeBridge.getStatus(),
-        extensionId: chrome.runtime.id,
-      };
-    }
+    case Messages.UnpairNativeProfile:
+      return await updateNativeProfilePairing(() => NativeBridge.unpairProfile());
 
     case Messages.OsListWorkflows:
       return await NativeBridge.listWorkflows();
@@ -281,6 +305,7 @@ async function handleMessage(request, sender) {
       return {
         ok: true,
         state: runtimeState.getState(),
+        session: runtimeSession.getSession(),
       };
 
     case Messages.ClearExecutionLogs:
@@ -338,6 +363,14 @@ async function handleMessage(request, sender) {
       };
 
     case Messages.RecordedStep:
+      if (!runtimeSession.isCurrentRecordingMessage(request.sessionId)) {
+        return {
+          ok: false,
+          code: "stale_recording_session",
+          error: "Recorded step belongs to an inactive recording session.",
+          sessionId: recordingController.getState().sessionId,
+        };
+      }
       const recordedStep = await mapperCoordinator.reconcileRecordedStep(
         request.step,
         {
@@ -359,7 +392,7 @@ async function handleMessage(request, sender) {
       return await runWorkflow(request.workflow || request.content);
 
     case Messages.StopWorkflow:
-      return await stopActiveWorkflow();
+      return await stopActiveWorkflow(request.runId);
 
     case Messages.RequestHardwareKeystroke:
       return await NativeBridge.osKeystroke(request.keys);
@@ -370,6 +403,7 @@ async function handleMessage(request, sender) {
         bridge: NativeBridge.getStatus(),
         recording: recordingController.getState(),
         runtime: runtimeState.getState(),
+        session: runtimeSession.getSession(),
       };
 
     default:
@@ -381,13 +415,93 @@ async function handleMessage(request, sender) {
   }
 }
 
+async function initializeRuntimeLifecycle() {
+  const restored = await runtimeSession.initialize();
+  runtimeState.replaceState({
+    recording: restored.recording,
+    execution: restored.execution,
+  });
+
+  const openTabs = await chrome.tabs.query({}).catch(() => []);
+  await recordingController.restore(restored.recording, openTabs);
+
+  NativeBridge.subscribeStatus(publishNativeBridgeStatus);
+
+  return runtimeSession.getSession();
+}
+
+function publishNativeBridgeStatus(status = {}) {
+  const bridge = bridgeStatusTransitions.next(status);
+  if (!bridge) return false;
+
+  runtimeSession.checkpointHost({
+    connected: bridge.socketConnected,
+    helloAccepted: Boolean(bridge.protocolVersion && bridge.host),
+    pairedProfileAccepted: bridge.paired,
+    profileInstanceId: bridge.profileInstanceId,
+    protocolVersion: bridge.protocolVersion,
+    capabilities: bridge.capabilities,
+    error: bridge.pairingError,
+  }).catch(() => {});
+
+  chrome.runtime.sendMessage({
+    type: Messages.BridgeStatus,
+    bridge,
+    ...bridge,
+  }).catch(() => {});
+  return true;
+}
+
+async function updateNativeProfilePairing(operation) {
+  const profileInstanceId = await loadOrCreateProfileInstanceId();
+  try {
+    const pairing = await operation();
+    if (pairing?.paired === true) {
+      await NativeBridge.hostHello();
+    }
+    return {
+      ok: true,
+      profileInstanceId,
+      pairing,
+      bridge: NativeBridge.getStatus(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || String(error),
+      code: error?.code || null,
+      pairingState: error?.pairingState || NativeBridge.getStatus().pairingState,
+      profileInstanceId,
+      bridge: NativeBridge.getStatus(),
+    };
+  }
+}
+
+async function resolveInspectorMapperSettings(request = {}) {
+  const requestedSettings = normalizeMapperSettings({
+    ...createDefaultMapperSettings(),
+    ...(request.settings || {}),
+  });
+  const workflowId = String(request.workflowId || "").trim();
+  if (!workflowId) return requestedSettings;
+  try {
+    const state = await mapperStore.getWorkflowMapperState(workflowId);
+    return state?.settings
+      ? normalizeMapperSettings(state.settings)
+      : requestedSettings;
+  } catch {
+    return requestedSettings;
+  }
+}
+
 async function mapCurrentPageForInspector(request = {}, sender = null) {
+  const settings = await resolveInspectorMapperSettings(request);
   let snapshot;
   try {
     snapshot = await getInspectorLiveMapperSnapshot({
       ...request,
       snapshotMode: "settled_current_dom",
-    }, sender);
+    }, sender, settings);
   } catch (error) {
     return {
       ok: false,
@@ -395,39 +509,86 @@ async function mapCurrentPageForInspector(request = {}, sender = null) {
     };
   }
 
+  const snapshotCapturedAt = normalizeInspectorSnapshotCapturedAt(snapshot.page?.capturedAt);
   const pageSnapshot = {
-    url: snapshot.tab.url || snapshot.page.url || "",
-    title: snapshot.tab.title || snapshot.page.title || "",
+    url: snapshot.page.url || snapshot.tab.url || "",
+    title: snapshot.page.title || snapshot.tab.title || "",
     platformProfile: snapshot.page.platformProfile || null,
     materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
     frameSummary: snapshot.page.frameSummary || null,
-  };
-  const settings = {
-    ...createDefaultMapperSettings(),
-    ...(request.settings || {}),
+    scanDiagnostics: snapshot.page.scanDiagnostics || null,
   };
   const temporaryMap = buildStaticPageMap({
     page: pageSnapshot,
     componentFacts: snapshot.mapperFacts,
     settings,
+    now: snapshotCapturedAt,
   });
   const workflowId = String(
     request.workflowId ||
       temporaryMap.siteKey ||
       "inspector",
   ).trim();
-  const previousState = await mapperStore.getWorkflowMapperState(workflowId);
-  const previousMap = findLatestInspectorMap(
-    previousState,
-    temporaryMap.pageProfileKey,
+  let previousMap = null;
+  let pageMap = null;
+  let discardedPageMap = null;
+  let deferred = false;
+  let persisted = true;
+  const nextState = await mapperStore.updateWorkflowMapperState(
+    workflowId,
+    (currentState, context = {}) => {
+      const activeSettings = context.exists ? currentState.settings : settings;
+      const activePageProfileKey = normalizePageProfile(
+        pageSnapshot,
+        activeSettings,
+      ).pageKey;
+      previousMap = findLatestInspectorMap(currentState, activePageProfileKey);
+      pageMap = buildStaticPageMap({
+        page: pageSnapshot,
+        componentFacts: snapshot.mapperFacts,
+        settings: activeSettings,
+        previousMap,
+        now: snapshotCapturedAt,
+      });
+      const newestMap = newestInspectorPageMap(
+        currentState.maps || [],
+        pageMap.pageProfileKey,
+      );
+      if (isStrictlyOlderInspectorPageMap(pageMap, newestMap)) {
+        discardedPageMap = pageMap;
+        pageMap = newestMap;
+        persisted = false;
+        return undefined;
+      }
+      if (shouldKeepPreviousInspectorMap(pageMap, previousMap)) {
+        deferred = true;
+        return undefined;
+      }
+      return {
+        ...currentState,
+        workflowId,
+        settings: activeSettings,
+        maps: replaceInspectorPageMap(
+          currentState.maps || [],
+          pageMap,
+          activeSettings,
+        ),
+      };
+    },
   );
-  const pageMap = buildStaticPageMap({
-    page: pageSnapshot,
-    componentFacts: snapshot.mapperFacts,
-    settings: previousState?.settings || settings,
-    previousMap,
-  });
-  if (shouldKeepPreviousInspectorMap(pageMap, previousMap)) {
+  if (!persisted) {
+    return {
+      ok: true,
+      workflowId,
+      tabId: snapshot.tab.id,
+      pageMap,
+      liveMap: discardedPageMap,
+      persisted: false,
+      reason: "stale_snapshot",
+      state: deserializeWorkflowMapperState(nextState),
+    };
+  }
+  if (deferred) {
     return {
       ok: true,
       workflowId,
@@ -435,26 +596,16 @@ async function mapCurrentPageForInspector(request = {}, sender = null) {
       pageMap: previousMap,
       liveMap: pageMap,
       deferred: true,
-      state: deserializeWorkflowMapperState(previousState),
+      state: deserializeWorkflowMapperState(nextState),
     };
   }
-
-  const nextState = await mapperStore.saveWorkflowMapperState(workflowId, {
-    ...(previousState || {}),
-    workflowId,
-    settings: previousState?.settings || settings,
-    maps: replaceInspectorPageMap(
-      previousState?.maps || [],
-      pageMap,
-      previousState?.settings || settings,
-    ),
-  });
 
   return {
     ok: true,
     workflowId,
     tabId: snapshot.tab.id,
     pageMap,
+    persisted: true,
     state: deserializeWorkflowMapperState(nextState),
   };
 }
@@ -469,9 +620,10 @@ function shouldKeepPreviousInspectorMap(pageMap = {}, previousMap = null) {
 }
 
 async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
+  const settings = await resolveInspectorMapperSettings(request);
   let snapshot;
   try {
-    snapshot = await getInspectorLiveMapperSnapshot(request, sender);
+    snapshot = await getInspectorLiveMapperSnapshot(request, sender, settings);
   } catch (error) {
     return {
       ok: false,
@@ -479,21 +631,19 @@ async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
     };
   }
 
-  const settings = {
-    ...createDefaultMapperSettings(),
-    ...(request.settings || {}),
-  };
   const liveMap = buildStaticPageMap({
     page: {
-      url: snapshot.tab.url || snapshot.page.url || "",
-      title: snapshot.tab.title || snapshot.page.title || "",
+      url: snapshot.page.url || snapshot.tab.url || "",
+      title: snapshot.page.title || snapshot.tab.title || "",
       platformProfile: snapshot.page.platformProfile || null,
       materialMutationCount: Number(snapshot.page.materialMutationCount) || 0,
       frameSummary: snapshot.page.frameSummary || null,
+      scanDiagnostics: snapshot.page.scanDiagnostics || null,
     },
     componentFacts: snapshot.mapperFacts,
     settings,
     previousMap: request.pageMap || null,
+    now: normalizeInspectorSnapshotCapturedAt(snapshot.page?.capturedAt),
   });
   const savedMap = request.pageMap || {};
   const liveComponentCount = liveMap.componentCount || 0;
@@ -547,8 +697,14 @@ async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
   };
 }
 
-async function getInspectorLiveMapperSnapshot(request = {}, sender = null) {
-  const tab = await getInspectorTargetTab(request.tabId, request.pageMap || null, sender);
+async function getInspectorLiveMapperSnapshot(request = {}, sender = null, settings = {}) {
+  const policy = normalizeMapperSettings(settings);
+  const tab = await getInspectorTargetTab(
+    request.tabId,
+    request.pageMap || null,
+    sender,
+    policy,
+  );
   if (!tab?.id) {
     throw new Error("No website tab found. Open the page you want to map, then try again.");
   }
@@ -558,14 +714,36 @@ async function getInspectorLiveMapperSnapshot(request = {}, sender = null) {
     frameSnapshots = await getInspectorMapperFrameSnapshots(
       tab,
       request.snapshotMode || "",
+      policy.maxComponents,
+      policy,
     );
   } catch (error) {
     throw new Error(`Could not reach mapper content script in ${tab.url || "target tab"}: ${error.message || error}`);
   }
 
-  const topSnapshot = frameSnapshots.find((snapshot) => snapshot.frameId === 0) || frameSnapshots[0];
-  if (!topSnapshot) throw new Error("Mapper content scan returned no accessible frame snapshots.");
-  const accessible = frameSnapshots.filter((snapshot) => snapshot.frameScope?.access !== "cross_origin");
+  const topSnapshot = frameSnapshots.find((snapshot) => snapshot.frameId === 0);
+  if (!topSnapshot) {
+    throw new Error(
+      "Mapper content scan could not verify the top-frame page context; the previous map was left unchanged.",
+    );
+  }
+  const accessible = frameSnapshots;
+  const allMapperFacts = accessible.flatMap((snapshot) => {
+    return (snapshot.controls || []).map((control) => control.mapperFact).filter(Boolean);
+  });
+  const mapperFacts = allMapperFacts.slice(0, policy.maxComponents);
+  const scanDiagnostics = summarizeInspectorScanDiagnostics(
+    accessible,
+    policy.maxComponents,
+    allMapperFacts.length > policy.maxComponents,
+    mapperFacts.length,
+  );
+  const accessibleFramePaths = accessible
+    .map((snapshot) => snapshot.frameScope?.path)
+    .filter(Boolean);
+  const incompleteFramePaths = scanDiagnostics.firstOmittedFramePath
+    ? [scanDiagnostics.firstOmittedFramePath]
+    : [];
 
   return {
     tab,
@@ -578,55 +756,377 @@ async function getInspectorLiveMapperSnapshot(request = {}, sender = null) {
       materialMutationCount: accessible.reduce((sum, snapshot) => {
         return sum + (Number(snapshot.page?.materialMutationCount) || 0);
       }, 0),
+      scanDiagnostics,
       frameSummary: {
         sameOriginFrames: accessible.filter((snapshot) => snapshot.frameScope?.access === "same_origin").length,
-        crossOriginFrames: frameSnapshots.filter((snapshot) => snapshot.frameScope?.access === "cross_origin").length,
+        crossOriginFrames: accessible.filter((snapshot) => snapshot.frameScope?.access === "cross_origin").length,
+        accessibleFramePaths,
+        incompleteFramePaths,
+        maxFrameContexts: scanDiagnostics.maxFrameContexts,
+        discoveredFrameContextCount: scanDiagnostics.discoveredFrameContextCount,
+        processedFrameContextCount: scanDiagnostics.processedFrameContextCount,
+        reachableFrameContextCount: scanDiagnostics.reachableFrameContextCount,
+        frameContextOverflow: scanDiagnostics.frameContextOverflow,
+        frameScanIncomplete: scanDiagnostics.frameScanIncomplete,
+        accessibleFramePathsComplete: scanDiagnostics.accessibleFramePathsComplete,
       },
     },
-    mapperFacts: accessible.flatMap((snapshot) => {
-      return (snapshot.controls || []).map((control) => control.mapperFact).filter(Boolean);
-    }),
+    frameContexts: accessible.map((snapshot) => snapshot.frameScope),
+    mapperFacts,
   };
 }
 
-async function getInspectorMapperFrameSnapshots(tab = {}, snapshotMode = "") {
+function selectBoundedInspectorMapperFrames(
+  discovered = [],
+  maxFrameContexts = MAPPER_FRAME_CONTEXT_BUDGET,
+) {
+  const results = Array.isArray(discovered) ? discovered : [];
+  const requestedBudget = Math.floor(Number(maxFrameContexts));
+  const boundedMaxFrameContexts = Math.max(
+    1,
+    Math.min(
+      Number.isFinite(requestedBudget) ? requestedBudget : MAPPER_FRAME_CONTEXT_BUDGET,
+      MAPPER_FRAME_CONTEXT_BUDGET,
+    ),
+  );
+  const retained = [];
+  let discoveredFrameContextCount = 0;
+
+  results.forEach((result, discoveryIndex) => {
+    if (!result?.result?.frameScope) return;
+    discoveredFrameContextCount += 1;
+    const numericFrameId = Number(result.frameId);
+    const entry = {
+      result,
+      discoveryIndex,
+      frameId: Number.isFinite(numericFrameId) ? numericFrameId : Number.MAX_SAFE_INTEGER,
+    };
+    const insertAt = retained.findIndex((candidate) => {
+      return entry.frameId < candidate.frameId ||
+        (entry.frameId === candidate.frameId && entry.discoveryIndex < candidate.discoveryIndex);
+    });
+    if (insertAt === -1) retained.push(entry);
+    else retained.splice(insertAt, 0, entry);
+    if (retained.length > boundedMaxFrameContexts + 1) retained.pop();
+  });
+
+  const frameContextOverflow = discoveredFrameContextCount > boundedMaxFrameContexts;
+  const firstOmitted = frameContextOverflow
+    ? retained[boundedMaxFrameContexts]?.result
+    : null;
+  return {
+    frames: retained
+      .slice(0, boundedMaxFrameContexts)
+      .map((entry) => entry.result),
+    maxFrameContexts: boundedMaxFrameContexts,
+    discoveredResultCount: results.length,
+    discoveredFrameContextCount,
+    missingFrameContextCount: Math.max(results.length - discoveredFrameContextCount, 0),
+    frameContextOverflow,
+    firstOmittedFramePath: firstOmitted?.result?.frameScope?.path || "",
+  };
+}
+
+async function getInspectorMapperFrameSnapshots(
+  tab = {},
+  snapshotMode = "",
+  maxComponents = createDefaultMapperSettings().maxComponents,
+  settings = {},
+) {
+  const boundedMaxComponents = normalizeMapperSettings({ maxComponents }).maxComponents;
   const collect = async () => {
-    const results = await chrome.scripting.executeScript({
+    const discovered = await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
-      func: (mode) => {
+      func: () => {
         const mapper = window.__BRUNNER_MAPPER__;
         if (!mapper) return null;
         return {
-          controls: mapper.scanDom(),
-          page: mapper.getMapperPageSnapshot({
-            settledCurrentDom: mode === "settled_current_dom",
-          }),
           frameScope: mapper.getMapperFrameScope(),
         };
       },
-      args: [snapshotMode],
     });
-    return results
-      .filter((result) => result.result)
-      .map((result) => ({
-        frameId: result.frameId,
-        ...result.result,
-      }));
+    const frameSelection = selectBoundedInspectorMapperFrames(
+      discovered,
+      MAPPER_FRAME_CONTEXT_BUDGET,
+    );
+    const discoveredMapperFrames = frameSelection.frames;
+    const snapshots = [];
+    let acceptedControlCount = 0;
+    let scanOverflow = false;
+    let processedFrameContextCount = 0;
+    let responseFailureCount = 0;
+    let stoppedDueToComponentLimit = false;
+    let firstOmittedFramePath = frameSelection.firstOmittedFramePath;
+
+    for (const result of discoveredMapperFrames) {
+      if (scanOverflow) {
+        stoppedDueToComponentLimit = true;
+        firstOmittedFramePath = result.result.frameScope?.path || firstOmittedFramePath;
+        break;
+      }
+
+      const remaining = Math.max(boundedMaxComponents - acceptedControlCount, 0);
+      const frameMaxComponents = Math.max(1, remaining);
+      processedFrameContextCount += 1;
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: "GET_CONTROLS_TREE",
+          snapshotMode,
+          maxComponents: frameMaxComponents,
+          settings: {
+            queryAllowlist: Array.isArray(settings.queryAllowlist)
+              ? settings.queryAllowlist
+              : [],
+          },
+        }, { frameId: result.frameId });
+        if (!response?.ok) {
+          responseFailureCount += 1;
+          snapshots.push(null);
+          continue;
+        }
+        const responseControls = Array.isArray(response.controls) ? response.controls : [];
+        const acceptedControls = responseControls.slice(0, remaining);
+        const frameDiagnostics = response.scanDiagnostics || response.page?.scanDiagnostics || {};
+        const frameOverflow = frameDiagnostics.overflow === true ||
+          responseControls.length > remaining;
+        const globalOverflow = frameOverflow ||
+          (remaining === 0 && responseControls.length > 0);
+        acceptedControlCount += acceptedControls.length;
+        scanOverflow = globalOverflow;
+        snapshots.push({
+          frameId: result.frameId,
+          controls: acceptedControls,
+          page: response.page || {},
+          frameScope: response.frameScope || result.result.frameScope,
+          scanDiagnostics: {
+            ...frameDiagnostics,
+            acceptedComponentCount: acceptedControls.length,
+            globalOverflow,
+          },
+        });
+      } catch {
+        responseFailureCount += 1;
+        snapshots.push(null);
+      }
+    }
+    const reachableSnapshots = snapshots.filter(Boolean);
+    const frameScanIncomplete = frameSelection.frameContextOverflow ||
+      frameSelection.missingFrameContextCount > 0 ||
+      responseFailureCount > 0 ||
+      processedFrameContextCount < frameSelection.discoveredFrameContextCount;
+    const frameScanDiagnostics = {
+      maxFrameContexts: frameSelection.maxFrameContexts,
+      discoveredResultCount: frameSelection.discoveredResultCount,
+      discoveredFrameContextCount: frameSelection.discoveredFrameContextCount,
+      processedFrameContextCount,
+      reachableFrameContextCount: reachableSnapshots.length,
+      frameContextOverflow: frameSelection.frameContextOverflow,
+      frameScanIncomplete,
+      accessibleFramePathsComplete: !frameScanIncomplete,
+      firstOmittedFramePath,
+      stoppedDueToComponentLimit,
+    };
+    const decoratedSnapshots = decorateAccessibleMapperFrameSnapshots(reachableSnapshots);
+    if (decoratedSnapshots.length) {
+      decoratedSnapshots[0] = {
+        ...decoratedSnapshots[0],
+        scanDiagnostics: {
+          ...(decoratedSnapshots[0].scanDiagnostics || {}),
+          ...frameScanDiagnostics,
+        },
+      };
+    }
+    return {
+      snapshots: decoratedSnapshots,
+      incomplete: discoveredMapperFrames.length !== discovered.length ||
+        reachableSnapshots.length !== discoveredMapperFrames.length ||
+        frameScanIncomplete,
+      requiresInjection: frameSelection.missingFrameContextCount > 0 ||
+        responseFailureCount > 0,
+    };
   };
 
-  let snapshots = await collect();
-  if (snapshots.length) return snapshots;
+  let collection = await collect();
+  if (collection.snapshots.length && !collection.requiresInjection) return collection.snapshots;
   await injectMapperContentScripts(tab.id);
-  snapshots = await collect();
-  return snapshots;
+  collection = await collect();
+  return collection.snapshots;
+}
+
+function summarizeInspectorScanDiagnostics(
+  snapshots = [],
+  maxComponents = createDefaultMapperSettings().maxComponents,
+  aggregateOverflow = false,
+  sampledComponentCount = 0,
+) {
+  const componentOverflow = aggregateOverflow || snapshots.some((snapshot) => {
+    const diagnostics = snapshot.scanDiagnostics || snapshot.page?.scanDiagnostics || {};
+    return diagnostics.overflow === true || diagnostics.globalOverflow === true;
+  });
+  const frameContextOverflow = snapshots.some((snapshot) => {
+    const diagnostics = snapshot.scanDiagnostics || snapshot.page?.scanDiagnostics || {};
+    return diagnostics.frameContextOverflow === true;
+  });
+  const frameScanIncomplete = snapshots.some((snapshot) => {
+    const diagnostics = snapshot.scanDiagnostics || snapshot.page?.scanDiagnostics || {};
+    return diagnostics.frameScanIncomplete === true;
+  });
+  const overflow = componentOverflow || frameContextOverflow || frameScanIncomplete;
+  const exactCandidateCount = snapshots.reduce((count, snapshot) => {
+    const diagnostics = snapshot.scanDiagnostics || snapshot.page?.scanDiagnostics || {};
+    if (diagnostics.skippedDueToGlobalLimit === true) return count;
+    return count + Math.max(Number(diagnostics.candidateCount) || 0, 0);
+  }, 0);
+  const frameDiagnostics = snapshots.reduce((summary, snapshot) => {
+    const diagnostics = snapshot.scanDiagnostics || snapshot.page?.scanDiagnostics || {};
+    return {
+      maxFrameContexts: Math.max(
+        summary.maxFrameContexts,
+        Number(diagnostics.maxFrameContexts) || 0,
+      ),
+      discoveredFrameContextCount: Math.max(
+        summary.discoveredFrameContextCount,
+        Number(diagnostics.discoveredFrameContextCount) || 0,
+      ),
+      processedFrameContextCount: Math.max(
+        summary.processedFrameContextCount,
+        Number(diagnostics.processedFrameContextCount) || 0,
+      ),
+      reachableFrameContextCount: Math.max(
+        summary.reachableFrameContextCount,
+        Number(diagnostics.reachableFrameContextCount) || 0,
+      ),
+      firstOmittedFramePath: summary.firstOmittedFramePath ||
+        String(diagnostics.firstOmittedFramePath || ""),
+    };
+  }, {
+    maxFrameContexts: MAPPER_FRAME_CONTEXT_BUDGET,
+    discoveredFrameContextCount: snapshots.length,
+    processedFrameContextCount: snapshots.length,
+    reachableFrameContextCount: snapshots.length,
+    firstOmittedFramePath: "",
+  });
+  return {
+    version: "mapper.scan.v1",
+    maxComponents,
+    sampledComponentCount: Math.min(sampledComponentCount, maxComponents),
+    candidateCount: overflow
+      ? maxComponents + 1
+      : exactCandidateCount,
+    candidateCountIsLowerBound: overflow,
+    overflow,
+    reason: frameContextOverflow
+      ? "frame_context_overflow"
+      : frameScanIncomplete
+        ? "frame_scan_incomplete"
+        : componentOverflow
+          ? "component_scan_overflow"
+          : "",
+    ...frameDiagnostics,
+    frameContextOverflow,
+    frameScanIncomplete,
+    accessibleFramePathsComplete: !frameScanIncomplete,
+  };
+}
+
+function decorateAccessibleMapperFrameSnapshots(snapshots = []) {
+  const scopes = decorateAccessibleMapperFrameScopes(snapshots.map((snapshot) => ({
+    frameId: snapshot.frameId,
+    frameScope: snapshot.frameScope,
+  })));
+  const scopeByFrameId = new Map(scopes.map((entry) => [entry.frameId, entry.frameScope]));
+  return snapshots
+    .slice()
+    .sort((left, right) => Number(left.frameId) - Number(right.frameId))
+    .map((snapshot) => {
+      const frameScope = scopeByFrameId.get(snapshot.frameId) || snapshot.frameScope || {};
+      return {
+        ...snapshot,
+        frameScope,
+        controls: (snapshot.controls || []).map((control) => ({
+          ...control,
+          mapperFact: attachMapperFrameScope(control.mapperFact, frameScope),
+        })),
+      };
+    });
+}
+
+function decorateAccessibleMapperFrameScopes(entries = []) {
+  const ordered = entries
+    .slice()
+    .sort((left, right) => Number(left.frameId) - Number(right.frameId));
+  const multiplicities = ordered.reduce((counts, entry) => {
+    const scope = entry.frameScope || {};
+    if (scope.access !== "cross_origin" || scope.extensionAccessible !== true) return counts;
+    const contextKey = String(scope.contextKey || scope.path || "cross_origin");
+    counts.set(contextKey, (counts.get(contextKey) || 0) + 1);
+    return counts;
+  }, new Map());
+  const ordinals = new Map();
+  return ordered
+    .map((entry) => {
+      const scope = entry.frameScope || {};
+      if (scope.access !== "cross_origin" || scope.extensionAccessible !== true) {
+        return {
+          frameId: entry.frameId,
+          frameScope: {
+            ...scope,
+            frameIdHint: Number(entry.frameId),
+          },
+        };
+      }
+      const contextKey = String(scope.contextKey || scope.path || "cross_origin");
+      const ordinal = (ordinals.get(contextKey) || 0) + 1;
+      ordinals.set(contextKey, ordinal);
+      const contextMultiplicity = multiplicities.get(contextKey) || 1;
+      const frameContextId = `${contextKey}_instance_${ordinal}`;
+      return {
+        frameId: entry.frameId,
+        frameScope: {
+          ...scope,
+          path: `${String(scope.path || `isolated/${contextKey}`).replace(/\/$/, "")}/instance_${ordinal}`,
+          contextKey,
+          frameContextId,
+          contextMultiplicity,
+          identityAmbiguous: contextMultiplicity > 1,
+          frameIdHint: Number(entry.frameId),
+          extensionAccessible: true,
+        },
+      };
+    });
+}
+
+function attachMapperFrameScope(mapperFact = null, frameScope = {}) {
+  if (!mapperFact || typeof mapperFact !== "object") return mapperFact;
+  return {
+    ...mapperFact,
+    fingerprint: {
+      ...(mapperFact.fingerprint || {}),
+      structural: {
+        ...(mapperFact.fingerprint?.structural || {}),
+        frameScope,
+      },
+    },
+  };
 }
 
 async function highlightMapperComponentForInspector(request = {}, sender = null) {
-  const tab = await getInspectorTargetTab(request.tabId, request.pageMap, sender);
+  const settings = normalizeMapperSettings(request.settings || {});
+  const tab = await getInspectorTargetTab(
+    request.tabId,
+    request.pageMap,
+    sender,
+    settings,
+  );
   if (!tab?.id) {
     return {
-      ok: false,
-      error: "No matching website tab found. Open the mapped page, then try again.",
+      ok: true,
+      mapperState: "map_stale",
+      mapperReason: "page_profile_mismatch",
+      confidence: 0,
+      attempts: [],
+      resolverLog: null,
+      highlighted: false,
     };
   }
 
@@ -636,6 +1136,8 @@ async function highlightMapperComponentForInspector(request = {}, sender = null)
       component: request.component,
       containerTarget: request.containerTarget || null,
       pageMap: request.pageMap,
+      settings,
+      actionOverride: request.actionOverride || "",
       highlightRequestId: request.highlightRequestId,
     });
   } catch (error) {
@@ -657,6 +1159,20 @@ async function sendInspectorMapperMessage(tab = {}, payload = {}) {
       }
     : null);
   const frameId = await resolveMapperFrameId(tab.id, frameComponent);
+  if (payload.pageMap?.pageProfileKey || payload.pageMap?.origin || payload.pageMap?.path) {
+    const currentTab = await chrome.tabs.get(tab.id);
+    if (!isInspectableWebsiteTab(currentTab, payload.pageMap, payload.settings || {})) {
+      return {
+        ok: true,
+        mapperState: "map_stale",
+        mapperReason: "page_profile_mismatch",
+        confidence: 0,
+        attempts: [],
+        resolverLog: null,
+        highlighted: false,
+      };
+    }
+  }
   try {
     return await chrome.tabs.sendMessage(tab.id, payload, { frameId });
   } catch (error) {
@@ -671,8 +1187,11 @@ async function resolveMapperFrameId(tabId, component = null) {
   const scope = component?.fingerprint?.structural?.frameScope || {};
   const expectedPath = String(scope.path || "top");
   if (!component || expectedPath === "top") return 0;
-  if (scope.access === "cross_origin") {
-    throw new Error("Cross-origin frame components are protected and cannot be inspected or executed.");
+  if (scope.access === "cross_origin" && scope.extensionAccessible !== true) {
+    throw createUnreachableMapperFrameError(scope);
+  }
+  if (scope.access === "cross_origin" && scope.identityAmbiguous === true) {
+    throw createAmbiguousMapperFrameError(scope);
   }
 
   const findFrame = async () => {
@@ -680,15 +1199,219 @@ async function resolveMapperFrameId(tabId, component = null) {
       target: { tabId, allFrames: true },
       func: () => window.__BRUNNER_MAPPER__?.getMapperFrameScope?.() || null,
     });
-    return results.find((result) => result.result?.path === expectedPath)?.frameId;
+    const selection = selectBoundedMapperFrameResolutionContexts(
+      results,
+      scope,
+      MAPPER_FRAME_CONTEXT_BUDGET,
+    );
+    const decorated = decorateAccessibleMapperFrameScopes(selection.contexts);
+    const pathOrContextMatches = (entry) => {
+      return entry.frameScope?.path === expectedPath ||
+        (
+          scope.frameContextId &&
+          entry.frameScope?.frameContextId === scope.frameContextId
+        ) ||
+        (
+          scope.access === "cross_origin" &&
+          scope.contextKey &&
+          entry.frameScope?.contextKey === scope.contextKey
+        );
+    };
+    if (scope.access !== "cross_origin") {
+      return {
+        frameId: decorated.find(pathOrContextMatches)?.frameId,
+        ambiguous: false,
+        incomplete: selection.missingFrameContextCount > 0,
+        ...selection.diagnostics,
+      };
+    }
+
+    const expectedMultiplicity = Number(scope.contextMultiplicity) || 1;
+    const exact = decorated.find((entry) => {
+      return pathOrContextMatches(entry) &&
+        entry.frameScope?.identityAmbiguous !== true &&
+        (Number(entry.frameScope?.contextMultiplicity) || 1) === expectedMultiplicity;
+    });
+    const contextualMatches = decorated.filter((entry) => {
+      return pathOrContextMatches(entry) ||
+        (
+          scope.contextKey &&
+          entry.frameScope?.contextKey === scope.contextKey
+        );
+    });
+    return {
+      frameId: exact?.frameId,
+      ambiguous: !exact && contextualMatches.some((entry) => {
+        return entry.frameScope?.identityAmbiguous === true ||
+          (Number(entry.frameScope?.contextMultiplicity) || 1) !== expectedMultiplicity;
+      }),
+      incomplete: selection.missingFrameContextCount > 0,
+      ...selection.diagnostics,
+    };
   };
 
-  let frameId = await findFrame();
-  if (Number.isInteger(frameId)) return frameId;
+  let resolution = await findFrame();
+  if (scope.access !== "cross_origin" || !resolution.frameContextOverflow) {
+    if (Number.isInteger(resolution.frameId)) return resolution.frameId;
+    if (resolution.ambiguous) throw createAmbiguousMapperFrameError(scope);
+  }
+  if (resolution.frameContextOverflow && !resolution.incomplete) {
+    throw createMapperFrameContextOverflowError(scope, resolution);
+  }
   await injectMapperContentScripts(tabId);
-  frameId = await findFrame();
-  if (Number.isInteger(frameId)) return frameId;
-  throw new Error(`Mapped same-origin frame is no longer available: ${expectedPath}`);
+  resolution = await findFrame();
+  if (
+    Number.isInteger(resolution.frameId) &&
+    (scope.access !== "cross_origin" || !resolution.frameContextOverflow)
+  ) {
+    return resolution.frameId;
+  }
+  if (resolution.frameContextOverflow) {
+    throw createMapperFrameContextOverflowError(scope, resolution);
+  }
+  if (resolution.ambiguous) throw createAmbiguousMapperFrameError(scope);
+  if (scope.access === "cross_origin") {
+    throw createUnreachableMapperFrameError(scope);
+  }
+  throw new Error(`Mapped frame is no longer available: ${expectedPath}`);
+}
+
+function selectBoundedMapperFrameResolutionContexts(
+  results = [],
+  expectedScope = {},
+  maxFrameContexts = MAPPER_FRAME_CONTEXT_BUDGET,
+) {
+  const discovered = Array.isArray(results) ? results : [];
+  const requestedBudget = Math.floor(Number(maxFrameContexts));
+  const boundedMaxFrameContexts = Math.max(
+    1,
+    Math.min(
+      Number.isFinite(requestedBudget) ? requestedBudget : MAPPER_FRAME_CONTEXT_BUDGET,
+      MAPPER_FRAME_CONTEXT_BUDGET,
+    ),
+  );
+  const expectedPath = String(expectedScope.path || "");
+  const expectedContextKey = String(expectedScope.contextKey || "");
+  const expectedFrameIdHint = Number(expectedScope.frameIdHint);
+  const retained = [];
+  let missingFrameContextCount = 0;
+  const inspectedResultCount = Math.min(
+    discovered.length,
+    boundedMaxFrameContexts + 1,
+  );
+
+  const compareEntries = (left, right) => {
+    return left.priority - right.priority ||
+      left.frameId - right.frameId ||
+      left.discoveryIndex - right.discoveryIndex;
+  };
+
+  for (let discoveryIndex = 0; discoveryIndex < inspectedResultCount; discoveryIndex += 1) {
+    const result = discovered[discoveryIndex];
+    const frameScope = result?.result;
+    const numericFrameId = Number(result?.frameId);
+    if (
+      !frameScope ||
+      typeof frameScope !== "object" ||
+      !Number.isInteger(numericFrameId) ||
+      numericFrameId < 0
+    ) {
+      missingFrameContextCount += 1;
+      continue;
+    }
+
+    const exactPathMatch = expectedPath && frameScope.path === expectedPath;
+    const exactContextMatch = expectedContextKey && frameScope.contextKey === expectedContextKey;
+    const hintedFrameMatch = Number.isInteger(expectedFrameIdHint) &&
+      numericFrameId === expectedFrameIdHint;
+    const priority = exactPathMatch
+      ? 0
+      : exactContextMatch
+        ? 1
+        : hintedFrameMatch
+          ? 2
+          : numericFrameId === 0
+            ? 3
+            : 4;
+    const entry = {
+      frameId: numericFrameId,
+      frameScope,
+      priority,
+      discoveryIndex,
+    };
+    const insertAt = retained.findIndex((candidate) => compareEntries(entry, candidate) < 0);
+    if (insertAt === -1) retained.push(entry);
+    else retained.splice(insertAt, 0, entry);
+    if (retained.length > boundedMaxFrameContexts + 1) retained.pop();
+  }
+
+  const frameContextOverflow = discovered.length > boundedMaxFrameContexts;
+  const firstOmitted = frameContextOverflow ? retained[boundedMaxFrameContexts] : null;
+  const contexts = retained.slice(0, boundedMaxFrameContexts).map((entry) => ({
+    frameId: entry.frameId,
+    frameScope: entry.frameScope,
+  }));
+  return {
+    contexts,
+    missingFrameContextCount,
+    diagnostics: {
+      maxFrameContexts: boundedMaxFrameContexts,
+      discoveredResultCount: discovered.length,
+      discoveredFrameContextCount: discovered.length,
+      inspectedResultCount,
+      selectedFrameContextCount: contexts.length,
+      missingFrameContextCount,
+      frameContextOverflow,
+      firstOmittedFrameId: firstOmitted?.frameId ?? null,
+    },
+  };
+}
+
+function createMapperFrameContextOverflowError(scope = {}, resolution = {}) {
+  const maxFrameContexts = Number(resolution.maxFrameContexts) || MAPPER_FRAME_CONTEXT_BUDGET;
+  const error = new Error(
+    `Mapped frame identity could not be verified within ${maxFrameContexts} frame contexts: ${scope.path || "unknown"}`,
+  );
+  error.diagnostics = {
+    mapperState: "dynamic_deferred",
+    mapperReason: "frame_context_overflow",
+    finalReason: "mapper_frame_context_overflow",
+    framePath: scope.path || "",
+    frameContextId: scope.frameContextId || "",
+    maxFrameContexts,
+    discoveredFrameContextCount: Number(resolution.discoveredFrameContextCount) || 0,
+    inspectedResultCount: Number(resolution.inspectedResultCount) || 0,
+    selectedFrameContextCount: Number(resolution.selectedFrameContextCount) || 0,
+    missingFrameContextCount: Number(resolution.missingFrameContextCount) || 0,
+    firstOmittedFrameId: Number.isInteger(resolution.firstOmittedFrameId)
+      ? resolution.firstOmittedFrameId
+      : null,
+  };
+  return error;
+}
+
+function createUnreachableMapperFrameError(scope = {}) {
+  const error = new Error(`Mapped extension frame is unreachable: ${scope.path || "unknown"}`);
+  error.diagnostics = {
+    mapperState: "protected_unsupported",
+    mapperReason: "cross_origin_frame_unreachable",
+    finalReason: "mapper_protected_unsupported",
+    framePath: scope.path || "",
+    frameContextId: scope.frameContextId || "",
+  };
+  return error;
+}
+
+function createAmbiguousMapperFrameError(scope = {}) {
+  const error = new Error(`Mapped extension frame identity is ambiguous: ${scope.path || "unknown"}`);
+  error.diagnostics = {
+    mapperState: "ambiguous",
+    mapperReason: "cross_origin_frame_context_ambiguous",
+    finalReason: "mapper_ambiguous",
+    framePath: scope.path || "",
+    frameContextId: scope.frameContextId || "",
+  };
+  return error;
 }
 
 async function injectMapperContentScripts(tabId) {
@@ -711,10 +1434,10 @@ function isMissingContentScriptError(error = null) {
     message.includes("Could not establish connection");
 }
 
-async function getInspectorTargetTab(tabId, pageMap = null, sender = null) {
+async function getInspectorTargetTab(tabId, pageMap = null, sender = null, settings = {}) {
   if (tabId) {
     const explicitTab = await chrome.tabs.get(Number(tabId));
-    return isInspectableWebsiteTab(explicitTab, pageMap) ? explicitTab : null;
+    return isInspectableWebsiteTab(explicitTab, pageMap, settings) ? explicitTab : null;
   }
 
   const senderWindowId = sender?.tab?.windowId;
@@ -726,32 +1449,31 @@ async function getInspectorTargetTab(tabId, pageMap = null, sender = null) {
       currentWindowTabs,
       pageMap,
       sender?.tab?.id,
+      settings,
     );
     if (currentWindowTarget) return currentWindowTarget;
   }
 
   const allTabs = await chrome.tabs.query({});
-  return selectBestInspectorTargetTab(allTabs, pageMap, sender?.tab?.id);
+  return selectBestInspectorTargetTab(allTabs, pageMap, sender?.tab?.id, settings);
 }
 
-function isInspectableWebsiteTab(tab = null, pageMap = null) {
+function isInspectableWebsiteTab(tab = null, pageMap = null, settings = {}) {
   if (!tab?.id || !tab.url || isStudioUrl(tab.url)) return false;
   if (!/^https?:\/\//i.test(tab.url)) return false;
-  if (!pageMap?.origin && !pageMap?.path) return true;
-
-  try {
-    const parsed = new URL(tab.url);
-    return (!pageMap.origin || parsed.origin === pageMap.origin) &&
-      (!pageMap.path || parsed.pathname === pageMap.path);
-  } catch {
-    return false;
-  }
+  if (!pageMap?.origin && !pageMap?.path && !pageMap?.pageProfileKey) return true;
+  return pageMapMatchesUrl(pageMap, tab.url, settings);
 }
 
-function selectBestInspectorTargetTab(tabs = [], pageMap = null, senderTabId = null) {
+function selectBestInspectorTargetTab(
+  tabs = [],
+  pageMap = null,
+  senderTabId = null,
+  settings = {},
+) {
   return tabs
     .filter((tab) => tab.id !== senderTabId)
-    .filter((tab) => isInspectableWebsiteTab(tab, pageMap))
+    .filter((tab) => isInspectableWebsiteTab(tab, pageMap, settings))
     .sort((a, b) => {
       if (a.active !== b.active) return a.active ? -1 : 1;
       return Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0);
@@ -760,12 +1482,16 @@ function selectBestInspectorTargetTab(tabs = [], pageMap = null, senderTabId = n
 
 function findLatestInspectorMap(state = null, pageProfileKey = "") {
   const maps = Array.isArray(state?.maps) ? state.maps : [];
-  const matching = maps.filter((map) => map.pageProfileKey === pageProfileKey);
-  const usable = matching.filter(isUsableInspectorPageMap);
-  return usable.at(-1) || matching.at(-1) || null;
+  const usable = maps.filter(isUsableInspectorPageMap);
+  return newestInspectorPageMap(usable, pageProfileKey) ||
+    newestInspectorPageMap(maps, pageProfileKey);
 }
 
 function replaceInspectorPageMap(maps = [], pageMap = {}, settings = {}) {
+  const newestExisting = newestInspectorPageMap(maps, pageMap.pageProfileKey);
+  if (isStrictlyOlderInspectorPageMap(pageMap, newestExisting)) {
+    return maps;
+  }
   const maxVersions = Math.min(3, Math.max(1, Number(settings.maxVersions) || 3));
   const nextMaps = maps
     .filter((map) => {
@@ -783,6 +1509,37 @@ function replaceInspectorPageMap(maps = [], pageMap = {}, settings = {}) {
     return map.pageProfileKey !== pageMap.pageProfileKey ||
       retained.has(map.mapVersionId);
   });
+}
+
+function newestInspectorPageMap(maps = [], pageProfileKey = "") {
+  return (Array.isArray(maps) ? maps : [])
+    .filter((map) => map?.pageProfileKey === pageProfileKey)
+    .reduce((newest, map) => {
+      if (!newest) return map;
+      const currentTime = Date.parse(map.createdAt || "");
+      const newestTime = Date.parse(newest.createdAt || "");
+      if (Number.isFinite(currentTime) && Number.isFinite(newestTime)) {
+        return currentTime > newestTime ? map : newest;
+      }
+      if (Number.isFinite(currentTime)) return map;
+      return newest;
+    }, null);
+}
+
+function isStrictlyOlderInspectorPageMap(pageMap = null, newest = null) {
+  if (!pageMap || !newest) return false;
+  const incomingTime = Date.parse(pageMap.createdAt || "");
+  const newestTime = Date.parse(newest.createdAt || "");
+  return Number.isFinite(incomingTime) &&
+    Number.isFinite(newestTime) &&
+    incomingTime < newestTime;
+}
+
+function normalizeInspectorSnapshotCapturedAt(value = "") {
+  const capturedAt = String(value || "").trim();
+  return Number.isFinite(Date.parse(capturedAt))
+    ? capturedAt
+    : new Date().toISOString();
 }
 
 function isUsableInspectorPageMap(map = {}) {
@@ -1224,7 +1981,12 @@ async function executeWorkflowNode({
 
   console.log(
     `[BRunner] Executing step ${index + 1}/${totalSteps}:`,
-    sanitizeStepForLog(resolvedStep),
+    {
+      nodeId: String(resolvedStep?.id || "").slice(0, 160),
+      action: String(resolvedStep?.action || resolvedStep?.type || "unknown").slice(0, 160),
+      tabRef: String(resolvedStep?.tabRef || "").slice(0, 160),
+      hasComponentRef: Boolean(resolvedStep?.componentRef),
+    },
   );
 
   let currentTab = tab;
@@ -1539,11 +2301,20 @@ function normalizeDataSourceVariableName(value) {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : "";
 }
 
-async function stopActiveWorkflow() {
+async function stopActiveWorkflow(expectedRunId = "") {
   if (!activeRun || runtimeState.getState().execution.status !== "running") {
     return {
       ok: false,
       error: "No workflow is currently running.",
+    };
+  }
+
+  if (expectedRunId && expectedRunId !== activeRun.runId) {
+    return {
+      ok: false,
+      code: "stale_execution_session",
+      error: "Stop request belongs to an inactive workflow run.",
+      runId: activeRun.runId,
     };
   }
 
@@ -1846,16 +2617,6 @@ async function executeStep(
     }
   }
 
-  if (action === Actions.FileLocalUpload) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        path: step.config?.path ? "[REDACTED]" : "",
-      },
-    };
-  }
-
   const response = await executeContentStepWithVisibleHostFallback(
     contextReadyTab,
     step,
@@ -1928,72 +2689,6 @@ async function executeHttpRequestStep(step, variableRegistry, runId) {
   } finally {
     controllers?.delete(controller);
   }
-}
-
-function sanitizeStepForLog(step) {
-  const action = step?.action || step?.type;
-
-  if (action === Actions.ClipboardWrite) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        value: step.config?.value ? "[REDACTED]" : "",
-      },
-    };
-  }
-
-  if (action === Actions.FileInputUpload) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        content: step.config?.content ? "[REDACTED]" : "",
-      },
-    };
-  }
-
-  if (action === Actions.ApprovedFileWrite) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        content: step.config?.content ? "[REDACTED]" : "",
-      },
-    };
-  }
-
-  if (action === Actions.DataFileExport) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        data: step.config?.data === undefined ? undefined : "[REDACTED]",
-      },
-    };
-  }
-
-  if (action === Actions.DownloadWait) {
-    return {
-      ...step,
-      config: {
-        ...step.config,
-        urlContains: step.config?.urlContains ? "[REDACTED]" : "",
-      },
-    };
-  }
-
-  if (action !== Actions.HttpRequest) return step;
-
-  return {
-    ...step,
-    config: {
-      ...step.config,
-      url: sanitizeHttpUrlForLog(step.config?.url),
-      headers: step.config?.headers ? "[REDACTED]" : "",
-      body: step.config?.body ? "[REDACTED]" : "",
-    },
-  };
 }
 
 function isApprovedDirectoryAction(action) {
@@ -2238,19 +2933,6 @@ async function ensureClipboardOffscreenDocument() {
     await offscreenClipboardCreation;
   } finally {
     offscreenClipboardCreation = null;
-  }
-}
-
-function sanitizeHttpUrlForLog(value) {
-  try {
-    const url = new URL(String(value || ""));
-    url.username = "";
-    url.password = "";
-    url.search = "";
-    url.hash = "";
-    return url.href;
-  } catch {
-    return "[INVALID URL]";
   }
 }
 
@@ -2594,6 +3276,11 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
   }
   throwIfRunCancelled(runId);
 
+  await chrome.windows.update(tab.windowId, { focused: true });
+  await chrome.tabs.update(tab.id, { active: true });
+  await delay(150);
+  throwIfRunCancelled(runId);
+
   const prepared = await sendContentRequest(tab, {
     type: Messages.PrepareHostFallback,
     step,
@@ -2609,47 +3296,21 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
     throw error;
   }
 
-  await chrome.windows.update(tab.windowId, { focused: true });
-  await chrome.tabs.update(tab.id, { active: true });
-  await delay(150);
-  throwIfRunCancelled(runId);
-
   await NativeBridge.hostWindow({
     expectedWindowTitle: prepared.window?.title || tab.title || "",
   });
 
   let visualRecovery = null;
-  if (shouldPreferVisualMatchFallback(step, prepared)) {
-    visualRecovery = await recoverVisibleHostFallbackWithVisualMatch(
-      tab,
-      step,
-      prepared,
-      runId,
-      browserError,
-    );
-    if (visualRecovery?.ok) {
-      const visualVerified = await verifyVisibleHostFallback(tab, step, runId);
-      if (visualVerified?.ok) {
-        return {
-          ok: true,
-          usedStrategy: "visible_host_fallback",
-          hostAction: visualRecovery?.action || prepared.action,
-          browserFailure: browserError?.diagnostics || null,
-          verification: "visual_match_recovery",
-          visualRecovery: true,
-        };
-      }
-    }
-  }
-
   let hostResult = null;
   let hostActionError = null;
   try {
     hostResult = await NativeBridge.hostAction({
       action: prepared.action,
       text: prepared.text || "",
-      point: prepared.point,
-      target: prepared.target,
+      coordinateSpace: prepared.coordinateSpace,
+      clientPoint: prepared.clientPoint,
+      clientBounds: prepared.clientBounds,
+      devicePixelRatio: prepared.devicePixelRatio,
       coordinateConfidence: prepared.confidence,
       expectedWindowTitle: prepared.window?.title || tab.title || "",
       browserFailure: browserError?.diagnostics || null,
@@ -2966,15 +3627,6 @@ function shouldAllowVisualMatchFallback(step = {}) {
 
   const config = step.config || {};
   return [true, "true", "allow"].includes(config.allowVisualMatchFallback);
-}
-
-function shouldPreferVisualMatchFallback(step = {}, prepared = {}) {
-  if (!shouldAllowVisualMatchFallback(step)) {
-    return false;
-  }
-
-  const sideUiInset = Number(prepared?.point?.sideUiInset);
-  return Number.isFinite(sideUiInset) && sideUiInset >= 80;
 }
 
 async function executeTabSwitch(currentTab, step, tabsByRef) {

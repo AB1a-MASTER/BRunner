@@ -2,7 +2,7 @@
   "name": "[NEW 2026-07-02] Local File Upload Acceptance",
   "description": "Fresh host-served acceptance workflow. Reads an allowlisted local file through the native host and uploads it to the page.",
   "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
-  "boundDomain": "http://127.0.0.1:8765/test.html",
+  "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
   "variables": {},
   "settings": {
     "reuseExistingTabs": false
@@ -11,7 +11,7 @@
     {
       "id": "local_file_acceptance_open",
       "action": "browser.navigate",
-      "url": "http://127.0.0.1:8765/test.html",
+      "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
       "friendlyName": "Open host-served acceptance page"
     },
     {

@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import json
-import pyautogui
 import logging
 from app_paths import (
     active_workflows_directory,
@@ -21,9 +20,11 @@ from directory_registry import (
 from fallback_input import execute_host_action
 from visual_match import execute_visual_match_action
 from workflow_repository import WorkflowRepository
-from mapper_repository import MapperRepository
 from execution_log_storage import save_execution_log
 from host_settings import load_or_create_config, save_config
+from host_runtime_status import clear_connection_status, write_connection_status
+from pairing_coordinator import PairingCoordinator
+from product_version import HOST_VERSION
 from window_validation import HostFallbackError, host_window_status
 
 # --- Paths ---
@@ -36,10 +37,14 @@ config = load_or_create_config(CONFIG_FILE, BASE_DIR)
 PORT = config["port"]
 WORKFLOWS_DIR = active_workflows_directory(config, BASE_DIR)
 WORKFLOW_REPOSITORY = WorkflowRepository(WORKFLOWS_DIR)
-MAPPER_REPOSITORY = MapperRepository(WORKFLOWS_DIR)
-HOST_VERSION = "0.1.0"
 PROTOCOL_VERSION = 2
-SUPPORTED_CAPABILITIES = [
+PROTOCOL_V2_CAPABILITIES = [
+    "host.hello",
+    "host.window",
+    "host.action",
+    "host.visual_match",
+]
+HOST_CAPABILITIES = [
     "host.hello",
     "workflow.list",
     "workflow.load",
@@ -48,10 +53,6 @@ SUPPORTED_CAPABILITIES = [
     "workflow.duplicate",
     "workflow.rename",
     "workflow.upgrade",
-    "mapper.state.list",
-    "mapper.state.get",
-    "mapper.state.save",
-    "mapper.state.delete",
     "host.window",
     "host.action",
     "host.visual_match",
@@ -64,6 +65,10 @@ SUPPORTED_CAPABILITIES = [
     "data_source.read",
     "execution_log.save",
 ]
+MAX_WEBSOCKET_MESSAGE_BYTES = 16 * 1024 * 1024
+MAX_WEBSOCKET_QUEUE = 16
+CONNECTION_STATUS_HEARTBEAT_SECONDS = 5
+CONNECTION_STATUS_HEARTBEAT_TASK_NAME = "brunner-connection-status-heartbeat"
 
 WORKFLOWS_DIR.mkdir(exist_ok=True)
 EXECUTION_LOGS_DIR.mkdir(exist_ok=True)
@@ -79,16 +84,11 @@ logging.basicConfig(
     ]
 )
 
-# --- Authentication & Setup ---
-
-
-PAIRING_KEY = config["pairing_key"]
+# --- Service Setup ---
 
 logging.info("========================================")
 logging.info(" BRunner Native OS Host Started")
 logging.info(f" Listening on ws://localhost:{PORT}")
-logging.info("========================================")
-logging.info(f" YOUR PAIRING KEY: {PAIRING_KEY}")
 logging.info("========================================")
 
 
@@ -131,8 +131,13 @@ def success(request_id=None, **kwargs):
     return response(request_id=request_id, status="success", **kwargs)
 
 
-def failure(request_id=None, error="Unknown error", status="failed"):
-    return response(request_id=request_id, status=status, error=str(error))
+def failure(request_id=None, error="Unknown error", status="failed", **kwargs):
+    return response(
+        request_id=request_id,
+        status=status,
+        error=str(error),
+        **kwargs,
+    )
 
 
 def parse_keys(raw_keys):
@@ -174,6 +179,70 @@ def current_config():
     return config
 
 
+def save_current_config(settings):
+    global config
+    config = save_config(CONFIG_FILE, settings)
+    return config
+
+
+def report_connection(profile_instance_id):
+    try:
+        write_connection_status(
+            BASE_DIR,
+            profile_instance_id=profile_instance_id,
+            port=PORT,
+        )
+    except Exception as error:
+        logging.warning("[Pairing] Could not update live connection status: %s", error)
+
+
+def clear_live_connection_status():
+    try:
+        clear_connection_status(BASE_DIR, port=PORT)
+    except Exception as error:
+        logging.warning("[Pairing] Could not clear live connection status: %s", error)
+
+
+async def connection_status_heartbeat(
+    profile_instance_id,
+    interval_seconds=None,
+    reporter=None,
+):
+    interval = (
+        CONNECTION_STATUS_HEARTBEAT_SECONDS
+        if interval_seconds is None
+        else float(interval_seconds)
+    )
+    if interval <= 0:
+        raise ValueError("Connection-status heartbeat interval must be positive.")
+    report = reporter or report_connection
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            report(profile_instance_id)
+        except Exception as error:
+            logging.warning("[Pairing] Connection-status heartbeat failed: %s", error)
+
+
+async def cancel_connection_status_heartbeat(task):
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    except Exception as error:
+        logging.warning("[Pairing] Connection-status heartbeat stopped: %s", error)
+
+
+PAIRING_COORDINATOR = PairingCoordinator(
+    current_config,
+    save_current_config,
+    report_connection,
+)
+
+
 def host_hello_payload():
     settings = current_config()
     host = settings.get("host") if isinstance(settings.get("host"), dict) else {}
@@ -185,7 +254,8 @@ def host_hello_payload():
             "version": HOST_VERSION,
             "port": host.get("port") or settings.get("port") or PORT,
         },
-        "capabilities": list(SUPPORTED_CAPABILITIES),
+        "capabilities": list(HOST_CAPABILITIES),
+        "protocolV2Capabilities": list(PROTOCOL_V2_CAPABILITIES),
         "status": {
             "workflowStorageMode": (
                 settings.get("workflowStorage", {}).get("mode")
@@ -200,47 +270,53 @@ def host_hello_payload():
 # --- Command Handlers ---
 
 
-async def handle_auth(websocket, request_id, payload):
-    client_key = payload.get("key") or payload.get("pairing_key")
-    client_extension_id = str(payload.get("extensionId") or payload.get("extension_id") or "").strip()
-    settings = current_config()
-    pairing_key = settings.get("pairingKey") or settings.get("pairing_key")
-    paired_extension_id = str(
-        settings.get("pairedExtensionId") or settings.get("paired_extension_id") or ""
-    ).strip()
+async def send_pairing_result(websocket, request_id, result):
+    details = {
+        key: value
+        for key, value in result.items()
+        if key not in {"ok", "message"}
+    }
+    if result.get("ok"):
+        body = success(request_id, message=result.get("message"), **details)
+    else:
+        body = failure(request_id, result.get("message"), **details)
+    await send_json(websocket, body)
 
-    if client_key != pairing_key:
-        await send_json(
-            websocket,
-            failure(request_id, "Invalid Pairing Key.")
-        )
-        logging.warning("[Auth] Blocked connection attempt with invalid key.")
-        return False
 
-    if paired_extension_id and client_extension_id and client_extension_id != paired_extension_id:
-        await send_json(
-            websocket,
-            failure(request_id, "This extension instance is not paired with this host.")
-        )
-        logging.warning(
-            "[Auth] Blocked unpaired extension instance: %s",
-            client_extension_id,
-        )
-        return False
+async def handle_profile_hello(websocket, request_id, payload, send_response=True):
+    result = PAIRING_COORDINATOR.announce(
+        websocket,
+        payload.get("profileInstanceId") or payload.get("profile_instance_id"),
+    )
+    if send_response:
+        await send_pairing_result(websocket, request_id, result)
+    logging.info(
+        "[Pairing] Profile hello: %s",
+        result.get("code"),
+    )
+    return result
 
-    if client_extension_id and not paired_extension_id:
-        settings["pairedExtensionId"] = client_extension_id
-        save_config(CONFIG_FILE, settings)
-        current_config()
-        logging.info("[Auth] Paired extension instance: %s", client_extension_id)
 
-    if client_key == pairing_key:
-        await send_json(
-            websocket,
-            success(request_id, message="Authenticated successfully.")
-        )
-        logging.info("[Auth] Extension connected and authenticated securely.")
-        return True
+async def handle_pair_profile(websocket, request_id, payload, send_response=True):
+    result = PAIRING_COORDINATOR.pair(
+        websocket,
+        payload.get("profileInstanceId") or payload.get("profile_instance_id"),
+    )
+    if send_response:
+        await send_pairing_result(websocket, request_id, result)
+    logging.info("[Pairing] Pair request: %s", result.get("code"))
+    return result
+
+
+async def handle_unpair_profile(websocket, request_id, payload, send_response=True):
+    result = PAIRING_COORDINATOR.unpair(
+        websocket,
+        payload.get("profileInstanceId") or payload.get("profile_instance_id"),
+    )
+    if send_response:
+        await send_pairing_result(websocket, request_id, result)
+    logging.info("[Pairing] Unpair request: %s", result.get("code"))
+    return result
 
 
 async def handle_os_keystroke(websocket, request_id, payload):
@@ -254,18 +330,20 @@ async def handle_os_keystroke(websocket, request_id, payload):
     keys = parse_keys(raw_keys)
 
     logging.info(f"[Hardware] Dispatching OS keystroke: {keys}")
-
+    action_request = dict(payload)
     if len(keys) == 1:
-        pyautogui.press(keys[0])
+        action_request.update({"action": "press", "key": keys[0]})
     else:
-        pyautogui.hotkey(*keys)
+        action_request.update({"action": "shortcut", "keys": keys})
+    result = execute_host_action(current_config(), action_request)
 
     await send_json(
         websocket,
         success(
             request_id,
             strategy="Python_OS_Hardware",
-            keys=keys
+            keys=keys,
+            hostAction=result,
         )
     )
 
@@ -325,10 +403,13 @@ async def handle_host_visual_match(websocket, request_id, payload, protocol_vers
 
 
 async def handle_read_file(websocket, request_id, payload):
+    request = directory_request(payload)
+    if not request.get("directoryAlias"):
+        request = payload.get("path") or payload.get("filePath")
     file_data = read_allowed_file(
         current_config(),
         BASE_DIR,
-        payload.get("path") or payload.get("filePath")
+        request,
     )
 
     await send_json(
@@ -371,11 +452,18 @@ async def handle_list_approved_directories(websocket, request_id):
     )
 
 
+def directory_request(payload):
+    if not isinstance(payload, dict):
+        return {}
+    request = payload.get("request")
+    return request if isinstance(request, dict) else payload
+
+
 async def handle_find_approved_files(websocket, request_id, payload):
     result = find_approved_files(
         current_config(),
         BASE_DIR,
-        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+        directory_request(payload),
     )
     await send_json(websocket, success(request_id, **result))
     logging.info(
@@ -389,7 +477,7 @@ async def handle_write_approved_file(websocket, request_id, payload):
     result = write_approved_file(
         current_config(),
         BASE_DIR,
-        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+        directory_request(payload),
     )
     await send_json(websocket, success(request_id, **result))
     logging.info(
@@ -404,7 +492,7 @@ async def handle_export_data_file(websocket, request_id, payload):
     result = export_data_file(
         current_config(),
         BASE_DIR,
-        payload.get("request") if isinstance(payload.get("request"), dict) else payload,
+        directory_request(payload),
     )
     await send_json(websocket, success(request_id, **result))
     logging.info(
@@ -513,44 +601,12 @@ async def handle_rename_workflow(websocket, request_id, payload):
     )
 
 
-async def handle_list_mapper_states(websocket, request_id):
-    await send_json(
-        websocket,
-        success(request_id, states=MAPPER_REPOSITORY.list_states())
-    )
-
-
-async def handle_get_mapper_state(websocket, request_id, payload):
-    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
-    await send_json(
-        websocket,
-        success(request_id, state=MAPPER_REPOSITORY.get_state(workflow_id))
-    )
-
-
-async def handle_save_mapper_state(websocket, request_id, payload):
-    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
-    state = payload.get("state") or {}
-    saved = MAPPER_REPOSITORY.save_state(workflow_id or state.get("workflowId"), state)
-    await send_json(
-        websocket,
-        success(request_id, state=saved)
-    )
-
-
-async def handle_delete_mapper_state(websocket, request_id, payload):
-    workflow_id = payload.get("workflowId") or payload.get("workflow_id")
-    await send_json(
-        websocket,
-        success(request_id, deleted=MAPPER_REPOSITORY.delete_state(workflow_id))
-    )
-
-
 # --- WebSocket Command Router ---
 
 
 async def handle_connection(websocket):
-    authenticated = False
+    profile_instance_id = ""
+    heartbeat_task = None
     remote_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
 
     logging.info(f"[Network] New connection attempt from {remote_ip}")
@@ -577,17 +633,130 @@ async def handle_connection(websocket):
                 request_id or "none"
             )
 
-            if command == "AUTH":
-                authenticated = await handle_auth(websocket, request_id, payload)
+            if command in {"PROFILE_HELLO", "PAIR_PROFILE", "UNPAIR_PROFILE"}:
+                try:
+                    if command == "PROFILE_HELLO":
+                        pairing_result = await handle_profile_hello(
+                            websocket,
+                            request_id,
+                            payload,
+                            send_response=False,
+                        )
+                    elif command == "PAIR_PROFILE":
+                        pairing_result = await handle_pair_profile(
+                            websocket,
+                            request_id,
+                            payload,
+                            send_response=False,
+                        )
+                    else:
+                        pairing_result = await handle_unpair_profile(
+                            websocket,
+                            request_id,
+                            payload,
+                            send_response=False,
+                        )
+                    if pairing_result.get("ok"):
+                        next_profile_instance_id = (
+                            pairing_result.get("profileInstanceId") or ""
+                        )
+                        await cancel_connection_status_heartbeat(heartbeat_task)
+                        heartbeat_task = None
+                        if (
+                            pairing_result.get("connected")
+                            and next_profile_instance_id
+                        ):
+                            profile_instance_id = next_profile_instance_id
+                            heartbeat_task = asyncio.create_task(
+                                connection_status_heartbeat(profile_instance_id),
+                                name=CONNECTION_STATUS_HEARTBEAT_TASK_NAME,
+                            )
+                        else:
+                            profile_instance_id = ""
+                            if (
+                                getattr(PAIRING_COORDINATOR, "active_connection", None) is None
+                                or getattr(PAIRING_COORDINATOR, "active_connection", None) is websocket
+                            ):
+                                clear_live_connection_status()
+                    elif not profile_instance_id:
+                        # Retain a valid announced identity so later commands
+                        # receive the coordinator's precise pairing diagnostic.
+                        profile_instance_id = (
+                            pairing_result.get("profileInstanceId") or ""
+                        )
+                    await send_pairing_result(websocket, request_id, pairing_result)
+                except Exception as error:
+                    await cancel_connection_status_heartbeat(heartbeat_task)
+                    heartbeat_task = None
+                    profile_instance_id = ""
+                    PAIRING_COORDINATOR.release(websocket)
+                    if getattr(PAIRING_COORDINATOR, "active_connection", None) is None:
+                        clear_live_connection_status()
+                    await send_json(
+                        websocket,
+                        failure(
+                            request_id,
+                            str(error),
+                            code="pairing_state_error",
+                            pairingState="pairing_failed",
+                            paired=False,
+                            connected=False,
+                        ),
+                    )
+                    logging.error("[Pairing] %s failed: %s", command, error)
                 continue
 
-            if not authenticated:
+            if not profile_instance_id:
+                await send_pairing_result(
+                    websocket,
+                    request_id,
+                    PAIRING_COORDINATOR.pairing_required(),
+                )
+                logging.warning("[Pairing] Rejected command before profile hello: %s", command)
+                continue
+
+            try:
+                pairing_result = PAIRING_COORDINATOR.validate_session(
+                    websocket,
+                    profile_instance_id,
+                )
+            except Exception as error:
+                await cancel_connection_status_heartbeat(heartbeat_task)
+                heartbeat_task = None
+                profile_instance_id = ""
+                if (
+                    getattr(PAIRING_COORDINATOR, "active_connection", None) is None
+                    or getattr(PAIRING_COORDINATOR, "active_connection", None) is websocket
+                ):
+                    clear_live_connection_status()
                 await send_json(
                     websocket,
-                    failure(request_id, "Not authenticated.")
+                    failure(
+                        request_id,
+                        str(error),
+                        code="pairing_state_error",
+                        pairingState="pairing_failed",
+                        paired=False,
+                        connected=False,
+                    ),
                 )
+                logging.error("[Pairing] Could not validate %s: %s", command, error)
+                continue
+            if not pairing_result.get("ok"):
+                await cancel_connection_status_heartbeat(heartbeat_task)
+                heartbeat_task = None
+                profile_instance_id = ""
+                if (
+                    getattr(PAIRING_COORDINATOR, "active_connection", None) is None
+                    or getattr(PAIRING_COORDINATOR, "active_connection", None) is websocket
+                ):
+                    clear_live_connection_status()
+                await send_pairing_result(websocket, request_id, pairing_result)
                 logging.warning(
-                    f"[Security] Rejected unauthenticated command: {command}")
+                    "[Pairing] Rejected command %s: %s",
+                    command,
+                    pairing_result.get("code"),
+                )
                 continue
 
             try:
@@ -660,18 +829,6 @@ async def handle_connection(websocket):
                 elif command == "RENAME_WORKFLOW":
                     await handle_rename_workflow(websocket, request_id, payload)
 
-                elif command == "LIST_MAPPER_STATES":
-                    await handle_list_mapper_states(websocket, request_id)
-
-                elif command == "GET_MAPPER_STATE":
-                    await handle_get_mapper_state(websocket, request_id, payload)
-
-                elif command == "SAVE_MAPPER_STATE":
-                    await handle_save_mapper_state(websocket, request_id, payload)
-
-                elif command == "DELETE_MAPPER_STATE":
-                    await handle_delete_mapper_state(websocket, request_id, payload)
-
                 else:
                     await send_json(
                         websocket,
@@ -700,10 +857,24 @@ async def handle_connection(websocket):
     except Exception as e:
         logging.error(f"[System] Unexpected error: {str(e)}")
 
+    finally:
+        await cancel_connection_status_heartbeat(heartbeat_task)
+        PAIRING_COORDINATOR.release(websocket)
+
 
 async def main():
-    async with websockets.serve(handle_connection, "localhost", PORT):
-        await asyncio.Future()
+    try:
+        clear_live_connection_status()
+        async with websockets.serve(
+            handle_connection,
+            "localhost",
+            PORT,
+            max_size=MAX_WEBSOCKET_MESSAGE_BYTES,
+            max_queue=MAX_WEBSOCKET_QUEUE,
+        ):
+            await asyncio.Future()
+    finally:
+        clear_live_connection_status()
 
 
 if __name__ == "__main__":

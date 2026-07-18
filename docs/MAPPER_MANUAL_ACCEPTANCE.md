@@ -1,222 +1,266 @@
 # Mapper Engine Manual Acceptance
 
-This checklist accepts the mapper engine that future nodes will consume. It does
-not accept the current provisional nodes, Graph Studio authoring, or the visual
-quality of the saved-map explorer/Mapper Inspector prototype.
+This checklist contains only acceptance that requires the unpacked extension,
+the Mapper Inspector, and live Chrome/Chromium tabs. Persistence races, schema
+validation, quota recovery, overflow bounds, and fixture integrity are covered
+by the automated suites and must not be recreated by manually editing extension
+storage.
 
-Use the current developer mapping trigger, extension diagnostic surface, or
-fixture harness only as a way to call the engine. Do not treat that transport's
-layout, navigation, highlighting, responsiveness, or accessibility as a mapper
-phase gate.
+The checklist accepts the node-neutral mapper engine. It does not accept the
+current provisional nodes, Graph Studio node behavior, release packaging, or
+the visual quality of the V2 saved-map viewer.
 
-## Serve Fixtures
+## Start the Fixtures
 
-From the repository root:
+From the repository root run:
 
 ```powershell
-python -m http.server 8765
+.\start_acceptance_server.ps1
 ```
 
-Open:
+Open these as ordinary website tabs:
 
 - `http://127.0.0.1:8765/BRunner_Host/mapper_test.html`
 - `http://127.0.0.1:8765/BRunner_Host/mapper_stress_test.html`
 - `http://127.0.0.1:8765/BRunner_Host/mapper_platform_profiles_test.html`
+- `http://localhost:8765/BRunner_Host/mapper_stress_test.html` for the unrelated-site check
 
-Reload the unpacked extension before live acceptance, especially after manifest,
-content-script, mapper bundle, or frame-routing changes.
+Then:
 
-## Acceptance Record
+- [ ] Reload BRunner at `chrome://extensions`.
+- [ ] Open the BRunner side panel and Mapper Inspector.
+- [ ] Enter workflow ID `mapper-live-acceptance`.
+- [ ] Keep the fixture being tested as the active ordinary website tab.
 
-For every scenario, retain the engine request/result and record:
+Use **Map Active Page** only to create an initial map or map an explicitly
+changed route/page. Use **Check live resolution** for a selected component,
+**Check live** for read-only map comparison, and **Refresh Map** only when a
+step explicitly asks for persistence.
 
-- workflow, site, page, and map-version identity;
-- Component ID and `ComponentRef` for the subject;
-- contextual hierarchy and frame/shadow/repeat scope;
-- resolver state, reason, score, runner-up, and margin when applicable;
-- whether a component was returned as the selected result;
-- whether revalidation or refresh created a retained version.
+For every failure retain the workflow ID, URL, Component ID/`ComponentRef`, map
+version, frame/shadow/repeat scope, resolver state/reason, score, runner-up,
+margin, and selected candidate.
 
-Local mapper data is user-managed and may include raw page content or values.
-Redaction and sensitive-site display behavior are not part of this acceptance.
+## 1. Node-Neutral Static Map
 
-## 1. Node-Neutral API Contract
+- [ ] Activate `mapper_test.html` and click **Map Active Page**.
+- [ ] Confirm the Tree contains Profile name/email, Profile Help, Billing email,
+  Billing plan, Automatically renew billing, both Billing frequency radios, and
+  both Save buttons.
+- [ ] Confirm the two Save buttons have different Component IDs and remain under
+  their actual Profile and Billing form/container paths.
+- [ ] Confirm headings, labels, forms, and containers appear as semantic/context
+  facts rather than a flattened control list.
+- [ ] Select one actionable control and one semantic/content component and run
+  **Check live resolution** with the default requirement.
+- [ ] Confirm both resolve without any current node type being selected or run.
 
-1. Call the mapper scan operation without supplying a current node type.
-2. Confirm the result contains a page-map identity, contextual hierarchy, and
-   components with locked Component IDs.
-3. Choose an actionable component and a semantic/content component and create
-   `ComponentRef` records for both.
-4. Resolve both references through the common resolver API.
-5. Revalidate each reference without performing a browser action.
-6. Refresh the page map explicitly and resolve the same references again.
+Pass: scan and resolution are node-neutral, the required control types are
+discoverable, and contextual hierarchy distinguishes duplicate controls.
 
-Expected: scan, resolve, revalidate, and refresh operate independently of the
-current node catalogue or Studio schema. No test requires a current node to be
-rewritten or executed.
+## 2. Independent Identity Drift
 
-## 2. Static Elements and Contextual Hierarchy
+Map the Publish Settings target in the Source container and record its Component
+ID and current map version. Before each case click **Reset Drift**, then use only
+the named fixture control.
 
-1. Open the static section of `mapper_test.html`.
-2. Scan the page at the normal mapper tier.
-3. Confirm actionable controls include buttons, links, text inputs, selects,
-   checkboxes/radios, and other enabled semantic controls.
-4. Confirm meaningful semantic elements needed for future extraction or context
-   are included under configured bounds.
-5. Confirm each component retains page/container/form/label context and the
-   structural hierarchy contains the actual parent/child path.
-6. Confirm duplicate **Save** controls in separate containers receive distinct
-   contextual identities.
+- [ ] **Apply ID/Class Drift**: run **Check live resolution**, then **Refresh Map**.
+- [ ] **Apply Text/Label Drift**: revalidate, then refresh.
+- [ ] **Apply Layout Drift**: revalidate, then refresh.
+- [ ] **Apply Container Drift**: revalidate, then refresh.
+- [ ] Confirm each strong-evidence case retains the original locked Component ID
+  and records the changed evidence/history.
+- [ ] Click **Replace With Weak Lookalike**, revalidate, and refresh.
+- [ ] Confirm the old reference is unresolved/ambiguous/stale rather than silently
+  rebound; the refreshed map represents the lookalike as new and retains the old
+  component as removed history.
 
-Expected: the map is useful to future click, type, wait, extraction, screenshot,
-and form-oriented nodes without being tailored to any one of them.
+Pass: strong independent evidence retains identity; weak/conflicting evidence
+never causes a guessed rebind.
 
-## 3. Stable Identity and Reconciliation
+## 3. Ambiguity and Capability Compatibility
 
-1. Save the initial static map and Component IDs.
-2. Apply the fixture's controlled ID/class/CSS-path drift.
-3. Revalidate existing references before refreshing.
-4. Refresh the map and compare retained identities and history.
-5. Repeat with label/text drift, layout movement, and a controlled container
-   change.
+Click **Reset Ambiguity**, refresh the page map, and select Review Account.
 
-Expected: strong unique semantic/structural evidence preserves the locked
-Component ID. Weak or conflicting history becomes a new component plus a
-removed historical record. No close match is silently rebound.
+- [ ] Confirm its initial live result is `resolved` or
+  `resolved_with_fallback`.
+- [ ] Click **Remove Primary Locator** and confirm ordered fallback resolution.
+- [ ] Reset, refresh, select Review Account, then click **Add Equal Duplicate**.
+- [ ] Confirm live resolution is `ambiguous` and no document-order candidate is
+  selected.
+- [ ] Reset, refresh, select Review Account, then click **Create Close-Score
+  Pair**.
+- [ ] Confirm the resolver refuses the pair when the winner margin is below
+  policy; record score, runner-up, and margin.
+- [ ] Select `capability-input`, choose **Type/input** in **Resolution
+  requirement**, and confirm it resolves.
+- [ ] Select `capability-button`, keep **Type/input**, and confirm the click-only
+  candidate is rejected as incompatible.
+- [ ] Change the button requirement to **Click** and confirm it resolves.
 
-## 4. Ambiguity and Compatibility
+Pass: direct duplicates and inadequate margins stay ambiguous, and incompatible
+capabilities are rejected before scoring.
 
-1. Resolve a uniquely identified control and confirm `resolved` or
-   `resolved_with_fallback`.
-2. Remove the unique locator while leaving sufficient fallback evidence and
-   confirm ordered fallback recovery.
-3. Make two candidates share the same saved locator and semantic evidence.
-4. Resolve with different capability requirements, such as click versus input.
-5. Create a close-score winner/runner-up pair below the required margin.
+## 4. Page, Site, Version, and Read Isolation
 
-Expected: duplicate direct matches and inadequate winner margins return
-`ambiguous`; incompatible candidates are rejected before scoring; document order
-never breaks a tie.
+Using workflow ID `mapper-live-acceptance`, map all four fixture URLs listed in
+the setup. Record every current map version.
 
-## 5. Refresh and Version Isolation
+- [ ] On the 127.0.0.1 `mapper_test.html` map, run **Check live** and confirm no
+  map version is created.
+- [ ] Apply one drift and click **Refresh Map**.
+- [ ] Confirm only that page receives a new version; the stress, platform, and
+  localhost-site map objects and versions remain unchanged.
+- [ ] Refresh the selected page enough times to exceed configured history.
+- [ ] Confirm only the newest configured versions remain in the version picker.
 
-1. Map two different pages for the same site and at least one unrelated site.
-2. Change components on only one selected page.
-3. Run read-only revalidation and confirm it does not persist a new version.
-4. Run explicit refresh for the changed page.
-5. Confirm bounded version retention and inspect the previous version through
-   the map-store API or developer diagnostics.
+Pass: revalidation is read-only, explicit refresh is page-scoped, unrelated
+pages/sites remain unchanged, and version history stays bounded.
 
-Expected: only the selected page changes. Other pages and sites remain byte-for-
-byte equivalent, and retention never exceeds the configured bound.
+## 5. Dynamic Regions and Honest Overflow
 
-## 6. Bounded Dynamic and Mutation-Heavy Regions
+Activate `mapper_stress_test.html`, restore policy **Max components** `500` and
+**Mutation limit** `50`, click **Save policy**, reset the mutation/repeat/large
+fixtures, and map the page.
 
-1. Open `mapper_stress_test.html` and scan the stable plus bounded-dynamic
-   sections.
-2. Append and remove controlled dynamic records, then revalidate existing
-   references.
-3. Refresh after the page settles.
-4. Start the mutation burst until the policy limit is exceeded.
-5. Stop the burst, allow the page to settle, and refresh again.
+- [ ] Record a stable static Save control and one keyed feed action.
+- [ ] Append and remove keyed records; confirm both saved references revalidate
+  without the static control taking a dynamic identity.
+- [ ] Refresh after the page settles and confirm the static layer remains.
+- [ ] Set **Mutation limit** to `10`, save policy, enter finite count `11`, and
+  click **Run Finite Mutation Count**.
+- [ ] Run **Check live** and attempt an explicit refresh.
+- [ ] Confirm an over-limit result is `dynamic_deferred` with an explicit
+  mutation reason and the last good static map is not overwritten.
+- [ ] Restore mutation limit `50`, click **Reset Mutation Region**, and clear the
+  large control set.
+- [ ] Keep max components `500`, generate `600` controls, and map/refresh.
+- [ ] Confirm `component_scan_overflow` is reported, runtime resolution does not
+  search a silently truncated corpus, the tab remains responsive, and the last
+  good map is retained.
+- [ ] Clear the large controls, restore policy `500`/`50`, wait for settlement,
+  and refresh successfully.
 
-Expected: stable/static components remain available throughout. Bounded records
-use the dynamic lane and reconcile only against dynamic history. Excessive
-mutation returns `dynamic_deferred`; a later explicit settled refresh can
-recover without erasing the static map.
+Pass: static and dynamic lanes remain separate, overflow is explicit and
+bounded, and a settled explicit refresh recovers.
 
-## 7. Repeated and Loaded-Window Records
+## 6. Repeated and Loaded-Window Records
 
-1. Append repeated feed/list records under fixture control.
-2. Confirm durable keys or independent container evidence produce stable,
-   container-scoped records.
-3. Present an unkeyed repeated record with indistinguishable siblings.
-4. Change the loaded window without asking the mapper to scroll or paginate.
+On `mapper_stress_test.html`, click **Reset Repeated Records**, refresh, and
+record a keyed feed card/action Component ID.
 
-Expected: loaded content is mapped honestly; unloaded content is never claimed.
-Unkeyed ambiguous records return a conservative unresolved/deferred reason and
-never inherit an older static or sibling identity.
+- [ ] Click **Append Feed Items**; confirm existing keyed records retain IDs.
+- [ ] Click **Remove First Feed Item**; confirm removed history does not transfer
+  to a sibling.
+- [ ] Click **Replace Loaded Feed Window** without scrolling; confirm old-window
+  references do not resolve into the replacement window.
+- [ ] Inspect an action under the Unkeyed twins, add/remove twins, and check live
+  resolution.
+- [ ] Confirm indistinguishable unkeyed records return a conservative
+  unresolved/protected result such as `repeat_condition_required`, never a
+  guessed sibling identity.
 
-## 8. Open Shadow DOM
+Pass: only loaded content is claimed, keyed records remain container-scoped, and
+unkeyed twins are not assigned guessed durable identities.
 
-1. Scan the open-shadow fixture control.
-2. Confirm its ComponentRef includes a composed host path.
-3. Resolve and revalidate it after ordinary host/child drift.
-4. Reload the page and resolve it again from the saved map.
-5. Confirm a closed-root fixture reports protected unsupported.
+## 7. Open and Closed Shadow DOM
 
-Expected: open roots are traversed host-by-host with uniqueness checks at every
-boundary. Closed roots are not guessed through coordinates or sibling matches.
+Reset `mapper_test.html`, map it, and record the `shadow-save` ComponentRef and
+its composed host path.
 
-## 9. Same-Origin and Extension-Accessible Cross-Origin Frames
+- [ ] Click **Apply Shadow Host Drift**, check live resolution, and refresh.
+- [ ] Reset, click **Apply Shadow Child Drift**, check live resolution, and
+  refresh.
+- [ ] Reload the extension and resolve the saved open-shadow reference again.
+- [ ] Confirm the visible **Closed Shadow Action** is not enumerated or persisted
+  as an ordinary component.
+- [ ] Confirm no closed-root target is guessed through coordinates or a light-DOM
+  sibling.
 
-1. Scan the same-origin frame fixture.
-2. Confirm the frame document is a separate hierarchy root and its `body/main`
-   path does not merge with the top page.
-3. Resolve frame controls, reload the page, and resolve them again through the
-   stable frame path.
-4. Scan a cross-origin frame for which the extension has host permission and a
-   running frame content script.
-5. Separately test a frame the extension genuinely cannot access.
+Closed Shadow DOM is opaque: an ordinary page cannot reveal whether a host has a
+closed root or no root. `protected_unsupported` is required only when a caller
+already supplies explicit unsupported-boundary metadata; scan-time detection of
+an unmarked closed root is not claimed.
 
-Expected: same-origin components map and resolve within their frame scope.
-Accessible cross-origin components also map under an isolated frame context and
-never become top-document candidates. A genuinely inaccessible frame returns a
-protected outcome.
+## 8. Frame Isolation
 
-## 10. Contextual Chat/Social Fixture
+On the mapped `mapper_test.html` page:
 
-1. Open `mapper_platform_profiles_test.html` and scan the chat fixture.
-2. Confirm application shell, navigation/contact area, active thread, message
-   records, composer, and controls have distinct contextual boundaries.
-3. Switch threads, append messages, and change ephemeral counters.
-4. Confirm a component from one thread cannot resolve inside another thread.
-5. Repeat for social navigation, feed cards, action areas, comment composers,
-   and appended loaded-window records.
-6. Confirm a card action cannot resolve into a sibling card.
+- [ ] Confirm the same-origin frame is a separate hierarchy root.
+- [ ] Resolve `frame-name` and `frame-save`, reload the page, and resolve them
+  again through the saved frame path.
+- [ ] Confirm the localhost cross-origin frame is mapped under an isolated,
+  extension-accessible cross-origin context and never as a top-document control.
+- [ ] Resolve its controls, reload, and resolve them again.
+- [ ] Confirm controls inside **Mapper protected sandbox fixture** are not exposed
+  as ordinary top-page candidates and the boundary is not guessed through.
 
-Expected: the engine records and enforces contextual scope conservatively. This
-accepts engine facts and resolution boundaries only; polished profile-specific
-Tree/Graph rendering and real-product support claims are deferred to V2.
+Pass: accessible frames resolve within stable isolated frame paths; inaccessible
+content stays protected.
 
-## 11. Persistence and Restart
+## 9. Chat and Social Context
 
-1. Save maps, close the mapper surface, and restart/reload the extension.
-2. Load the workflow/page map through the map-store API.
-3. Resolve representative static, dynamic, shadow, and frame references.
-4. Corrupt a copy with an unsupported schema version and confirm safe rejection.
-5. Exceed configured history/component bounds and confirm deterministic pruning.
+Activate and map `mapper_platform_profiles_test.html`.
 
-Expected: local user-managed maps remain schema-valid, bounded, and usable after
-restart. The inactive native filesystem adapter is not required.
+- [ ] Confirm chat shell, navigation, contacts, active thread, loaded messages,
+  composer, and controls have distinct contextual paths.
+- [ ] Save one Alpha message action, click **Swap Active Thread**, and confirm it
+  cannot resolve in Beta.
+- [ ] Use **Load Older Messages**, **Replace Message Window**, and **Tick Chat
+  Ephemeral Data**; confirm stable records retain scope and counters do not
+  become identity.
+- [ ] Save one social-card action, use **Append Feed Window**, **Replace Social
+  Window**, and **Tick Social Ephemeral Data**.
+- [ ] Confirm an action never resolves into a sibling card or replacement-window
+  record.
 
-## 12. Concurrent Persistence and Large Pages
+Pass: thread, card, composer, and loaded-window boundaries are enforced without
+making product-specific UI claims.
 
-1. Start scans or refreshes from two frames/tabs for the same workflow while a
-   diagnostic reader is active.
-2. Delay one storage operation so the writes complete out of order.
-3. Confirm both page/frame updates survive and the store revision advances
-   deterministically.
-4. Repeat with two different workflows and confirm neither rewrites the other's
-   stored state.
-5. Scan the large-page fixture to the configured component bound and inspect
-   duration, serialized size, pruning, and quota behavior.
+## 10. SPA Route Isolation
 
-Expected: mapper persistence serializes or rejects/retries stale revisions;
-concurrent operations do not lose updates. Large pages remain bounded without
-silently discarding unrelated maps.
+Activate the base `mapper_test.html` page and map it once. In the Inspector
+policy set **Query allowlist** to `route`, click **Save policy**, then:
+
+- [ ] Click **Go To Route A** and **Map Active Page**; record the route-A page
+  profile, map version, and `spa-account-save` reference.
+- [ ] Click **Go To Route B** and **Map Active Page**; confirm a distinct route-B
+  page profile and record `spa-billing-save`.
+- [ ] While Route B is active, select the saved Route A component and click
+  **Check live resolution**.
+- [ ] Confirm `map_stale` / `page_profile_mismatch`, no Route B component is
+  selected, and no website highlight is shown.
+- [ ] Use **Browser Back** and **Browser Forward** and confirm the matching saved
+  route becomes resolvable while the other remains isolated.
+- [ ] Reload the extension while on a query route and confirm its saved profile
+  still loads and resolves.
+
+Pass: same-looking controls cannot cross SPA routes, including between target-tab
+selection and in-page resolution.
+
+## 11. Extension Restart Persistence
+
+- [ ] Ensure static, dynamic, open-shadow, frame, and SPA-route maps exist.
+- [ ] Close the Mapper Inspector, reload the unpacked extension, and reopen the
+  Inspector.
+- [ ] Confirm workflow `mapper-live-acceptance`, its sites/pages, retained
+  versions, and representative Component IDs remain available.
+- [ ] Resolve one representative static, dynamic, shadow, frame, and route
+  reference.
+
+Pass: the bounded Chrome-storage map state survives a real extension restart.
 
 ## Completion Gate
 
-The mapper engine is ready for final-node integration only when deterministic
-tests and every applicable live section above pass. Failures must identify the
-fixture, ComponentRef, resolver outcome, and evidence, not merely a viewer or
-current-node UI symptom.
+- [ ] Every section above passed in live Chrome/Chromium.
+- [ ] Every failure was fixed and its affected section rerun.
+- [x] The final automated suites pass: 279 JavaScript tests and 175 Python
+  tests on 2026-07-17.
 
-The following are explicitly deferred and must not block this gate:
+After the operator reports the live result, record it in
+`MAPPER_TODO_STATUS.md` and `FOUNDATION_TODO_STATUS.md`.
 
-- polished saved-map explorer/Inspector windows and navigation;
-- Tree/Graph/Review Queue visual behavior;
-- viewer responsive, touch, keyboard, accessibility, and styling acceptance;
-- current-node/Studio retrofits;
-- product-specific chat/social viewer presentation.
+Only then is the mapper engine accepted for the finalized node phase. Polished
+saved-map browsing, Tree/Graph presentation, responsive/accessibility polish,
+current-node retrofits, and real-product chat/social support claims remain V2
+or node-phase work.

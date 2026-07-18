@@ -85,6 +85,9 @@
       <div class="toolbar">
         <button id="start-mutations" type="button">Start Mutation Burst</button>
         <button id="stop-mutations" type="button">Stop Mutation Burst</button>
+        <label>Finite count <input id="finite-mutation-count" type="number" min="1" max="1000" value="11"></label>
+        <button id="run-finite-mutations" type="button">Run Finite Mutation Count</button>
+        <button id="reset-mutations" type="button">Reset Mutation Region</button>
         <span class="counter">Material mutations <strong id="material-mutation-count">0</strong></span>
       </div>
       <div id="mutation-target" class="card" data-testid="mutation-target">
@@ -93,12 +96,34 @@
     </section>
 
     <section id="infinite-scroll-section" data-testid="infinite-scroll-section" aria-label="Infinite scroll controls">
-      <h2>Infinite Scroll Section</h2>
+      <h2>Repeated And Loaded-Window Section</h2>
       <div class="toolbar">
         <button id="append-feed" type="button">Append Feed Items</button>
+        <button id="remove-first-feed" type="button">Remove First Feed Item</button>
+        <button id="replace-feed-window" type="button">Replace Loaded Feed Window</button>
+        <button id="append-unkeyed-feed" type="button">Append Unkeyed Twins</button>
+        <button id="remove-unkeyed-feed" type="button">Remove Unkeyed Twin</button>
+        <button id="reset-repeat-fixture" type="button">Reset Repeated Records</button>
         <span class="counter">Feed items <strong id="feed-count">0</strong></span>
+        <span class="counter">Window <strong id="feed-window-generation">1</strong></span>
+        <span class="counter">Unkeyed <strong id="unkeyed-count">0</strong></span>
       </div>
-      <div id="feed" class="feed" data-testid="infinite-feed" aria-label="Loaded feed items"></div>
+      <div class="grid">
+        <div id="feed" class="feed" data-testid="infinite-feed" data-loaded-window-generation="1" aria-label="Loaded keyed feed items"></div>
+        <div id="unkeyed-feed" class="feed" data-testid="unkeyed-feed" aria-label="Loaded indistinguishable unkeyed feed items"></div>
+      </div>
+    </section>
+
+    <section id="large-page-section" data-testid="large-page-section" aria-label="Large page generator">
+      <h2>Large Page And Component Overflow</h2>
+      <p>Generate a deterministic number of otherwise usable controls, then scan with a lower Inspector max-components policy or with the default 500-component bound.</p>
+      <div class="toolbar">
+        <label>Control count <input id="large-control-count" type="number" min="1" max="2500" value="600"></label>
+        <button id="generate-large-controls" type="button">Generate Large Control Set</button>
+        <button id="clear-large-controls" type="button">Clear Large Control Set</button>
+        <span class="counter">Generated <strong id="large-generated-count">0</strong></span>
+      </div>
+      <div id="large-control-container" class="grid" data-testid="large-control-container" aria-label="Generated large control set"></div>
     </section>
 
     <section id="shadow-section" data-testid="shadow-section" aria-label="Open Shadow DOM controls">
@@ -129,6 +154,10 @@
       driftCount: 0,
       materialMutationCount: 0,
       feedCount: 0,
+      feedSequence: 0,
+      feedWindowGeneration: 1,
+      unkeyedCount: 0,
+      largeControlCount: 0,
       mutationTimer: null,
     };
 
@@ -171,18 +200,25 @@
       location.reload();
     });
 
-    document.querySelector("#start-mutations").addEventListener("click", () => {
-      if (state.mutationTimer) return;
-      state.mutationTimer = setInterval(() => {
+    function appendMaterialMutations(count = 1) {
+      const target = document.querySelector("#mutation-target");
+      for (let index = 0; index < count; index += 1) {
         state.materialMutationCount += 1;
-        setText("#material-mutation-count", state.materialMutationCount);
-        const target = document.querySelector("#mutation-target");
         const chip = document.createElement("span");
         chip.textContent = ` mutation-${state.materialMutationCount}`;
         chip.dataset.testid = `mutation-chip-${state.materialMutationCount}`;
+        chip.dataset.mutationChip = "true";
         target.append(chip);
-        target.dataset.materialMutationCount = String(state.materialMutationCount);
-        log(`mutation burst count=${state.materialMutationCount}`);
+      }
+      setText("#material-mutation-count", state.materialMutationCount);
+      target.dataset.materialMutationCount = String(state.materialMutationCount);
+      log(`material mutations appended count=${count} total=${state.materialMutationCount}`);
+    }
+
+    document.querySelector("#start-mutations").addEventListener("click", () => {
+      if (state.mutationTimer) return;
+      state.mutationTimer = setInterval(() => {
+        appendMaterialMutations(1);
       }, 80);
       log("mutation burst started");
     });
@@ -193,17 +229,36 @@
       log("mutation burst stopped");
     });
 
+    document.querySelector("#run-finite-mutations").addEventListener("click", () => {
+      const requested = Number(document.querySelector("#finite-mutation-count").value) || 11;
+      appendMaterialMutations(Math.max(1, Math.min(1000, Math.trunc(requested))));
+    });
+
+    document.querySelector("#reset-mutations").addEventListener("click", () => {
+      clearInterval(state.mutationTimer);
+      state.mutationTimer = null;
+      document.querySelectorAll("#mutation-target [data-mutation-chip]").forEach((node) => node.remove());
+      state.materialMutationCount = 0;
+      document.querySelector("#mutation-target").dataset.materialMutationCount = "0";
+      setText("#material-mutation-count", 0);
+      log("mutation region reset");
+    });
+
     function appendFeedItems(count = 12) {
       const feed = document.querySelector("#feed");
       for (let index = 0; index < count; index += 1) {
         state.feedCount += 1;
+        state.feedSequence += 1;
+        const recordKey = `window-${state.feedWindowGeneration}-item-${state.feedSequence}`;
         const card = document.createElement("article");
         card.className = "feed-card";
-        card.dataset.testid = `feed-card-${state.feedCount}`;
+        card.dataset.testid = `feed-card-${recordKey}`;
+        card.dataset.recordKey = recordKey;
+        card.dataset.loadedWindowIndex = String(state.feedCount);
         card.innerHTML = `
-          <strong>Feed item ${state.feedCount}</strong>
-          <p>Loaded item ${state.feedCount} for mapper infinite-scroll boundary checks.</p>
-          <button type="button" data-testid="feed-action-${state.feedCount}">Open item</button>
+          <strong>Feed item ${state.feedSequence}</strong>
+          <p>Loaded item ${state.feedSequence} in window ${state.feedWindowGeneration} for mapper boundary checks.</p>
+          <button type="button" data-testid="feed-action-${recordKey}">Open item</button>
         `;
         feed.append(card);
       }
@@ -212,7 +267,94 @@
     }
 
     document.querySelector("#append-feed").addEventListener("click", () => appendFeedItems());
+
+    document.querySelector("#remove-first-feed").addEventListener("click", () => {
+      const first = document.querySelector("#feed .feed-card");
+      if (first) first.remove();
+      state.feedCount = document.querySelectorAll("#feed .feed-card").length;
+      setText("#feed-count", state.feedCount);
+      log("first keyed feed item removed");
+    });
+
+    document.querySelector("#replace-feed-window").addEventListener("click", () => {
+      state.feedWindowGeneration += 1;
+      state.feedCount = 0;
+      state.feedSequence = 0;
+      document.querySelector("#feed").replaceChildren();
+      document.querySelector("#feed").dataset.loadedWindowGeneration = String(state.feedWindowGeneration);
+      setText("#feed-window-generation", state.feedWindowGeneration);
+      appendFeedItems(8);
+      log(`loaded feed window replaced generation=${state.feedWindowGeneration}`);
+    });
+
+    function appendUnkeyedTwins(count = 4) {
+      const feed = document.querySelector("#unkeyed-feed");
+      for (let index = 0; index < count; index += 1) {
+        const card = document.createElement("article");
+        card.className = "feed-card unkeyed-record";
+        card.innerHTML = `
+          <strong>Unkeyed repeated record</strong>
+          <p>Every sibling intentionally has the same content and structure.</p>
+          <button type="button" class="unkeyed-action" aria-label="Open repeated record">Open item</button>
+        `;
+        feed.append(card);
+      }
+      state.unkeyedCount = feed.children.length;
+      setText("#unkeyed-count", state.unkeyedCount);
+      log(`unkeyed twins appended total=${state.unkeyedCount}`);
+    }
+
+    document.querySelector("#append-unkeyed-feed").addEventListener("click", () => appendUnkeyedTwins());
+    document.querySelector("#remove-unkeyed-feed").addEventListener("click", () => {
+      document.querySelector("#unkeyed-feed .unkeyed-record")?.remove();
+      state.unkeyedCount = document.querySelector("#unkeyed-feed").children.length;
+      setText("#unkeyed-count", state.unkeyedCount);
+      log(`unkeyed twin removed total=${state.unkeyedCount}`);
+    });
+
+    document.querySelector("#reset-repeat-fixture").addEventListener("click", () => {
+      state.feedWindowGeneration = 1;
+      state.feedCount = 0;
+      state.feedSequence = 0;
+      state.unkeyedCount = 0;
+      const keyedFeed = document.querySelector("#feed");
+      keyedFeed.replaceChildren();
+      keyedFeed.dataset.loadedWindowGeneration = "1";
+      document.querySelector("#unkeyed-feed").replaceChildren();
+      setText("#feed-window-generation", 1);
+      appendFeedItems(8);
+      appendUnkeyedTwins(4);
+      log("repeated-record fixture reset");
+    });
+
+    document.querySelector("#generate-large-controls").addEventListener("click", () => {
+      const requested = Number(document.querySelector("#large-control-count").value) || 600;
+      const count = Math.max(1, Math.min(2500, Math.trunc(requested)));
+      const container = document.querySelector("#large-control-container");
+      const fragment = document.createDocumentFragment();
+      for (let index = 1; index <= count; index += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.testid = `large-control-${index}`;
+        button.setAttribute("aria-label", `Generated control ${index}`);
+        button.textContent = `Generated Control ${index}`;
+        fragment.append(button);
+      }
+      container.replaceChildren(fragment);
+      state.largeControlCount = count;
+      setText("#large-generated-count", count);
+      log(`large control set generated count=${count}`);
+    });
+
+    document.querySelector("#clear-large-controls").addEventListener("click", () => {
+      document.querySelector("#large-control-container").replaceChildren();
+      state.largeControlCount = 0;
+      setText("#large-generated-count", 0);
+      log("large control set cleared");
+    });
+
     appendFeedItems(8);
+    appendUnkeyedTwins(4);
 
     document.querySelector("#clear-log").addEventListener("click", () => {
       document.querySelector("#event-log").textContent = "";

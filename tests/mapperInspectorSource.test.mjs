@@ -43,6 +43,11 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(background, /isUsableInspectorPageMap/);
   assert.match(background, /deferred: true/);
   assert.match(background, /snapshotMode: "settled_current_dom"/);
+  assert.match(background, /snapshotCapturedAt = normalizeInspectorSnapshotCapturedAt\(snapshot\.page\?\.capturedAt\)/);
+  assert.match(background, /now: snapshotCapturedAt/);
+  assert.match(background, /persisted: false/);
+  assert.match(background, /reason: "stale_snapshot"/);
+  assert.match(background, /url: snapshot\.page\.url \|\| snapshot\.tab\.url/);
   assert.match(background, /request\.snapshotMode \|\| ""/);
   const mapCurrentPageSource = background.match(
     /async function mapCurrentPageForInspector[\s\S]*?(?=async function inspectCurrentPageMapForInspector)/,
@@ -50,17 +55,36 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(mapCurrentPageSource, /tabId: snapshot\.tab\.id/);
   assert.doesNotMatch(mapCurrentPageSource, /tabId: tab\.id/);
   assert.match(background, /stale,/);
-  assert.match(background, /getInspectorTargetTab\(request\.tabId, request\.pageMap \|\| null, sender\)/);
+  assert.match(background, /getInspectorTargetTab\([\s\S]*?request\.tabId,[\s\S]*?request\.pageMap \|\| null,[\s\S]*?sender,[\s\S]*?policy/);
+  assert.match(background, /pageMapMatchesUrl/);
   assert.match(background, /Math\.min\(3, Math\.max\(1, Number\(settings\.maxVersions\) \|\| 3\)\)/);
   assert.match(background, /materialMutationCount: Number\(snapshot\.page\.materialMutationCount\) \|\| 0/);
   assert.match(background, /platformProfile: snapshot\.page\.platformProfile \|\| null/);
   assert.match(background, /getInspectorMapperFrameSnapshots/);
   assert.match(background, /resolveMapperFrameId/);
   assert.match(background, /allFrames: true/);
+  assert.match(background, /type: "GET_CONTROLS_TREE"/);
+  assert.match(background, /chrome\.tabs\.sendMessage\(tab\.id/);
+  assert.match(background, /\{ frameId: result\.frameId \}/);
+  assert.match(background, /decorateAccessibleMapperFrameSnapshots/);
+  assert.match(background, /decorateAccessibleMapperFrameScopes/);
+  assert.match(background, /attachMapperFrameScope/);
+  assert.match(background, /incomplete: discoveredMapperFrames\.length !== discovered\.length/);
+  assert.match(background, /const accessible = frameSnapshots/);
+  assert.match(background, /extensionAccessible/);
+  assert.match(background, /accessibleFramePaths/);
+  assert.match(background, /frameContexts: accessible\.map/);
+  assert.match(background, /createUnreachableMapperFrameError/);
+  assert.match(background, /identityAmbiguous/);
+  assert.match(background, /createAmbiguousMapperFrameError/);
+  assert.match(background, /cross_origin_frame_context_ambiguous/);
   assert.match(background, /sameOriginFrames/);
   assert.match(background, /case Messages\.HighlightMapperComponent/);
   assert.match(background, /highlightMapperComponentForInspector\(request, sender\)/);
   assert.match(background, /highlightRequestId: request\.highlightRequestId/);
+  assert.match(background, /actionOverride: request\.actionOverride \|\| ""/);
+  assert.match(background, /mapperState: "map_stale"/);
+  assert.match(background, /mapperReason: "page_profile_mismatch"/);
   assert.match(background, /selectBestInspectorTargetTab/);
   assert.match(background, /tab\.id !== senderTabId/);
   assert.match(background, /sendInspectorMapperMessage/);
@@ -80,6 +104,7 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(content, /mapperMutationStats/);
   assert.match(content, /recordMapperMutations/);
   assert.match(content, /getMapperPageSnapshot/);
+  assert.match(content, /capturedAt: new Date\(\)\.toISOString\(\)/);
   assert.match(content, /detectMapperPlatformProfile/);
   assert.match(content, /mapper\.platform_profile\.v1/);
   assert.match(content, /data-platform-profile='chat'/);
@@ -96,22 +121,29 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(content, /snapshotMode === "settled_current_dom"/);
   assert.match(content, /compareElementsByVisualOrder/);
   assert.match(content, /enumerateMapperCandidates\(action = "", options = {}\)/);
-  assert.match(content, /this\.resolveStoredMapperLocatorTarget\(\s*\n\s*component,\s*\n\s*action,\s*\n\s*\{ includeHidden \}/);
+  assert.match(content, /this\.resolveStoredMapperLocatorTarget\([\s\S]*?includeHidden,[\s\S]*?workBudget: runtimeWorkBudget,[\s\S]*?factWorkBudget: runtimeFactBudget/);
   assert.match(content, /mapperCandidateFromElement\(element, action = "", preferredLocator = null/);
   assert.match(content, /mergeMapperLocators\(fact\.locatorCandidates \|\| \[\], preferredLocator\)/);
   assert.match(content, /findElementsByMapperLocator\(locator = {}, options = {}\)/);
   assert.match(content, /stored_primary_locator_unique/);
   assert.match(content, /stored_fallback_locator_unique/);
   assert.match(content, /stored_primary_locator_ambiguous/);
-  assert.match(content, /queryAllMapperRoots\(`#\$\{this\.cssEscapeIdentifier\(value\)\}`\)/);
+  assert.match(content, /selector = `#\$\{this\.cssEscapeIdentifier\(value\)\}`/);
   assert.match(content, /findMapperElementsByLabelText/);
   assert.match(content, /findMapperElementsByDomPath/);
-  assert.match(content, /options\.includeHidden \|\| this\.isUsableControl\(element\)/);
+  assert.match(content, /options\.includeHidden \|\| this\.isUsableControl\(element, \{[\s\S]*?workBudget: candidateWorkBudget/);
   assert.match(content, /elements\.sort\(\(a, b\) => this\.compareElementsByVisualOrder\(a, b\)\)/);
   assert.match(content, /this\.hideRecorderHighlight\(\)/);
   assert.match(content, /zIndex: "2147483647"/);
   assert.match(content, /stale_highlight_request/);
   assert.match(content, /this\.mapperHighlightRequestId = requestId/);
+  assert.match(content, /mapperPageMatchesCurrentLocation/);
+  assert.match(content, /mapperPageIdentityDigest/);
+  assert.match(content, /identity_v2_\$\{identity\}/);
+  assert.match(content, /pageMap\.path && pageMap\.path !== profile\.path/);
+  assert.match(content, /pageMap\.query === "string" && pageMap\.query !== profile\.query/);
+  assert.match(content, /mapperReason: "page_profile_mismatch"/);
+  assert.match(content, /Object\.values\(Actions\)\.includes\(actionOverride\)/);
   assert.match(content, /inspector_highlight_cleared/);
   assert.match(content, /highlightRequestId !== this\.mapperHighlightRequestId/);
   assert.match(content, /return true;/);
@@ -129,6 +161,10 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(content, /expectedCapabilities/);
   assert.match(content, /withMapperResolverLog/);
   assert.match(content, /mapper\.resolver\.log\.v1/);
+  assert.match(inspectorJs, /component-resolution-action/);
+  assert.match(inspectorJs, /settings: entry\.settings \|\| \{\}/);
+  assert.match(inspectorJs, /actionOverride: options\.actionOverride \|\| ""/);
+  assert.match(inspectorJs, /identity_v2_\[0-9a-f\]\{32\}/);
   assert.match(content, /minimumScore: 75/);
   assert.match(content, /minimumMargin: 15/);
   assert.match(content, /resolverLog: resolved\?\.resolverLog/);
@@ -312,12 +348,11 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /policy-global-mode/);
   assert.match(inspectorJs, /policy-site-mode/);
   assert.match(inspectorJs, /policy-page-mode/);
-  assert.match(inspectorJs, /policy-page-sensitive/);
   assert.match(inspectorJs, /applyPolicyOverrideValues/);
   assert.match(inspectorJs, /displayAlias/);
   assert.match(inspectorJs, /reviewDecision/);
-  assert.match(inspectorJs, /sensitive-badge/);
-  assert.match(inspectorJs, /redactSensitive/);
+  assert.doesNotMatch(inspectorJs, /policy-(?:site|page)-sensitive/);
+  assert.doesNotMatch(inspectorJs, /sensitive-badge|redactSensitive/);
   assert.match(inspectorJs, /renderLiveCandidateLinks/);
   assert.match(inspectorJs, /linkLiveCandidateAttempt/);
   assert.match(inspectorJs, /inspector_live_candidate/);
@@ -350,7 +385,7 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /Platform Scope/);
   assert.match(inspectorJs, /platformStructure/);
   assert.match(inspectorJs, /Major panes/);
-  assert.match(inspectorJs, /Sanitized structural scope; page content is not stored here\./);
+  assert.match(inspectorJs, /Contextual scope is captured with the local mapper data\./);
   assert.match(inspectorJs, /scope\.loadedWindowIndex/);
   assert.match(inspectorJs, /scope\.dynamicKind/);
   assert.match(inspectorJs, /scope\.mappingDisposition/);
@@ -359,7 +394,7 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /runtimeAttemptsForComponent/);
   assert.match(inspectorJs, /reliabilityMetricsForEntry/);
   assert.match(inspectorJs, /mapper\.runtime_resolution\.v1|Runtime resolver attempts/);
-  assert.match(inspectorJs, /rawLocatorStored/);
+  assert.doesNotMatch(inspectorJs, /rawLocatorStored|rawTextStored|redaction/);
   assert.match(inspectorJs, /fallbackRecoveryCount/);
   assert.match(inspectorJs, /incorrectActionCount/);
   assert.match(inspectorCss, /graph-shell/);
@@ -426,6 +461,17 @@ test("mapper inspector extension surface is wired", async () => {
   assert.doesNotMatch(inspectorCss, /website-component/);
 });
 
+test("manual mapper harness contains same-origin and accessible cross-origin frames", async () => {
+  const fixture = await readFile(
+    new URL("../BRunner_Host/mapper_test.html", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(fixture, /id="same-origin-frame"[\s\S]*src="mapper_frame_child\.html"/);
+  assert.match(fixture, /id="cross-origin-frame"[\s\S]*src="http:\/\/localhost:8765\/BRunner_Host\/mapper_frame_child\.html"/);
+  assert.match(fixture, /id="protected-frame"[\s\S]*sandbox/);
+});
+
 test("map store lists deserialized workflow mapper states", async () => {
   const storage = createMemoryStorage({
     [Defaults.MapperStorageKey]: {
@@ -482,6 +528,7 @@ function createMemoryStorage(initial = {}) {
   const values = structuredClone(initial);
   return {
     async get(key) {
+      if (key === null) return structuredClone(values);
       return {
         [key]: structuredClone(values[key]),
       };

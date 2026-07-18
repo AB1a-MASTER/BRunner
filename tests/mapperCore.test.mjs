@@ -1,23 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { Defaults } from "../BRunner/core/constants.js";
 import {
   buildStaticPageMap,
+  createComponentRef,
   createDefaultMapperSettings,
   createEmptyWorkflowMapperState,
   createPlaceholderComponentRef,
   deserializeWorkflowMapperState,
+  getPageMap,
   isComponentRef,
   MapperComponentLayers,
   MapperComponentStatuses,
   MapperPageClassifications,
   MapperResolverStates,
+  pageMapMatchesUrl,
   recordMapperRuntimeResolution,
   normalizeMapperSettings,
   normalizePageProfile,
+  refreshPageMap,
+  revalidateComponent,
+  resolveComponent,
   resolveMappedComponent,
+  scanPage,
+  serializeWorkflowMapperState,
 } from "../BRunner/mapper/core.js";
-import { ChromeMapStore } from "../BRunner/core/mapStore.js";
+import {
+  ChromeMapStore,
+  MapStoreConflictError,
+  mapperWorkflowStorageKey,
+} from "../BRunner/core/mapStore.js";
 
 test("mapper settings normalize to bounded workflow-scoped defaults", () => {
   const settings = normalizeMapperSettings({
@@ -26,6 +39,12 @@ test("mapper settings normalize to bounded workflow-scoped defaults", () => {
     maxComponents: 99999,
     maxVersions: -1,
     queryAllowlist: ["tab", "tab", " "],
+    siteOverrides: {
+      example_com: { mode: "explicit", sensitive: true, redaction: "all" },
+    },
+    pageOverrides: {
+      "example_com::account": { sensitiveSite: true, redactSensitive: true },
+    },
   });
 
   assert.equal(settings.enabled, false);
@@ -33,6 +52,12 @@ test("mapper settings normalize to bounded workflow-scoped defaults", () => {
   assert.equal(settings.maxComponents, 2000);
   assert.equal(settings.maxVersions, 1);
   assert.deepEqual(settings.queryAllowlist, ["tab"]);
+  assert.deepEqual(settings.siteOverrides, {
+    example_com: { mode: "explicit" },
+  });
+  assert.deepEqual(settings.pageOverrides, {
+    "example_com::account": {},
+  });
   assert.deepEqual(createDefaultMapperSettings().siteOverrides, {});
   assert.equal(createDefaultMapperSettings().maxVersions, 3);
   assert.equal(normalizeMapperSettings({ maxVersions: 99 }).maxVersions, 3);
@@ -51,8 +76,136 @@ test("page profiles ignore non-allowlisted query and hash", () => {
     query: "tab=users",
     title: "",
     siteKey: "example_com",
-    pageKey: "example_com::app_page::tab_users",
+    pageKey: profile.pageKey,
   });
+  assert.match(profile.pageKey, /^example_com::app_page::identity_v2_[0-9a-f]{32}$/);
+  assert.equal(
+    normalizePageProfile(
+      "https://example.com/app/page?tab=users&utm=other#different",
+      { queryAllowlist: ["tab"] },
+    ).pageKey,
+    profile.pageKey,
+  );
+});
+
+test("page maps persist route identity and reject cross-route or cross-origin URLs", () => {
+  const settings = { queryAllowlist: ["route"] };
+  const pageMap = scanPage({
+    page: {
+      url: "http://127.0.0.1:8765/BRunner_Host/mapper_test.html?route=account&utm=ignored#section",
+      title: "Mapper route account",
+    },
+    componentFacts: [],
+    settings,
+    now: "2026-07-17T00:00:00.000Z",
+  });
+  const state = {
+    ...createEmptyWorkflowMapperState("route-identity", settings),
+    maps: [pageMap],
+  };
+  const restored = deserializeWorkflowMapperState(serializeWorkflowMapperState(state));
+  const restoredMap = restored.maps[0];
+
+  assert.equal(restoredMap.origin, "http://127.0.0.1:8765");
+  assert.equal(restoredMap.hostname, "127.0.0.1");
+  assert.equal(restoredMap.path, "/BRunner_Host/mapper_test.html");
+  assert.equal(restoredMap.query, "route=account");
+  assert.equal(restoredMap.title, "Mapper route account");
+  assert.equal(pageMapMatchesUrl(
+    restoredMap,
+    "http://127.0.0.1:8765/BRunner_Host/mapper_test.html?route=account&utm=other#different",
+    settings,
+  ), true);
+  assert.equal(pageMapMatchesUrl(
+    restoredMap,
+    "http://127.0.0.1:8765/BRunner_Host/mapper_test.html?route=billing",
+    settings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    restoredMap,
+    "http://127.0.0.1:8765/BRunner_Host/other.html?route=account",
+    settings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    restoredMap,
+    "https://127.0.0.1:8765/BRunner_Host/mapper_test.html?route=account",
+    settings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    restoredMap,
+    "http://127.0.0.1:9999/BRunner_Host/mapper_test.html?route=account",
+    settings,
+  ), false);
+});
+
+test("page identity distinguishes lossy path, query, scheme, and port collisions", () => {
+  const querySettings = { queryAllowlist: ["route"] };
+  const nestedPath = normalizePageProfile(
+    "https://example.com/account/settings",
+    querySettings,
+  );
+  const dashedPath = normalizePageProfile(
+    "https://example.com/account-settings",
+    querySettings,
+  );
+  const dashedQuery = normalizePageProfile(
+    "https://example.com/account?route=account-settings",
+    querySettings,
+  );
+  const underscoredQuery = normalizePageProfile(
+    "https://example.com/account?route=account_settings",
+    querySettings,
+  );
+  const httpDefault = normalizePageProfile(
+    "http://example.com/account?route=account-settings",
+    querySettings,
+  );
+  const httpsDefault = normalizePageProfile(
+    "https://example.com/account?route=account-settings",
+    querySettings,
+  );
+  const httpsAlternatePort = normalizePageProfile(
+    "https://example.com:8443/account?route=account-settings",
+    querySettings,
+  );
+
+  assert.notEqual(nestedPath.pageKey, dashedPath.pageKey);
+  assert.notEqual(dashedQuery.pageKey, underscoredQuery.pageKey);
+  assert.notEqual(httpDefault.pageKey, httpsDefault.pageKey);
+  assert.notEqual(httpsDefault.pageKey, httpsAlternatePort.pageKey);
+
+  const pageMap = scanPage({
+    page: {
+      url: "https://example.com/account/settings?route=account-settings&utm=ignored#one",
+    },
+    componentFacts: [],
+    settings: querySettings,
+  });
+  assert.equal(pageMapMatchesUrl(
+    pageMap,
+    "https://example.com/account/settings?route=account-settings&utm=other#two",
+    querySettings,
+  ), true);
+  assert.equal(pageMapMatchesUrl(
+    pageMap,
+    "https://example.com/account-settings?route=account-settings",
+    querySettings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    pageMap,
+    "https://example.com/account/settings?route=account_settings",
+    querySettings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    pageMap,
+    "http://example.com/account/settings?route=account-settings",
+    querySettings,
+  ), false);
+  assert.equal(pageMapMatchesUrl(
+    pageMap,
+    "https://example.com:8443/account/settings?route=account-settings",
+    querySettings,
+  ), false);
 });
 
 test("component refs and mapper state serialize safely", () => {
@@ -68,16 +221,64 @@ test("component refs and mapper state serialize safely", () => {
   assert.deepEqual(restored.settings.queryAllowlist, ["view"]);
 });
 
-test("chrome map store persists workflow mapper state by workflow id", async () => {
-  const memory = {};
-  const storage = {
-    async get(key) {
-      return { [key]: memory[key] };
-    },
-    async set(value) {
-      Object.assign(memory, value);
-    },
+test("node-neutral mapper APIs scan, lookup, reference, resolve, revalidate, and refresh", () => {
+  const fact = componentFact({
+    componentUid: "save-uid",
+    accessibleName: "Save",
+    role: "button",
+    locator: { strategy: "css_selector", value: "#save", reliability: 98 },
+  });
+  const pageMap = scanPage({
+    page: { url: "https://example.com/account" },
+    componentFacts: [fact],
+    now: "2026-07-04T00:00:00.000Z",
+  });
+  const state = {
+    ...createEmptyWorkflowMapperState("flow-api"),
+    maps: [pageMap],
   };
+  const found = getPageMap(state, { pageProfileKey: pageMap.pageProfileKey });
+  const componentRef = createComponentRef(
+    found,
+    found.components[0].componentId,
+    { workflowId: "flow-api" },
+  );
+
+  assert.equal(isComponentRef(componentRef), true);
+  assert.equal(componentRef.schema, "mapper.component_ref.v1");
+  assert.equal(componentRef.workflowId, "flow-api");
+
+  const resolved = resolveComponent({
+    pageMap: found,
+    componentRef,
+    candidateFacts: [fact],
+    requirements: { action: "element.click" },
+  });
+  const revalidated = revalidateComponent({
+    pageMap: found,
+    componentRef,
+    candidateFacts: [fact],
+    requirements: { action: "element.click" },
+  });
+  const refreshed = refreshPageMap({
+    page: { url: "https://example.com/account" },
+    componentFacts: [{
+      ...fact,
+      locatorCandidates: [{ strategy: "css_selector", value: "#save-new", reliability: 98 }],
+    }],
+    previousMap: pageMap,
+    now: "2026-07-04T00:01:00.000Z",
+  });
+
+  assert.equal(resolved.state, MapperResolverStates.Resolved);
+  assert.equal(revalidated.state, MapperResolverStates.Resolved);
+  assert.equal(revalidated.operation, "revalidate");
+  assert.equal(refreshed.components[0].componentId, componentRef.componentId);
+  assert.notEqual(refreshed.mapVersionId, pageMap.mapVersionId);
+});
+
+test("chrome map store persists workflow mapper state by workflow id", async () => {
+  const storage = createMemoryChromeStorage();
   const store = new ChromeMapStore(storage);
 
   const saved = await store.saveWorkflowMapperState("flow-1", {
@@ -87,10 +288,465 @@ test("chrome map store persists workflow mapper state by workflow id", async () 
   const loaded = await store.getWorkflowMapperState("flow-1");
 
   assert.equal(saved.workflowId, "flow-1");
+  assert.equal(saved.storage.revision, "1");
   assert.deepEqual(loaded.maps, [{ pageId: "home" }]);
   assert.deepEqual(loaded.settings.queryAllowlist, ["page"]);
+  assert.ok(storage.snapshot()[mapperWorkflowStorageKey("flow-1")]);
   assert.equal(await store.deleteWorkflowMapperState("flow-1"), true);
   assert.equal(await store.getWorkflowMapperState("flow-1"), null);
+});
+
+test("chrome map store isolates concurrent workflows without corpus rewrites", async () => {
+  const storage = createMemoryChromeStorage({}, { yieldBeforeSet: true });
+  const firstStore = new ChromeMapStore(storage);
+  const secondStore = new ChromeMapStore(storage);
+
+  await Promise.all([
+    firstStore.saveWorkflowMapperState("flow-a", {
+      maps: [{ pageProfileKey: "example_com::a", mapVersionId: "a1" }],
+    }),
+    secondStore.saveWorkflowMapperState("flow-b", {
+      maps: [{ pageProfileKey: "example_com::b", mapVersionId: "b1" }],
+    }),
+  ]);
+
+  const states = await firstStore.getAllWorkflowMapperStates();
+  const snapshot = storage.snapshot();
+  assert.deepEqual(Object.keys(states).sort(), ["flow-a", "flow-b"]);
+  assert.equal(snapshot["brunner.mapper.v1"], undefined);
+  assert.ok(snapshot[mapperWorkflowStorageKey("flow-a")]);
+  assert.ok(snapshot[mapperWorkflowStorageKey("flow-b")]);
+});
+
+test("chrome map store serializes concurrent mutations within one workflow", async () => {
+  const storage = createMemoryChromeStorage({}, { yieldBeforeSet: true });
+  const firstStore = new ChromeMapStore(storage);
+  const secondStore = new ChromeMapStore(storage);
+  await firstStore.saveWorkflowMapperState("flow-shared", { maps: [] });
+
+  await Promise.all([
+    firstStore.updateWorkflowMapperState("flow-shared", (state) => ({
+      ...state,
+      maps: state.maps.concat({ pageProfileKey: "example_com::a", mapVersionId: "a1" }),
+    })),
+    secondStore.updateWorkflowMapperState("flow-shared", (state) => ({
+      ...state,
+      maps: state.maps.concat({ pageProfileKey: "example_com::b", mapVersionId: "b1" }),
+    })),
+  ]);
+
+  const state = await firstStore.getWorkflowMapperState("flow-shared");
+  assert.deepEqual(state.maps.map((map) => map.mapVersionId), ["a1", "b1"]);
+  assert.equal(state.storage.revision, "3");
+});
+
+test("chrome map store rejects stale revision writes", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+  await store.saveWorkflowMapperState("flow-revision", { maps: [] });
+  const first = await store.getWorkflowMapperState("flow-revision");
+  const stale = await store.getWorkflowMapperState("flow-revision");
+  await store.saveWorkflowMapperState("flow-revision", {
+    ...first,
+    maps: [{ pageProfileKey: "example_com::one", mapVersionId: "one" }],
+  });
+
+  await assert.rejects(
+    () => store.saveWorkflowMapperState("flow-revision", {
+      ...stale,
+      maps: [{ pageProfileKey: "example_com::stale", mapVersionId: "stale" }],
+    }),
+    (error) => {
+      assert.ok(error instanceof MapStoreConflictError);
+      assert.equal(error.expectedRevision, "1");
+      assert.equal(error.actualRevision, "2");
+      return true;
+    },
+  );
+  const state = await store.getWorkflowMapperState("flow-revision");
+  assert.deepEqual(state.maps.map((map) => map.mapVersionId), ["one"]);
+});
+
+test("chrome map store rejects a stale revision after its record is absent", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+  const stale = {
+    ...createEmptyWorkflowMapperState("flow-absent-stale"),
+    storage: {
+      ...createEmptyWorkflowMapperState("flow-absent-stale").storage,
+      revision: "7",
+    },
+  };
+
+  await assert.rejects(
+    () => store.saveWorkflowMapperState("flow-absent-stale", stale),
+    (error) => {
+      assert.ok(error instanceof MapStoreConflictError);
+      assert.equal(error.expectedRevision, "7");
+      assert.equal(error.actualRevision, "");
+      return true;
+    },
+  );
+  assert.equal(await store.getWorkflowMapperState("flow-absent-stale"), null);
+});
+
+test("chrome map store rejects an old generation when numeric revisions collide", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage, {
+    revisionGeneration: () => "new-generation",
+  });
+  const current = await store.updateWorkflowMapperState(
+    "flow-generation",
+    (state) => state,
+  );
+  assert.equal(current.storage.revision, "1");
+  assert.equal(current.storage.generation, "new-generation");
+
+  await assert.rejects(
+    () => store.saveWorkflowMapperState("flow-generation", {
+      ...current,
+      storage: {
+        ...current.storage,
+        revision: "1",
+        generation: "old-generation",
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof MapStoreConflictError);
+      assert.equal(error.expectedRevision, "1");
+      assert.equal(error.actualRevision, "1");
+      assert.equal(error.expectedGeneration, "old-generation");
+      assert.equal(error.actualGeneration, "new-generation");
+      return true;
+    },
+  );
+});
+
+test("chrome map store tombstone rejects a pre-delete stale save without resurrection", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+  await store.saveWorkflowMapperState("flow-delete-race", {
+    maps: [{ pageProfileKey: "example_com::one", mapVersionId: "one" }],
+  });
+  const stale = await store.getWorkflowMapperState("flow-delete-race");
+
+  assert.equal(await store.deleteWorkflowMapperState("flow-delete-race"), true);
+  assert.equal(await store.getWorkflowMapperState("flow-delete-race"), null);
+  assert.equal(
+    storage.snapshot()[mapperWorkflowStorageKey("flow-delete-race")].revision,
+    "2",
+  );
+
+  await assert.rejects(
+    () => store.saveWorkflowMapperState("flow-delete-race", {
+      ...stale,
+      maps: [{ pageProfileKey: "example_com::stale", mapVersionId: "stale" }],
+    }),
+    (error) => {
+      assert.ok(error instanceof MapStoreConflictError);
+      assert.equal(error.expectedRevision, "1");
+      assert.equal(error.actualRevision, "2");
+      return true;
+    },
+  );
+
+  const tombstone = storage.snapshot()[mapperWorkflowStorageKey("flow-delete-race")];
+  assert.equal(tombstone.deleted, true);
+  assert.equal(tombstone.revision, "2");
+  assert.equal(await store.getWorkflowMapperState("flow-delete-race"), null);
+});
+
+test("chrome map store serializes update and delete with a monotonic tombstone revision", async () => {
+  const storage = createMemoryChromeStorage({}, { yieldBeforeSet: true });
+  const updatingStore = new ChromeMapStore(storage);
+  const deletingStore = new ChromeMapStore(storage);
+  await updatingStore.saveWorkflowMapperState("flow-update-delete", { maps: [] });
+
+  let announceUpdateStarted;
+  let releaseUpdate;
+  const updateStarted = new Promise((resolve) => {
+    announceUpdateStarted = resolve;
+  });
+  const updateRelease = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const updatePromise = updatingStore.updateWorkflowMapperState(
+    "flow-update-delete",
+    async (state) => {
+      announceUpdateStarted();
+      await updateRelease;
+      return {
+        ...state,
+        maps: [{ pageProfileKey: "example_com::updated", mapVersionId: "updated" }],
+      };
+    },
+  );
+  await updateStarted;
+  const deletePromise = deletingStore.deleteWorkflowMapperState("flow-update-delete");
+  releaseUpdate();
+
+  const [updated, deleted] = await Promise.all([updatePromise, deletePromise]);
+  assert.equal(updated.storage.revision, "2");
+  assert.equal(deleted, true);
+  assert.equal(await updatingStore.getWorkflowMapperState("flow-update-delete"), null);
+  const tombstone = storage.snapshot()[mapperWorkflowStorageKey("flow-update-delete")];
+  assert.equal(tombstone.deleted, true);
+  assert.equal(tombstone.revision, "3");
+});
+
+test("chrome map store recreates after deletion at the next tombstone revision", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+  await store.saveWorkflowMapperState("flow-recreate", { maps: [] });
+  await store.deleteWorkflowMapperState("flow-recreate");
+
+  const recreated = await store.updateWorkflowMapperState("flow-recreate", (state, context) => {
+    assert.equal(context.exists, false);
+    assert.equal(context.revision, "2");
+    return {
+      ...state,
+      maps: [{ pageProfileKey: "example_com::new", mapVersionId: "new" }],
+    };
+  });
+
+  assert.equal(recreated.storage.revision, "3");
+  assert.equal(
+    (await store.getWorkflowMapperState("flow-recreate")).maps[0].mapVersionId,
+    "new",
+  );
+});
+
+test("chrome map store treats missing and already-deleted workflows as delete no-ops", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+
+  assert.equal(await store.deleteWorkflowMapperState("flow-missing"), false);
+  assert.deepEqual(storage.snapshot(), {});
+
+  await store.saveWorkflowMapperState("flow-once", { maps: [] });
+  assert.equal(await store.deleteWorkflowMapperState("flow-once"), true);
+  const tombstone = storage.snapshot()[mapperWorkflowStorageKey("flow-once")];
+  assert.equal(await store.deleteWorkflowMapperState("flow-once"), false);
+  assert.deepEqual(
+    storage.snapshot()[mapperWorkflowStorageKey("flow-once")],
+    tombstone,
+  );
+});
+
+test("chrome map store applies bounded version, component, and attempt pruning", async () => {
+  const storage = createMemoryChromeStorage();
+  const store = new ChromeMapStore(storage);
+  const maps = Array.from({ length: 4 }, (_, index) => ({
+    pageProfileKey: "example_com::account",
+    mapVersionId: `version-${index + 1}`,
+    components: Array.from({ length: 4 }, (__, componentIndex) => ({
+      componentId: `component-${index}-${componentIndex}`,
+      status: "new",
+    })),
+    resolverAttempts: Array.from({ length: 40 }, (__, attemptIndex) => ({
+      createdAt: `attempt-${attemptIndex}`,
+    })),
+  }));
+
+  const saved = await store.saveWorkflowMapperState("flow-bounded", {
+    settings: { maxVersions: 2, maxComponents: 2 },
+    maps,
+  });
+
+  assert.deepEqual(saved.maps.map((map) => map.mapVersionId), ["version-3", "version-4"]);
+  assert.deepEqual(saved.maps.map((map) => map.components.length), [2, 2]);
+  assert.deepEqual(saved.maps.map((map) => map.resolverAttempts.length), [25, 25]);
+});
+
+test("chrome map store retries quota failures with deterministic pruning", async () => {
+  const storage = createMemoryChromeStorage({}, { maxWriteBytes: 5500 });
+  const store = new ChromeMapStore(storage);
+  const maps = Array.from({ length: 3 }, (_, pageIndex) => ({
+    pageProfileKey: `example_com::page_${pageIndex}`,
+    mapVersionId: `map-${pageIndex}`,
+    components: Array.from({ length: 12 }, (__, componentIndex) => ({
+      componentId: `component-${pageIndex}-${componentIndex}`,
+      status: "new",
+      fingerprint: { semantic: { stableText: "x".repeat(300) } },
+    })),
+  }));
+
+  const saved = await store.saveWorkflowMapperState("flow-quota", {
+    settings: { maxVersions: 3, maxComponents: 500 },
+    maps,
+  });
+
+  assert.equal(saved.storage.quotaPruned, true);
+  assert.ok(saved.storage.prunedComponentCount > 0);
+  assert.ok(saved.maps.reduce((total, map) => total + map.components.length, 0) < 36);
+  assert.ok(storage.setCount() > 1);
+});
+
+test("chrome map store evicts the oldest workflow before pruning the current aggregate write", async () => {
+  const largeState = (workflowId, marker) => ({
+    maps: Array.from({ length: 3 }, (_, mapIndex) => ({
+      pageProfileKey: `example_com::${marker}_${mapIndex}`,
+      mapVersionId: `${marker}-${mapIndex}`,
+      components: Array.from({ length: 3 }, (__, componentIndex) => ({
+        componentId: `${marker}-${mapIndex}-${componentIndex}`,
+        status: "new",
+        fingerprint: { semantic: { stableText: marker.repeat(180) } },
+      })),
+    })),
+  });
+  const seedStorage = createMemoryChromeStorage();
+  const seedStore = new ChromeMapStore(seedStorage, {
+    clock: () => "2026-07-01T00:00:00.000Z",
+  });
+  await seedStore.saveWorkflowMapperState("flow-old", largeState("flow-old", "old"));
+  const seeded = seedStorage.snapshot();
+  const oldKey = mapperWorkflowStorageKey("flow-old");
+  const oldBytes = Buffer.byteLength(JSON.stringify(seeded), "utf8");
+  const storage = createMemoryChromeStorage(seeded, {
+    maxTotalBytes: oldBytes + 1500,
+  });
+  const store = new ChromeMapStore(storage, {
+    clock: () => "2026-07-02T00:00:00.000Z",
+  });
+
+  const saved = await store.saveWorkflowMapperState(
+    "flow-current",
+    largeState("flow-current", "new"),
+  );
+
+  assert.equal(saved.storage.quotaPruned, false);
+  assert.equal(saved.maps.length, 3);
+  assert.equal(saved.maps.reduce((total, map) => total + map.components.length, 0), 9);
+  assert.equal(await store.getWorkflowMapperState("flow-old"), null);
+  assert.equal(
+    (await store.getWorkflowMapperState("flow-current")).workflowId,
+    "flow-current",
+  );
+  const tombstone = storage.snapshot()[oldKey];
+  assert.equal(tombstone.deleted, true);
+  assert.equal(tombstone.reason, "aggregate_quota_eviction");
+});
+
+test("chrome map store bounds retained live workflow states globally", async () => {
+  const initial = {};
+  for (let index = 0; index < 50; index += 1) {
+    const workflowId = `flow-${String(index).padStart(2, "0")}`;
+    initial[mapperWorkflowStorageKey(workflowId)] = {
+      ...createEmptyWorkflowMapperState(workflowId),
+      storage: {
+        ...createEmptyWorkflowMapperState(workflowId).storage,
+        revision: "1",
+        savedAt: new Date(Date.UTC(2026, 5, 1, 0, 0, index)).toISOString(),
+      },
+    };
+  }
+  const storage = createMemoryChromeStorage(initial);
+  const store = new ChromeMapStore(storage, {
+    clock: () => "2026-07-31T00:00:00.000Z",
+  });
+
+  await store.saveWorkflowMapperState("flow-current", { maps: [] });
+
+  const snapshot = storage.snapshot();
+  const live = Object.entries(snapshot).filter(([key, value]) => {
+    return key.startsWith(`${Defaults.MapperStorageKey}.workflow.`)
+      && value?.deleted !== true;
+  });
+  assert.equal(live.length, 50);
+  assert.equal(snapshot[mapperWorkflowStorageKey("flow-00")].deleted, true);
+  assert.equal(
+    snapshot[mapperWorkflowStorageKey("flow-00")].reason,
+    "global_retention_eviction",
+  );
+});
+
+test("chrome map store bounds tombstones and compacts the oldest entries", async () => {
+  const initial = {};
+  for (let index = 0; index < 101; index += 1) {
+    const workflowId = `deleted-${String(index).padStart(3, "0")}`;
+    initial[mapperWorkflowStorageKey(workflowId)] = {
+      mapperSchemaVersion: 1,
+      workflowId,
+      deleted: true,
+      revision: "2",
+      deletedAt: new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString(),
+      reason: "workflow_deleted",
+    };
+  }
+  const storage = createMemoryChromeStorage(initial);
+  const store = new ChromeMapStore(storage);
+
+  await store.saveWorkflowMapperState("flow-current", { maps: [] });
+
+  const snapshot = storage.snapshot();
+  const tombstones = Object.entries(snapshot).filter(([key, value]) => {
+    return key.startsWith(`${Defaults.MapperStorageKey}.workflow.`)
+      && value?.deleted === true;
+  });
+  assert.equal(tombstones.length, 100);
+  assert.equal(
+    Object.hasOwn(snapshot, mapperWorkflowStorageKey("deleted-000")),
+    false,
+  );
+});
+
+test("chrome map store counts legacy and direct records in global retention", async () => {
+  const legacy = {};
+  for (let index = 0; index < 50; index += 1) {
+    const workflowId = `legacy-${String(index).padStart(2, "0")}`;
+    legacy[workflowId] = {
+      ...createEmptyWorkflowMapperState(workflowId),
+      storage: {
+        ...createEmptyWorkflowMapperState(workflowId).storage,
+        revision: "1",
+        savedAt: new Date(Date.UTC(2026, 5, 1, 0, 0, index)).toISOString(),
+      },
+    };
+  }
+  const storage = createMemoryChromeStorage({
+    [Defaults.MapperStorageKey]: legacy,
+  });
+  const store = new ChromeMapStore(storage, {
+    clock: () => "2026-07-31T00:00:00.000Z",
+  });
+
+  await store.saveWorkflowMapperState("flow-current", { maps: [] });
+
+  const states = await store.getAllWorkflowMapperStates();
+  assert.equal(Object.keys(states).length, 50);
+  assert.equal(states["legacy-00"], undefined);
+  assert.equal(states["flow-current"].workflowId, "flow-current");
+});
+
+test("chrome map store excludes malformed direct records from live retention", async () => {
+  const initial = {
+    [mapperWorkflowStorageKey("invalid")]: {
+      workflowId: "invalid",
+      mapperSchemaVersion: 999,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+    },
+  };
+  for (let index = 0; index < 49; index += 1) {
+    const workflowId = `valid-${String(index).padStart(2, "0")}`;
+    initial[mapperWorkflowStorageKey(workflowId)] = {
+      ...createEmptyWorkflowMapperState(workflowId),
+      storage: {
+        ...createEmptyWorkflowMapperState(workflowId).storage,
+        revision: "1",
+        savedAt: new Date(Date.UTC(2026, 5, 1, 0, 0, index)).toISOString(),
+      },
+    };
+  }
+  const storage = createMemoryChromeStorage(initial);
+  const store = new ChromeMapStore(storage);
+
+  await store.saveWorkflowMapperState("flow-current", { maps: [] });
+
+  const states = await store.getAllWorkflowMapperStates();
+  assert.equal(Object.keys(states).length, 50);
+  assert.equal(states["valid-00"].workflowId, "valid-00");
+  assert.equal(states["flow-current"].workflowId, "flow-current");
+  assert.equal(states.invalid, undefined);
 });
 
 test("static page map creates locked readable component ids", () => {
@@ -160,7 +816,7 @@ test("static page map stores components in visual reading order", () => {
   ]);
 });
 
-test("static page map stores redacted platform profile hints", () => {
+test("static page map stores bounded platform profile hints", () => {
   const pageMap = buildStaticPageMap({
     page: {
       url: "https://example.com/chat",
@@ -285,7 +941,11 @@ test("static page map uses platform scope as structural identity context", () =>
   assert.equal(Object.hasOwn(pageMap.components[0].fingerprint.structural.platformScope, "rawText"), false);
 });
 
-test("static page map retains bounded open-shadow boundary paths", () => {
+test("static page map retains complete open-shadow boundary paths", () => {
+  const deepHostPath = Array.from(
+    { length: 40 },
+    (_, index) => `custom-shadow-host-${index}:0`,
+  ).join("/");
   const pageMap = buildStaticPageMap({
     page: { url: "https://example.com/settings" },
     componentFacts: [componentFact({
@@ -295,19 +955,24 @@ test("static page map retains bounded open-shadow boundary paths", () => {
       shadowPath: [
         { hostPath: "body:1/main:0/shadow-card:2", innerPath: "div:0/button:1" },
         { hostPath: "div:0/nested-card:0", innerPath: "section:0/button:0" },
-        { hostPath: "ignored", innerPath: "ignored" },
-        { hostPath: "ignored-2", innerPath: "ignored-2" },
-        { hostPath: "too-deep", innerPath: "too-deep" },
+        { hostPath: "section:0/deep-card:0", innerPath: "article:0/button:0" },
+        { hostPath: "article:0/deeper-card:0", innerPath: "div:0/button:0" },
+        { hostPath: deepHostPath, innerPath: "main:0/button:0" },
       ],
     })],
   });
 
   const shadowPath = pageMap.components[0].fingerprint.technical.shadowPath;
-  assert.equal(shadowPath.length, 4);
+  assert.equal(shadowPath.length, 5);
   assert.deepEqual(shadowPath[0], {
     hostPath: "body:1/main:0/shadow-card:2",
     innerPath: "div:0/button:1",
   });
+  assert.deepEqual(shadowPath[4], {
+    hostPath: deepHostPath,
+    innerPath: "main:0/button:0",
+  });
+  assert.ok(shadowPath[4].hostPath.length > 320);
 });
 
 test("static page map safely declines mutation-heavy pages", () => {
@@ -329,6 +994,53 @@ test("static page map safely declines mutation-heavy pages", () => {
   assert.equal(pageMap.classification, MapperPageClassifications.DynamicDeferred);
   assert.equal(pageMap.componentCount, 0);
   assert.equal(pageMap.diagnostics.reason, "material_mutation_limit_exceeded");
+});
+
+test("bounded scan overflow defers both mapper layers instead of accepting a truncated map", () => {
+  const pageMap = buildStaticPageMap({
+    page: {
+      url: "https://example.com/large-page",
+      scanDiagnostics: {
+        version: "mapper.scan.v1",
+        maxComponents: 2,
+        sampledComponentCount: 2,
+        candidateCount: 3,
+        candidateCountIsLowerBound: true,
+        overflow: true,
+        overflowKind: "visited_node_budget",
+      },
+    },
+    settings: { maxComponents: 2 },
+    componentFacts: [
+      componentFact({
+        accessibleName: "Stable control",
+        role: "button",
+        locator: { strategy: "css_selector", value: "#stable", reliability: 95 },
+      }),
+      componentFact({
+        accessibleName: "Loaded control",
+        role: "button",
+        regionDynamics: {
+          regionId: "loaded_feed",
+          classification: "loaded_window",
+          loadedContentOnly: true,
+        },
+        locator: { strategy: "css_selector", value: "#loaded", reliability: 95 },
+      }),
+    ],
+  });
+
+  assert.equal(pageMap.status, "unsupported");
+  assert.equal(pageMap.classification, MapperPageClassifications.DynamicDeferred);
+  assert.equal(pageMap.componentCount, 0);
+  assert.equal(pageMap.layers.static.status, "deferred");
+  assert.equal(pageMap.layers.dynamic.status, "deferred");
+  assert.equal(pageMap.layers.static.reason, "component_scan_overflow");
+  assert.equal(pageMap.layers.dynamic.reason, "component_scan_overflow");
+  assert.equal(pageMap.diagnostics.scanOverflow, true);
+  assert.equal(pageMap.diagnostics.scanCandidateCount, 3);
+  assert.equal(pageMap.diagnostics.scanOverflowKind, "visited_node_budget");
+  assert.equal(pageMap.diagnostics.reason, "component_scan_overflow");
 });
 
 test("bounded dynamic regions remain mapped as loaded-content-only", () => {
@@ -489,8 +1201,7 @@ test("page map reconciliation marks changed and removed components", () => {
   assert.equal(refreshed.components[0].status, MapperComponentStatuses.Changed);
   assert.equal(refreshed.components[0].reviewRequired, false);
   assert.equal(refreshed.components[0].reconciliationDecision.reason, "component_uid_drift");
-  assert.equal(refreshed.reliabilityMetrics.redaction.rawTextStored, false);
-  assert.equal(refreshed.reliabilityMetrics.redaction.rawLocatorStored, false);
+  assert.equal(Object.hasOwn(refreshed.reliabilityMetrics, "redaction"), false);
   assert.equal(refreshed.reliabilityMetrics.automaticStrongMatchCount, 1);
   assert.equal(refreshed.reliabilityMetrics.uncertainAsNewCount, 0);
   assert.equal(refreshed.reliabilityMetrics.componentIdSurvivalRate, 0.5);
@@ -563,7 +1274,7 @@ test("page map reconciliation confirms automatic rebinding across settled captur
   assert.equal(confirmed.reliabilityMetrics.rebindConfirmation.confirmedCount, 1);
 });
 
-test("runtime resolver outcomes update redacted page reliability counters", () => {
+test("runtime resolver outcomes retain local raw diagnostics and reliability counters", () => {
   const pageMap = buildStaticPageMap({
     page: { url: "https://example.com/account" },
     componentFacts: [
@@ -594,8 +1305,8 @@ test("runtime resolver outcomes update redacted page reliability counters", () =
         evidence: ["name", "structural"],
         componentId: "raw candidate id",
         componentUid: "raw candidate uid",
-        displayName: "Do not persist",
-        primary: { strategy: "css_selector", value: "#do-not-persist" },
+        displayName: "Persist local candidate",
+        primary: { strategy: "css_selector", value: "#persist-local" },
       },
       runnerUp: {
         rank: 2,
@@ -625,11 +1336,12 @@ test("runtime resolver outcomes update redacted page reliability counters", () =
   assert.equal(notFound.reliabilityMetrics.runtime.ambiguousCount, 1);
   assert.equal(notFound.reliabilityMetrics.runtime.notFoundCount, 1);
   assert.equal(notFound.resolverAttempts.length, 3);
-  assert.equal(notFound.resolverAttempts[0].redaction.rawTextStored, false);
-  assert.equal(notFound.resolverAttempts[0].redaction.rawLocatorStored, false);
-  assert.equal(notFound.resolverAttempts[0].selected.primaryStrategy, "css_selector");
-  assert.equal(Object.hasOwn(notFound.resolverAttempts[0].selected, "displayName"), false);
-  assert.equal(Object.hasOwn(notFound.resolverAttempts[0].selected, "primary"), false);
+  assert.equal(Object.hasOwn(notFound.resolverAttempts[0], "redaction"), false);
+  assert.equal(notFound.resolverAttempts[0].selected.componentId, "raw candidate id");
+  assert.equal(notFound.resolverAttempts[0].selected.componentUid, "raw candidate uid");
+  assert.equal(notFound.resolverAttempts[0].selected.displayName, "Persist local candidate");
+  assert.equal(notFound.resolverAttempts[0].selected.primary.strategy, "css_selector");
+  assert.equal(notFound.resolverAttempts[0].selected.primary.value, "#persist-local");
 });
 
 test("page map reconciliation keeps appended feed items after existing items", () => {
@@ -961,7 +1673,7 @@ test("resolver blocks repeated platform controls without durable scope", () => {
   assert.equal(result.reason, "platform_scope_insufficient");
 });
 
-test("resolver isolates same-origin frame paths and protects cross-origin frames", () => {
+test("resolver isolates frame paths, supports accessible cross-origin frames, and protects unreachable frames", () => {
   const mapped = buildStaticPageMap({
     page: { url: "https://example.com/frames" },
     componentFacts: [componentFact({
@@ -987,6 +1699,111 @@ test("resolver isolates same-origin frame paths and protects cross-origin frames
   })], { action: "element.click" });
   assert.equal(wrongFrame.state, MapperResolverStates.NotFound);
 
+  const accessibleCrossOriginScope = {
+    access: "cross_origin",
+    path: "isolated/frame_checkout/instance_1",
+    depth: 1,
+    contextKey: "frame_checkout",
+    frameContextId: "frame_checkout_instance_1",
+    frameIdHint: 7,
+    extensionAccessible: true,
+  };
+  const accessibleComponent = buildStaticPageMap({
+    page: { url: "https://example.com/frames" },
+    componentFacts: [componentFact({
+      accessibleName: "Pay",
+      role: "button",
+      frameScope: accessibleCrossOriginScope,
+      locator: { strategy: "text", value: "Pay", reliability: 90 },
+    })],
+  }).components[0];
+  const accessibleResult = resolveMappedComponent(accessibleComponent, [componentFact({
+    accessibleName: "Pay",
+    role: "button",
+    frameScope: accessibleCrossOriginScope,
+    locator: { strategy: "text", value: "Pay", reliability: 90 },
+  })], { action: "element.click" });
+  assert.equal(accessibleResult.state, MapperResolverStates.Resolved);
+  assert.equal(
+    accessibleComponent.fingerprint.structural.frameScope.extensionAccessible,
+    true,
+  );
+
+  const rawCrossOriginScope = {
+    ...accessibleCrossOriginScope,
+    path: "isolated/frame_checkout",
+    frameContextId: "",
+    frameIdHint: null,
+  };
+  const rawComponent = buildStaticPageMap({
+    page: { url: "https://example.com/frames" },
+    componentFacts: [componentFact({
+      accessibleName: "Pay",
+      role: "button",
+      frameScope: rawCrossOriginScope,
+      locator: { strategy: "text", value: "Pay", reliability: 90 },
+    })],
+  }).components[0];
+  const rawToDecoratedResult = resolveMappedComponent(rawComponent, [componentFact({
+    accessibleName: "Pay",
+    role: "button",
+    frameScope: accessibleCrossOriginScope,
+    locator: { strategy: "text", value: "Pay", reliability: 90 },
+  })], {
+    action: "element.click",
+    accessibleFramePaths: [accessibleCrossOriginScope.path],
+  });
+  assert.equal(rawToDecoratedResult.state, MapperResolverStates.Resolved);
+
+  const ambiguousScope = {
+    ...accessibleCrossOriginScope,
+    contextMultiplicity: 2,
+    identityAmbiguous: true,
+  };
+  const ambiguousComponent = buildStaticPageMap({
+    page: { url: "https://example.com/frames" },
+    componentFacts: [componentFact({
+      accessibleName: "Pay",
+      role: "button",
+      frameScope: ambiguousScope,
+      locator: { strategy: "text", value: "Pay", reliability: 90 },
+    })],
+  }).components[0];
+  const ambiguousResult = resolveMappedComponent(ambiguousComponent, [componentFact({
+    accessibleName: "Pay",
+    role: "button",
+    frameScope: ambiguousScope,
+    locator: { strategy: "text", value: "Pay", reliability: 90 },
+  })], { action: "element.click" });
+  assert.equal(ambiguousResult.state, MapperResolverStates.Ambiguous);
+  assert.equal(ambiguousResult.reason, "cross_origin_frame_context_ambiguous");
+
+  const liveAmbiguousResult = resolveMappedComponent(accessibleComponent, [componentFact({
+    accessibleName: "Pay",
+    role: "button",
+    frameScope: ambiguousScope,
+    locator: { strategy: "text", value: "Pay", reliability: 90 },
+  })], { action: "element.click" });
+  assert.equal(liveAmbiguousResult.state, MapperResolverStates.Ambiguous);
+  assert.equal(liveAmbiguousResult.reason, "cross_origin_frame_context_ambiguous");
+
+  const duplicatedInventoryResult = resolveMappedComponent(accessibleComponent, [], {
+    action: "element.click",
+    accessibleFramePaths: [
+      "isolated/frame_checkout/instance_1",
+      "isolated/frame_checkout/instance_2",
+    ],
+  });
+  assert.equal(duplicatedInventoryResult.state, MapperResolverStates.Ambiguous);
+  assert.equal(duplicatedInventoryResult.reason, "cross_origin_frame_context_ambiguous");
+
+  const unreachableAfterCapture = resolveMappedComponent(accessibleComponent, [], {
+    action: "element.click",
+    accessibleFramePaths: [],
+  });
+  assert.equal(unreachableAfterCapture.state, MapperResolverStates.ProtectedUnsupported);
+  assert.equal(unreachableAfterCapture.reason, "cross_origin_frame_unreachable");
+
   const protectedComponent = buildStaticPageMap({
     page: { url: "https://example.com/frames" },
     componentFacts: [componentFact({
@@ -1004,7 +1821,7 @@ test("resolver isolates same-origin frame paths and protects cross-origin frames
     action: "element.click",
   });
   assert.equal(protectedResult.state, MapperResolverStates.ProtectedUnsupported);
-  assert.equal(protectedResult.reason, "cross_origin_frame_unsupported");
+  assert.equal(protectedResult.reason, "cross_origin_frame_unreachable");
 });
 
 test("resolver pins repeated feed items and protects unconditioned patterns", () => {
@@ -1199,6 +2016,48 @@ function componentFact({
       visual: {
         documentBounds,
       },
+    },
+  };
+}
+
+function createMemoryChromeStorage(
+  initial = {},
+  {
+    maxWriteBytes = Number.POSITIVE_INFINITY,
+    maxTotalBytes = Number.POSITIVE_INFINITY,
+    yieldBeforeSet = false,
+  } = {},
+) {
+  const values = structuredClone(initial);
+  let writes = 0;
+  return {
+    async get(key) {
+      if (key === null) return structuredClone(values);
+      if (Array.isArray(key)) {
+        return Object.fromEntries(key.map((entry) => [entry, structuredClone(values[entry])]));
+      }
+      return { [key]: structuredClone(values[key]) };
+    },
+    async set(next) {
+      writes += 1;
+      if (yieldBeforeSet) await Promise.resolve();
+      if (Buffer.byteLength(JSON.stringify(next), "utf8") > maxWriteBytes) {
+        throw new Error("QUOTA_BYTES exceeded for deterministic test storage");
+      }
+      const proposed = { ...values, ...structuredClone(next) };
+      if (Buffer.byteLength(JSON.stringify(proposed), "utf8") > maxTotalBytes) {
+        throw new Error("QUOTA_BYTES exceeded for aggregate deterministic test storage");
+      }
+      Object.assign(values, structuredClone(next));
+    },
+    async remove(keys) {
+      for (const key of Array.isArray(keys) ? keys : [keys]) delete values[key];
+    },
+    snapshot() {
+      return structuredClone(values);
+    },
+    setCount() {
+      return writes;
     },
   };
 }

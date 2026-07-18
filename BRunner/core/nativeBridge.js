@@ -5,16 +5,36 @@ import { Defaults, NativeCommands } from "./constants.js";
 import { NativeHostCapabilities } from "./nativeHostRequirements.js";
 import { ensureJsonFilename } from "./workflowUtils.js";
 
-class NativeBridgeClient {
+const PairingFailureCodes = new Set([
+  "invalid_profile_instance_id",
+  "pairing_required",
+  "paired_to_other_profile",
+  "paired_connection_active",
+  "pairing_session_inactive",
+  "pairing_state_error",
+]);
+
+const PairingFailureStates = new Set([
+  "unpaired",
+  "paired_to_other_profile",
+  "paired_connection_active",
+  "pairing_session_inactive",
+  "pairing_failed",
+]);
+
+export class NativeBridgeClient {
   constructor() {
     this.socket = null;
     this.isConnected = false;
-    this.isAuthenticated = false;
-    this.authPromise = null;
-    this.lastAuthError = "";
+    this.isPaired = false;
+    this.sessionPromise = null;
+    this.pairingState = "disconnected";
+    this.lastPairingError = "";
+    this.profileInstanceId = "";
     this.pendingRequests = new Map();
     this.nextRequestId = 1;
     this.lastHello = null;
+    this.statusListeners = new Set();
   }
 
   connect() {
@@ -26,52 +46,99 @@ class NativeBridgeClient {
       return;
     }
 
-    this.socket = new WebSocket(Defaults.NativeHostUrl);
+    this.pairingState = "connecting";
+    this.lastPairingError = "";
+    const socket = new WebSocket(Defaults.NativeHostUrl);
+    this.socket = socket;
+    this.notifyStatus();
 
-    this.socket.onopen = () => {
+    socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.isConnected = true;
-      this.isAuthenticated = false;
-      this.startAuthentication();
+      this.isPaired = false;
+      this.pairingState = "checking";
+      this.lastPairingError = "";
+      this.startProfileSession();
+      this.notifyStatus();
       console.log("[BRunner] Native host connected.");
     };
 
-    this.socket.onclose = () => {
+    socket.onclose = () => {
+      if (this.socket !== socket) return;
       this.isConnected = false;
-      this.isAuthenticated = false;
-      this.authPromise = null;
+      this.isPaired = false;
+      this.sessionPromise = null;
+      this.pairingState = "disconnected";
+      this.lastPairingError = "";
       this.lastHello = null;
       this.rejectPendingRequests("Native host disconnected.");
+      this.notifyStatus();
       console.warn("[BRunner] Native host disconnected.");
     };
 
-    this.socket.onerror = (error) => {
+    socket.onerror = (error) => {
+      if (this.socket !== socket) return;
       this.isConnected = false;
-      this.isAuthenticated = false;
-      this.authPromise = null;
+      this.isPaired = false;
+      this.sessionPromise = null;
+      this.pairingState = "unavailable";
+      this.lastPairingError = "Native host socket error.";
       this.lastHello = null;
       this.rejectPendingRequests("Native host socket error.");
+      this.notifyStatus();
       console.error("[BRunner] Native host socket error:", error);
     };
 
-    this.socket.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (this.socket !== socket) return;
       this.handleMessage(event.data);
     };
   }
 
   resetConnection() {
-    this.isAuthenticated = false;
-    this.authPromise = null;
+    this.isPaired = false;
+    this.sessionPromise = null;
+    this.pairingState = "disconnected";
+    this.lastPairingError = "";
     this.lastHello = null;
-    if (this.socket) {
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
       try {
-        this.socket.close();
+        socket.close();
       } catch {
         // Socket may already be closing.
       }
     }
-    this.socket = null;
     this.isConnected = false;
     this.rejectPendingRequests("Native host connection reset.");
+    this.notifyStatus();
+  }
+
+  subscribeStatus(listener) {
+    if (typeof listener !== "function") {
+      throw new TypeError("Native bridge status listener must be a function.");
+    }
+    this.statusListeners.add(listener);
+    try {
+      listener(this.getStatus());
+    } catch (error) {
+      console.warn("[BRunner] Native bridge status listener failed:", error);
+    }
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  notifyStatus() {
+    const status = this.getStatus();
+    for (const listener of this.statusListeners) {
+      try {
+        listener(status);
+      } catch (error) {
+        console.warn("[BRunner] Native bridge status listener failed:", error);
+      }
+    }
   }
 
   sendRaw(payload) {
@@ -82,42 +149,84 @@ class NativeBridgeClient {
     this.socket.send(JSON.stringify(payload));
   }
 
-  async authenticate() {
+  async announceProfile() {
     try {
-      const pairingKey = await this.getPairingKey();
-      if (!pairingKey) {
-        throw new Error("Native host pairing key is not configured.");
-      }
-
-      const response = await this.sendAuthenticatedRequest({
-        command: NativeCommands.Auth,
-        key: pairingKey,
-        extensionId: globalThis.chrome?.runtime?.id || "",
+      const profileInstanceId = await loadOrCreateProfileInstanceId();
+      this.profileInstanceId = profileInstanceId;
+      const response = await this.sendSessionRequest({
+        command: NativeCommands.ProfileHello,
+        profileInstanceId,
       });
-      this.isAuthenticated = true;
-      this.lastAuthError = "";
+      this.applyPairingResponse(response);
       return response;
     } catch (error) {
-      this.isAuthenticated = false;
-      this.lastAuthError = error?.message || String(error);
+      this.applyPairingFailure(error);
       throw error;
     }
   }
 
-  startAuthentication() {
-    this.authPromise = this.authenticate().catch((error) => {
-      console.warn("[BRunner] Native host authentication failed:", error);
+  startProfileSession() {
+    this.sessionPromise = this.announceProfile().catch((error) => {
+      console.warn("[BRunner] Native host pairing check failed:", error);
       return null;
     });
-    return this.authPromise;
+    return this.sessionPromise;
   }
 
-  async getPairingKey() {
-    const pairing = await loadNativePairing();
-    return pairing.key || Defaults.PairingKey;
+  async refreshProfileSession() {
+    this.connect();
+    await this.waitForSocketOpen();
+    if (this.sessionPromise) {
+      await this.sessionPromise;
+    }
+    return await this.announceProfile();
   }
 
-  async waitForAuthentication() {
+  async pairProfile() {
+    this.connect();
+    await this.waitForSocketOpen();
+    if (this.sessionPromise) {
+      await this.sessionPromise;
+    }
+    const profileInstanceId = await loadOrCreateProfileInstanceId();
+    this.profileInstanceId = profileInstanceId;
+    this.lastHello = null;
+    try {
+      const response = await this.sendSessionRequest({
+        command: NativeCommands.PairProfile,
+        profileInstanceId,
+      });
+      this.applyPairingResponse(response);
+      return response;
+    } catch (error) {
+      this.applyPairingFailure(error);
+      throw error;
+    }
+  }
+
+  async unpairProfile() {
+    this.connect();
+    await this.waitForSocketOpen();
+    if (this.sessionPromise) {
+      await this.sessionPromise;
+    }
+    const profileInstanceId = await loadOrCreateProfileInstanceId();
+    this.profileInstanceId = profileInstanceId;
+    this.lastHello = null;
+    try {
+      const response = await this.sendSessionRequest({
+        command: NativeCommands.UnpairProfile,
+        profileInstanceId,
+      });
+      this.applyPairingResponse(response);
+      return response;
+    } catch (error) {
+      this.applyPairingFailure(error);
+      throw error;
+    }
+  }
+
+  async waitForSocketOpen() {
     this.connect();
 
     const startedAt = Date.now();
@@ -127,18 +236,29 @@ class NativeBridgeClient {
       }
       await delay(100);
     }
+  }
 
-    if (!this.authPromise) {
-      this.startAuthentication();
+  async waitForPairing() {
+    await this.waitForSocketOpen();
+
+    if (!this.sessionPromise) {
+      this.startProfileSession();
     }
 
-    await this.authPromise;
-    if (!this.isAuthenticated) {
-      throw new Error(this.lastAuthError || "Native host authentication failed.");
+    await this.sessionPromise;
+    if (!this.isPaired) {
+      const error = new Error(
+        this.lastPairingError || "Pair this Chrome profile with the companion before continuing.",
+      );
+      error.code = this.pairingState === "unpaired"
+        ? "pairing_required"
+        : this.pairingState || "pairing_required";
+      error.pairingState = this.pairingState;
+      throw error;
     }
   }
 
-  sendAuthenticatedRequest(payload) {
+  sendSessionRequest(payload) {
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
       const timer = this.startRequestTimeout(requestId, reject);
@@ -151,6 +271,7 @@ class NativeBridgeClient {
         });
       } catch (error) {
         this.pendingRequests.delete(requestId);
+        clearTimeout(timer);
         reject(error);
       }
     });
@@ -158,7 +279,7 @@ class NativeBridgeClient {
 
   async request(command, payload = {}, options = {}) {
     this.connect();
-    await this.waitForAuthentication();
+    await this.waitForPairing();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
@@ -215,7 +336,7 @@ class NativeBridgeClient {
 
   async requestCapability(capability, payload = {}, options = {}) {
     this.connect();
-    await this.waitForAuthentication();
+    await this.waitForPairing();
 
     return new Promise((resolve, reject) => {
       const requestId = String(this.nextRequestId++);
@@ -272,6 +393,35 @@ class NativeBridgeClient {
     });
   }
 
+  applyPairingResponse(response = {}) {
+    const paired = response?.paired === true && response?.connected === true;
+    this.isPaired = paired;
+    this.pairingState = String(
+      response?.pairingState || (paired ? "paired" : "unpaired"),
+    );
+    this.lastPairingError = paired ? "" : String(response?.message || "");
+    if (response?.profileInstanceId) {
+      this.profileInstanceId = String(response.profileInstanceId);
+    }
+    if (!paired) {
+      this.lastHello = null;
+    }
+    this.notifyStatus();
+  }
+
+  applyPairingFailure(error) {
+    const code = String(error?.code || "");
+    const state = String(
+      error?.pairingState ||
+      (code === "pairing_required" ? "unpaired" : code || "pairing_failed"),
+    );
+    this.isPaired = false;
+    this.pairingState = state;
+    this.lastPairingError = error?.message || String(error || "Pairing failed.");
+    this.lastHello = null;
+    this.notifyStatus();
+  }
+
   handleMessage(raw) {
     let message;
 
@@ -294,7 +444,13 @@ class NativeBridgeClient {
     clearTimeout(pending.timer);
 
     if (message.error) {
-      pending.reject(new Error(message.error));
+      const error = new Error(message.error);
+      error.code = String(message.code || "");
+      error.pairingState = String(message.pairingState || "");
+      if (isPairingFailure(error)) {
+        this.applyPairingFailure(error);
+      }
+      pending.reject(error);
       return;
     }
 
@@ -326,6 +482,7 @@ class NativeBridgeClient {
     const response = await this.request(NativeCommands.HostHello);
     if (Array.isArray(response?.capabilities)) {
       this.lastHello = response;
+      this.notifyStatus();
     }
     return response;
   }
@@ -437,7 +594,22 @@ class NativeBridgeClient {
     });
   }
 
-  async readLocalFile(path) {
+  async readLocalFile(request) {
+    if (request && typeof request === "object") {
+      const directoryAlias = String(request.directoryAlias || "").trim();
+      const relativePath = String(request.relativePath || "").trim();
+      if (!directoryAlias || !relativePath) {
+        throw new Error("Local file read requires directoryAlias and relativePath.");
+      }
+      return this.request(NativeCommands.ReadFile, {
+        request: {
+          directoryAlias,
+          relativePath,
+        },
+      });
+    }
+    const path = String(request || "").trim();
+    if (!path) throw new Error("Local file path is required.");
     return this.request(NativeCommands.ReadFile, {
       path,
     });
@@ -485,59 +657,79 @@ class NativeBridgeClient {
       NativeHostCapabilities.DataSourceRead,
       NativeHostCapabilities.ExecutionLogSave,
     ];
+    const ready = Boolean(this.isConnected && this.isPaired && this.lastHello);
     return {
-      connected: this.isConnected,
-      authenticated: this.isAuthenticated,
-      authError: this.lastAuthError,
+      connected: ready,
+      ready,
+      socketConnected: this.isConnected,
+      paired: this.isPaired,
+      pairingState: this.pairingState,
+      pairingError: this.lastPairingError,
+      profileInstanceId: this.profileInstanceId,
       protocolVersion: this.lastHello?.protocolVersion || null,
       host: this.lastHello?.host || null,
-      capabilities: this.isConnected
+      capabilities: ready
         ? (Array.isArray(this.lastHello?.capabilities) ? this.lastHello.capabilities : fallbackCapabilities)
         : [],
     };
   }
 }
 
-export async function loadNativePairing(storage = globalThis.chrome?.storage?.local) {
-  if (!storage) {
-    return { key: Defaults.PairingKey };
-  }
-  const result = await storage.get(Defaults.NativePairingStorageKey);
-  const value = result?.[Defaults.NativePairingStorageKey];
-  if (!value || typeof value !== "object") {
-    return { key: Defaults.PairingKey };
-  }
-  return {
-    key: String(value.key || "").trim() || Defaults.PairingKey,
-  };
+function isPairingFailure(error) {
+  const code = String(error?.code || "").trim();
+  const state = String(error?.pairingState || "").trim();
+  return PairingFailureCodes.has(code) || PairingFailureStates.has(state);
 }
 
-export async function saveNativePairing(pairing = {}, storage = globalThis.chrome?.storage?.local) {
-  const key = normalizeNativePairingKey(pairing.key);
-  if (!/^[0-9a-f]{32}$/.test(key)) {
-    throw new Error("Pairing key must contain 32 hexadecimal characters.");
-  }
+export async function loadOrCreateProfileInstanceId(
+  storage = globalThis.chrome?.storage?.local,
+) {
   if (!storage) {
-    throw new Error("Extension storage is unavailable.");
+    throw new Error("Extension profile storage is unavailable.");
   }
+  const result = await storage.get(Defaults.ProfileInstanceStorageKey);
+  const stored = normalizeProfileInstanceId(
+    result?.[Defaults.ProfileInstanceStorageKey],
+  );
+  if (isValidProfileInstanceId(stored)) {
+    return stored;
+  }
+  const profileInstanceId = generateProfileInstanceId();
   await storage.set({
-    [Defaults.NativePairingStorageKey]: { key },
+    [Defaults.ProfileInstanceStorageKey]: profileInstanceId,
   });
-  NativeBridge.resetConnection();
-  return { key };
+  return profileInstanceId;
 }
 
-export function generateNativePairingKey() {
+export function generateProfileInstanceId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID().toLowerCase();
+  }
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const value = Array.from(
+    bytes,
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    value.slice(12, 16),
+    value.slice(16, 20),
+    value.slice(20),
+  ].join("-");
 }
 
-function normalizeNativePairingKey(value = "") {
-  return String(value || "")
-    .trim()
-    .replace(/[\s-]+/g, "")
-    .toLowerCase();
+export function normalizeProfileInstanceId(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function isValidProfileInstanceId(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+    normalizeProfileInstanceId(value),
+  );
 }
 
 function delay(ms) {

@@ -15,6 +15,7 @@ import {
   getTabDomain,
   isAutomationTab,
 } from "./tabUtils.js";
+import { normalizeRecordingCheckpoint } from "./runtimeSession.js";
 
 export function createRecordingController({ nativeBridge, onStateChanged }) {
   let isRecording = false;
@@ -109,6 +110,48 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
   async function toggle(enabled, requestedTabPolicy) {
     if (enabled) return start(requestedTabPolicy);
     return stop();
+  }
+
+  async function restore(checkpoint = {}, openTabs = []) {
+    const normalized = normalizeRecordingCheckpoint(checkpoint);
+    const openTabIds = new Set(
+      (Array.isArray(openTabs) ? openTabs : [])
+        .map((tab) => Number(tab?.id))
+        .filter(Number.isInteger),
+    );
+    const restoredTabs = normalized.trackedTabs.filter((tab) => {
+      return openTabIds.has(tab.tabId);
+    });
+
+    recordedSteps = [...normalized.recordedSteps];
+    trackedTabs = new Map(
+      restoredTabs.map((tab) => [tab.tabId, { ...tab }]),
+    );
+    isRecording = Boolean(
+      normalized.isRecording &&
+      normalized.sessionId &&
+      trackedTabs.size > 0
+    );
+    sessionId = isRecording ? normalized.sessionId : "";
+    tabPolicy = normalized.tabPolicy;
+    boundDomain = normalized.boundDomain;
+    recordingTabId = trackedTabs.has(normalized.recordingTabId)
+      ? normalized.recordingTabId
+      : (restoredTabs[0]?.tabId ?? null);
+    activeRecordingTabId = trackedTabs.has(normalized.activeRecordingTabId)
+      ? normalized.activeRecordingTabId
+      : recordingTabId;
+    lastRecordedUrl = normalized.lastRecordedUrl;
+    lastNavigationRecordedAt = 0;
+    nextTabRef = getNextTabRef(restoredTabs);
+
+    if (isRecording) {
+      await broadcastRecordingState();
+    } else {
+      notifyStateChanged();
+    }
+
+    return getState();
   }
 
   function addStep(step, senderTab = null) {
@@ -301,11 +344,15 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
 
     trackedTabs.delete(tabId);
 
-    if (activeRecordingTabId !== tabId) return;
+    if (activeRecordingTabId === tabId) {
+      // Keep this unset so the browser's subsequent onActivated event records
+      // the return to the opener (or whichever tracked tab becomes active).
+      activeRecordingTabId = null;
+    }
 
-    // Keep this unset so the browser's subsequent onActivated event records
-    // the return to the opener (or whichever tracked tab becomes active).
-    activeRecordingTabId = null;
+    // Tab removal changes the recoverable recording checkpoint even when the
+    // removed tab was not active.
+    notifyStateChanged();
   }
 
   function recordTabSwitch(tabId, tab) {
@@ -404,6 +451,10 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
   }
 
   async function broadcastRecordingState() {
+    // Publish the authoritative session before enabling content scripts. A
+    // freshly enabled tab can emit its first step immediately, and background
+    // validation must already recognize that session ID.
+    notifyStateChanged();
     const tabs = await chrome.tabs.query({});
 
     await Promise.allSettled(
@@ -415,12 +466,11 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
         return chrome.tabs.sendMessage(tab.id, {
           type: Messages.SetRecordingState,
           isRecording,
+          sessionId,
           boundDomain,
         });
         }),
     );
-
-    notifyStateChanged();
   }
 
   function notifyStateChanged() {
@@ -439,6 +489,7 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
       await chrome.tabs.sendMessage(tabId, {
         type: Messages.SetRecordingState,
         isRecording,
+        sessionId,
         boundDomain,
       });
     } catch {
@@ -468,6 +519,15 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
     return `recorded_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  function getNextTabRef(tabs) {
+    const highest = tabs.reduce((maximum, tab) => {
+      const match = /^tab_(\d+)$/.exec(tab.tabRef || "");
+      const value = match ? Number(match[1]) : 0;
+      return Math.max(maximum, value);
+    }, 0);
+    return highest + 1;
+  }
+
   function safeUrlPart(url, key) {
     try {
       return new URL(url)[key] || "";
@@ -480,6 +540,7 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
     start,
     stop,
     toggle,
+    restore,
     addStep,
     getState,
     syncTab,

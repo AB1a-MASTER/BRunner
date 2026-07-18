@@ -33,7 +33,7 @@
             background: #fbfcff;
         }
         label { display: grid; gap: 5px; font-weight: 650; }
-        input, select, button, textarea {
+        input, select, button, textarea, a.button-link {
             min-height: 38px;
             padding: 8px 10px;
             border: 1px solid #b8c2d6;
@@ -41,8 +41,18 @@
             font: inherit;
             background: #fff;
         }
-        button { cursor: pointer; font-weight: 700; }
-        button:hover { border-color: #4069b2; }
+        button, a.button-link { cursor: pointer; font-weight: 700; }
+        button:hover, a.button-link:hover { border-color: #4069b2; }
+        a.button-link { display: inline-flex; align-items: center; color: #1d4ed8; text-decoration: none; }
+        fieldset { display: grid; gap: 8px; margin: 0; padding: 10px; border: 1px solid #dfe4ee; border-radius: 6px; }
+        legend { padding: 0 5px; font-weight: 700; }
+        label.choice { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+        label.choice input { min-height: auto; margin: 0; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+        .drop-zone { min-height: 92px; align-content: start; }
+        .route-view { min-height: 100px; }
+        .route-card { display: grid; gap: 8px; }
+        .fixture-note { color: #475569; font-size: 14px; }
         [data-region] { position: relative; }
         #event-log {
             min-height: 80px;
@@ -65,8 +75,20 @@
             border-bottom: 1px solid #e5e7eb;
         }
         .mutating { outline: 2px solid #f59e0b; }
+        .frame-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        iframe {
+            width: 100%;
+            min-height: 180px;
+            border: 1px solid #b8c2d6;
+            border-radius: 8px;
+            background: #fff;
+        }
         @media (max-width: 720px) {
-            .grid { grid-template-columns: 1fr; }
+            .grid, .frame-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -76,7 +98,8 @@
         <p>
             Use this page to test mapping without relying only on recorder smoke:
             stable component IDs, duplicate labels, drift recovery, open Shadow DOM,
-            and mutation-heavy safe decline.
+            same-origin and accessible cross-origin frames, and mutation-heavy safe
+            decline.
         </p>
     </header>
 
@@ -92,6 +115,7 @@
                     Profile email
                     <input id="profile-email" name="profile_email" aria-label="Profile email" data-testid="profile-email" placeholder="ada@example.com">
                 </label>
+                <a class="button-link" id="profile-help" data-testid="profile-help" href="#result-heading">Profile Help</a>
                 <button id="profile-save" name="profile_save" data-testid="profile-save" type="button">Save</button>
             </form>
 
@@ -108,6 +132,21 @@
                         <option value="enterprise">Enterprise</option>
                     </select>
                 </label>
+                <label class="choice" for="billing-auto-renew">
+                    <input id="billing-auto-renew" name="billing_auto_renew" data-testid="billing-auto-renew" type="checkbox">
+                    Automatically renew billing
+                </label>
+                <fieldset data-testid="billing-frequency-group">
+                    <legend>Billing frequency</legend>
+                    <label class="choice" for="billing-monthly">
+                        <input id="billing-monthly" name="billing_frequency" data-testid="billing-monthly" type="radio" value="monthly" checked>
+                        Monthly
+                    </label>
+                    <label class="choice" for="billing-yearly">
+                        <input id="billing-yearly" name="billing_frequency" data-testid="billing-yearly" type="radio" value="yearly">
+                        Yearly
+                    </label>
+                </fieldset>
                 <button id="billing-save" name="billing_save" data-testid="billing-save" type="button">Save</button>
             </form>
         </div>
@@ -115,17 +154,115 @@
 
     <section aria-labelledby="drift-heading" data-region="drift-lab">
         <h2 id="drift-heading">Drift And Reconciliation Lab</h2>
-        <div class="card">
-            <p>The target below changes ID, position, and visible text while keeping enough independent evidence to track.</p>
-            <button id="drift-target" name="drift_target" aria-label="Publish settings" data-testid="publish-settings" type="button">Publish Settings</button>
-            <button id="apply-drift" type="button">Apply Drift</button>
+        <p>Map the target, apply one isolated change, revalidate, refresh, record the result, and reset before the next change.</p>
+        <div class="toolbar" aria-label="Independent drift controls">
+            <button id="apply-id-drift" type="button">Apply ID/Class Drift</button>
+            <button id="apply-text-drift" type="button">Apply Text/Label Drift</button>
+            <button id="apply-layout-drift" type="button">Apply Layout Drift</button>
+            <button id="apply-container-drift" type="button">Apply Container Drift</button>
+            <button id="apply-weak-replacement" type="button">Replace With Weak Lookalike</button>
             <button id="reset-drift" type="button">Reset Drift</button>
+        </div>
+        <div class="grid">
+            <div class="card drop-zone" id="drift-source-container" data-testid="drift-source-container" aria-label="Drift source container">
+                <strong>Source container</strong>
+                <button id="drift-target" class="primary-publish-action" name="drift_target" aria-label="Publish settings" data-testid="publish-settings" type="button">Publish Settings</button>
+                <span data-testid="drift-stable-sibling">Stable sibling</span>
+            </div>
+            <div class="card drop-zone" id="drift-destination-container" data-testid="drift-destination-container" aria-label="Drift destination container">
+                <strong>Destination container</strong>
+                <span data-testid="drift-destination-sibling">Destination sibling</span>
+            </div>
+        </div>
+    </section>
+
+    <section aria-labelledby="ambiguity-heading" data-region="ambiguity-lab">
+        <h2 id="ambiguity-heading">Ambiguity And Capability Lab</h2>
+        <p>Map the unique target first, then remove its primary evidence or create controlled competing candidates.</p>
+        <div class="toolbar" aria-label="Ambiguity controls">
+            <button id="remove-primary-locator" type="button">Remove Primary Locator</button>
+            <button id="add-equal-duplicate" type="button">Add Equal Duplicate</button>
+            <button id="add-close-candidate" type="button">Create Close-Score Pair</button>
+            <button id="reset-ambiguity" type="button">Reset Ambiguity</button>
+        </div>
+        <div class="grid">
+            <div class="card" id="ambiguity-candidates" data-testid="ambiguity-candidates" aria-label="Ambiguity candidate container">
+                <button id="ambiguity-target" class="account-review-action" data-testid="ambiguity-target" aria-label="Review account" type="button">Review Account</button>
+            </div>
+            <div class="card" data-testid="capability-candidates" aria-label="Capability compatibility candidates">
+                <label for="capability-input">Shared capability target
+                    <input id="capability-input" name="shared_capability" data-testid="capability-input" aria-label="Shared capability target" placeholder="Type here">
+                </label>
+                <button id="capability-button" data-testid="capability-button" aria-label="Shared capability target" type="button">Shared Capability Target</button>
+            </div>
         </div>
     </section>
 
     <section aria-labelledby="shadow-heading" data-region="shadow-lab">
-        <h2 id="shadow-heading">Open Shadow DOM</h2>
+        <h2 id="shadow-heading">Shadow DOM Boundaries</h2>
+        <div class="toolbar">
+            <button id="apply-shadow-host-drift" type="button">Apply Shadow Host Drift</button>
+            <button id="apply-shadow-child-drift" type="button">Apply Shadow Child Drift</button>
+            <button id="reset-shadow-drift" type="button">Reset Open Shadow Drift</button>
+        </div>
         <shadow-mapper-card id="shadow-card"></shadow-mapper-card>
+        <p class="fixture-note">The visible control below is inside a closed root. Its internals must not appear as ordinary mapped components.</p>
+        <closed-shadow-mapper-card id="closed-shadow-card" data-testid="closed-shadow-host"></closed-shadow-mapper-card>
+    </section>
+
+    <section aria-labelledby="frame-heading" data-region="frame-lab">
+        <h2 id="frame-heading">Frame Isolation</h2>
+        <p>
+            Serve this harness from <code>127.0.0.1:8765</code>. The first child is
+            same-origin; the second uses <code>localhost:8765</code> so Chrome treats
+            it as a distinct, extension-accessible origin.
+        </p>
+        <div class="frame-grid">
+            <div class="card">
+                <strong>Same-origin frame</strong>
+                <iframe
+                    id="same-origin-frame"
+                    data-testid="same-origin-frame"
+                    name="mapper-same-origin"
+                    title="Mapper same-origin fixture"
+                    src="mapper_frame_child.html"
+                ></iframe>
+            </div>
+            <div class="card">
+                <strong>Accessible cross-origin frame</strong>
+                <iframe
+                    id="cross-origin-frame"
+                    data-testid="cross-origin-frame"
+                    name="mapper-cross-origin"
+                    title="Mapper cross-origin fixture"
+                    src="http://localhost:8765/BRunner_Host/mapper_frame_child.html"
+                ></iframe>
+            </div>
+            <div class="card">
+                <strong>Protected sandbox frame</strong>
+                <iframe
+                    id="protected-frame"
+                    data-testid="protected-frame"
+                    name="mapper-protected"
+                    title="Mapper protected sandbox fixture"
+                    sandbox
+                    src="mapper_frame_child.html"
+                ></iframe>
+            </div>
+        </div>
+    </section>
+
+    <section aria-labelledby="spa-heading" data-region="spa-route-lab">
+        <h2 id="spa-heading">SPA Route Isolation</h2>
+        <p>Set the Mapper Inspector query allowlist to <code>route</code>, then use Route A and Route B before mapping. Both routes deliberately render a primary control with the same ID and visible label.</p>
+        <div class="toolbar" aria-label="SPA route controls">
+            <button id="spa-route-a" type="button">Go To Route A</button>
+            <button id="spa-route-b" type="button">Go To Route B</button>
+            <button id="spa-route-back" type="button">Browser Back</button>
+            <button id="spa-route-forward" type="button">Browser Forward</button>
+            <button id="spa-route-reset" type="button">Reset Fixture URL</button>
+        </div>
+        <div id="spa-route-view" class="card route-view" data-testid="spa-route-view" aria-live="polite"></div>
     </section>
 
     <section aria-labelledby="dynamic-heading" data-region="dynamic-feed">
@@ -160,25 +297,109 @@
             writeLog("billing_save clicked");
         });
 
-        document.getElementById("drift-target").addEventListener("click", () => {
-            writeLog("drift target clicked");
-        });
+        const driftTargetMarkup = `
+            <button id="drift-target" class="primary-publish-action" name="drift_target" aria-label="Publish settings" data-testid="publish-settings" type="button">Publish Settings</button>
+            <span data-testid="drift-stable-sibling">Stable sibling</span>
+        `;
 
-        document.getElementById("apply-drift").addEventListener("click", () => {
-            const target = document.querySelector("[data-testid='publish-settings']");
-            target.id = "drift-target-renamed";
-            target.textContent = "Publish Changes";
-            target.closest(".card").append(target);
-            writeLog("drift applied: id/text/order changed");
-        });
+        function currentDriftTarget() {
+            return document.querySelector("[data-testid='publish-settings'], [data-weak-lookalike='publish-settings']");
+        }
 
-        document.getElementById("reset-drift").addEventListener("click", () => {
-            const target = document.querySelector("[data-testid='publish-settings']");
-            target.id = "drift-target";
-            target.textContent = "Publish Settings";
-            document.querySelector("#drift-heading + .card").prepend(target);
+        function resetDrift() {
+            document.getElementById("drift-source-container").innerHTML = `<strong>Source container</strong>${driftTargetMarkup}`;
+            document.getElementById("drift-destination-container").innerHTML = `
+                <strong>Destination container</strong>
+                <span data-testid="drift-destination-sibling">Destination sibling</span>
+            `;
             writeLog("drift reset");
+        }
+
+        document.getElementById("apply-id-drift").addEventListener("click", () => {
+            resetDrift();
+            const target = currentDriftTarget();
+            target.id = "drift-target-renamed";
+            target.className = "renamed-publish-action";
+            writeLog("isolated drift applied: id/class changed");
         });
+
+        document.getElementById("apply-text-drift").addEventListener("click", () => {
+            resetDrift();
+            const target = currentDriftTarget();
+            target.textContent = "Publish Changes";
+            target.setAttribute("aria-label", "Publish changed settings");
+            writeLog("isolated drift applied: text/label changed");
+        });
+
+        document.getElementById("apply-layout-drift").addEventListener("click", () => {
+            resetDrift();
+            const target = currentDriftTarget();
+            target.closest(".card").append(target);
+            writeLog("isolated drift applied: sibling order changed");
+        });
+
+        document.getElementById("apply-container-drift").addEventListener("click", () => {
+            resetDrift();
+            document.getElementById("drift-destination-container").append(currentDriftTarget());
+            writeLog("isolated drift applied: target moved to destination container");
+        });
+
+        document.getElementById("apply-weak-replacement").addEventListener("click", () => {
+            resetDrift();
+            currentDriftTarget().remove();
+            const replacement = document.createElement("button");
+            replacement.type = "button";
+            replacement.dataset.weakLookalike = "publish-settings";
+            replacement.setAttribute("aria-label", "Publish settings");
+            replacement.textContent = "Publish Settings";
+            document.getElementById("drift-destination-container").append(replacement);
+            writeLog("weak lookalike replacement created without stable locator evidence");
+        });
+
+        document.getElementById("reset-drift").addEventListener("click", resetDrift);
+
+        document.addEventListener("click", (event) => {
+            if (event.target.matches("[data-testid='publish-settings'], [data-weak-lookalike='publish-settings']")) {
+                writeLog("drift target clicked");
+            }
+        });
+
+        const ambiguityInitialMarkup = `
+            <button id="ambiguity-target" class="account-review-action" data-testid="ambiguity-target" aria-label="Review account" type="button">Review Account</button>
+        `;
+
+        function resetAmbiguity() {
+            document.getElementById("ambiguity-candidates").innerHTML = ambiguityInitialMarkup;
+            writeLog("ambiguity fixture reset to one unique target");
+        }
+
+        document.getElementById("remove-primary-locator").addEventListener("click", () => {
+            const target = document.querySelector("#ambiguity-candidates .account-review-action");
+            target.removeAttribute("id");
+            target.removeAttribute("data-testid");
+            writeLog("ambiguity target primary id/test locator removed");
+        });
+
+        document.getElementById("add-equal-duplicate").addEventListener("click", () => {
+            const container = document.getElementById("ambiguity-candidates");
+            const target = container.querySelector(".account-review-action");
+            target.removeAttribute("id");
+            target.removeAttribute("data-testid");
+            const duplicate = target.cloneNode(true);
+            duplicate.dataset.equalDuplicate = "true";
+            container.append(duplicate);
+            writeLog("equal ambiguity candidate added");
+        });
+
+        document.getElementById("add-close-candidate").addEventListener("click", () => {
+            document.getElementById("ambiguity-candidates").innerHTML = `
+                <button class="account-review-action close-score-candidate" data-close-candidate="details" aria-label="Review account details" type="button">Review Account Details</button>
+                <button class="account-review-action close-score-candidate" data-close-candidate="settings" aria-label="Review account settings" type="button">Review Account Settings</button>
+            `;
+            writeLog("close-score ambiguity pair replaced the original target");
+        });
+
+        document.getElementById("reset-ambiguity").addEventListener("click", resetAmbiguity);
 
         document.getElementById("start-mutations").addEventListener("click", () => {
             if (mutationTimer) return;
@@ -204,8 +425,12 @@
 
         class ShadowMapperCard extends HTMLElement {
             connectedCallback() {
-                const root = this.attachShadow({ mode: "open" });
-                root.innerHTML = `
+                if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+                this.render(false);
+            }
+
+            render(drifted) {
+                this.shadowRoot.innerHTML = `
                     <style>
                         .panel { display: grid; gap: 10px; padding: 14px; border: 1px solid #b8c2d6; border-radius: 8px; background: #f8fafc; }
                         label { display: grid; gap: 5px; font-weight: 650; }
@@ -216,16 +441,103 @@
                             Shadow token
                             <input id="shadow-token" name="shadow_token" aria-label="Shadow token" data-testid="shadow-token" placeholder="token">
                         </label>
-                        <button id="shadow-save" name="shadow_save" aria-label="Save shadow token" data-testid="shadow-save" type="button">Save Shadow</button>
+                        <button id="${drifted ? "shadow-save-renamed" : "shadow-save"}" name="shadow_save" aria-label="${drifted ? "Store shadow value" : "Save shadow token"}" data-testid="shadow-save" type="button">${drifted ? "Store Shadow" : "Save Shadow"}</button>
                     </div>
                 `;
-                root.getElementById("shadow-save").addEventListener("click", () => {
+                const button = this.shadowRoot.querySelector("[data-testid='shadow-save']");
+                if (drifted) this.shadowRoot.querySelector(".panel").prepend(button);
+                button.addEventListener("click", () => {
                     writeLog("shadow_save clicked");
                 });
+            }
+
+            applyDrift() {
+                this.render(true);
+            }
+
+            resetDrift() {
+                this.render(false);
             }
         }
 
         customElements.define("shadow-mapper-card", ShadowMapperCard);
+
+        customElements.define("closed-shadow-mapper-card", class extends HTMLElement {
+            connectedCallback() {
+                const root = this.attachShadow({ mode: "closed" });
+                root.innerHTML = `
+                    <style>
+                        button { min-height: 38px; padding: 8px 10px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; font: inherit; }
+                    </style>
+                    <button id="closed-shadow-action" data-testid="closed-shadow-action" type="button">Closed Shadow Action</button>
+                `;
+            }
+        });
+
+        document.getElementById("apply-shadow-host-drift").addEventListener("click", () => {
+            const host = document.getElementById("shadow-card");
+            host.id = "shadow-card-renamed";
+            host.className = "renamed-shadow-host";
+            writeLog("open shadow host drift applied: host id/class changed");
+        });
+
+        document.getElementById("apply-shadow-child-drift").addEventListener("click", () => {
+            document.querySelector("shadow-mapper-card").applyDrift();
+            writeLog("open shadow child drift applied: id/text/order changed inside host path");
+        });
+
+        document.getElementById("reset-shadow-drift").addEventListener("click", () => {
+            const host = document.querySelector("shadow-mapper-card");
+            host.id = "shadow-card";
+            host.className = "";
+            host.resetDrift();
+            writeLog("open shadow drift reset");
+        });
+
+        const spaFixtureBasePath = "/BRunner_Host/mapper_test.html";
+
+        function activeSpaRoute() {
+            return new URL(location.href).searchParams.get("route") === "billing"
+                ? "billing"
+                : "account";
+        }
+
+        function renderSpaRoute() {
+            const route = activeSpaRoute();
+            const view = document.getElementById("spa-route-view");
+            view.dataset.activeRoute = route;
+            view.innerHTML = `
+                <article class="route-card" data-testid="spa-route-${route}" data-route-scope="${route}" aria-label="${route} SPA route">
+                    <strong>${route === "account" ? "Account Route A" : "Billing Route B"}</strong>
+                    <p>Route-scoped content for ${route}.</p>
+                    <button id="spa-route-primary" data-testid="spa-${route}-save" aria-label="Save route item" type="button">Save Route Item</button>
+                </article>
+            `;
+            writeLog(`spa route rendered url=${location.pathname}${location.search} route=${route}`);
+        }
+
+        function navigateSpaRoute(route) {
+            const url = new URL(spaFixtureBasePath, location.origin);
+            url.searchParams.set("route", route);
+            history.pushState({ mapperFixtureRoute: route }, "", `${url.pathname}${url.search}`);
+            renderSpaRoute();
+        }
+
+        document.getElementById("spa-route-a").addEventListener("click", () => navigateSpaRoute("account"));
+        document.getElementById("spa-route-b").addEventListener("click", () => navigateSpaRoute("billing"));
+        document.getElementById("spa-route-back").addEventListener("click", () => history.back());
+        document.getElementById("spa-route-forward").addEventListener("click", () => history.forward());
+        document.getElementById("spa-route-reset").addEventListener("click", () => {
+            history.pushState({ mapperFixtureRoute: "reset" }, "", spaFixtureBasePath);
+            renderSpaRoute();
+        });
+        window.addEventListener("popstate", renderSpaRoute);
+        document.getElementById("spa-route-view").addEventListener("click", (event) => {
+            if (event.target.matches("#spa-route-primary")) {
+                writeLog(`spa primary clicked route=${activeSpaRoute()}`);
+            }
+        });
+        renderSpaRoute();
     </script>
 </body>
 </html>

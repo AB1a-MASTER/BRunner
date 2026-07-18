@@ -1,4 +1,6 @@
 Workflows/*.json
+!Workflows/extension_host_roundtrip_verification.json
+!Workflows/approved_directory_escape_acceptance.json
 AllowedFiles/
 Logs/
 build/

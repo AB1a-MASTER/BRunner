@@ -18,20 +18,27 @@ class LocalFileAccessTests(unittest.TestCase):
         self.allowed = self.base_dir / "allowed"
         self.allowed.mkdir()
         self.config = {
-            "local_file_access": {
-                "enabled": True,
-                "allowed_roots": [str(self.allowed)],
-            }
+            "approvedDirectories": [{
+                "id": "allowed",
+                "path": str(self.allowed),
+                "read": True,
+                "write": False,
+                "recursive": True,
+            }]
         }
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_reads_allowed_file_without_returning_path(self):
+    def test_reads_approved_file_without_returning_path(self):
         file_path = self.allowed / "sample.txt"
         file_path.write_text("BRunner", encoding="utf-8")
 
-        result = read_allowed_file(self.config, self.base_dir, file_path)
+        result = read_allowed_file(
+            self.config,
+            self.base_dir,
+            {"directoryAlias": "allowed", "relativePath": "sample.txt"},
+        )
 
         self.assertEqual(result["filename"], "sample.txt")
         self.assertEqual(result["mimeType"], "text/plain")
@@ -39,23 +46,34 @@ class LocalFileAccessTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(result["content"]), b"BRunner")
         self.assertNotIn("path", result)
 
-    def test_disabled_access_fails(self):
+    def test_read_permission_is_required(self):
         config = {
-            "local_file_access": {
-                "enabled": False,
-                "allowed_roots": [str(self.allowed)],
-            }
+            "approvedDirectories": [{
+                "id": "allowed",
+                "path": str(self.allowed),
+                "read": False,
+                "recursive": True,
+            }]
         }
+        (self.allowed / "sample.txt").write_text("blocked", encoding="utf-8")
 
-        with self.assertRaisesRegex(LocalFileAccessError, "disabled"):
-            read_allowed_file(config, self.base_dir, "sample.txt")
+        with self.assertRaisesRegex(LocalFileAccessError, "does not allow reads"):
+            read_allowed_file(
+                config,
+                self.base_dir,
+                {"directoryAlias": "allowed", "relativePath": "sample.txt"},
+            )
 
     def test_file_outside_allowed_roots_fails(self):
         outside = self.base_dir / "outside.txt"
         outside.write_text("blocked", encoding="utf-8")
 
-        with self.assertRaisesRegex(LocalFileAccessError, "outside allowed roots"):
-            read_allowed_file(self.config, self.base_dir, outside)
+        with self.assertRaisesRegex(LocalFileAccessError, "outside approved"):
+            read_allowed_file(
+                self.config,
+                self.base_dir,
+                {"directoryAlias": "allowed", "relativePath": "../outside.txt"},
+            )
 
     def test_oversized_file_fails(self):
         file_path = self.allowed / "large.bin"
@@ -65,9 +83,37 @@ class LocalFileAccessTests(unittest.TestCase):
             read_allowed_file(
                 self.config,
                 self.base_dir,
-                file_path,
+                {"directoryAlias": "allowed", "relativePath": "large.bin"},
                 max_bytes=3,
             )
+
+    def test_provisional_raw_path_honors_explicit_approved_directory_policy(self):
+        file_path = self.allowed / "sample.txt"
+        file_path.write_text("BRunner", encoding="utf-8")
+
+        result = read_allowed_file(self.config, self.base_dir, file_path)
+        self.assertEqual(base64.b64decode(result["content"]), b"BRunner")
+
+        blocked = {
+            "approvedDirectories": [{
+                **self.config["approvedDirectories"][0],
+                "read": False,
+            }],
+        }
+        with self.assertRaisesRegex(LocalFileAccessError, "does not allow reads"):
+            read_allowed_file(blocked, self.base_dir, file_path)
+
+        for request in (
+            {"path": str(file_path)},
+            {"alias": "allowed", "path": "sample.txt"},
+            {"directoryAlias": "allowed", "path": "sample.txt"},
+        ):
+            with self.subTest(request=request):
+                with self.assertRaisesRegex(
+                    LocalFileAccessError,
+                    "requires directoryAlias and relativePath",
+                ):
+                    read_allowed_file(self.config, self.base_dir, request)
 
     def test_reads_file_from_approved_directory_alias(self):
         file_path = self.allowed / "alias.txt"

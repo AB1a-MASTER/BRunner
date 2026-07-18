@@ -79,7 +79,7 @@ export async function captureScreenshot(tab, config = {}, adapter = {}) {
     throw new ScreenshotCaptureError(
       "Visible-tab screenshot capture failed.",
       "screenshot_capture_failed",
-      { platformReason: sanitizePlatformError(error) },
+      { platformReason: formatPlatformError(error) },
     );
   }
 
@@ -163,8 +163,6 @@ function getBase64ByteLength(base64) {
   return Math.floor((compact.length * 3) / 4) - padding;
 }
 
-function sanitizePlatformError(error) {
-  return String(error?.message || error || "")
-    .replace(/(?:https?|file|chrome|edge|about):\/\/\S+/gi, "[REDACTED URL]")
-    .slice(0, 200);
+function formatPlatformError(error) {
+  return String(error?.message || error || "").slice(0, 200);
 }

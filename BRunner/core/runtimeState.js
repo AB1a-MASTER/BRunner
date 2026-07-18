@@ -7,9 +7,8 @@ import {
   createExecutionLogEntry,
 } from "./executionLog.js";
 
-export function createRuntimeStateStore() {
-  let executionLogSequence = 0;
-  let state = {
+export function createDefaultRuntimeState() {
+  return {
     recording: {
       isRecording: false,
       sessionId: "",
@@ -36,12 +35,26 @@ export function createRuntimeStateStore() {
       logs: [],
     },
   };
+}
+
+export function createRuntimeStateStore({
+  initialState = null,
+  onStateChanged = null,
+} = {}) {
+  let state = normalizeRuntimeState(initialState);
+  let executionLogSequence = getHighestExecutionLogSequence(
+    state.execution.logs,
+  );
 
   function getState() {
-    return {
-      recording: { ...state.recording },
-      execution: { ...state.execution },
-    };
+    return structuredClone(state);
+  }
+
+  function replaceState(nextState = {}) {
+    state = normalizeRuntimeState(nextState);
+    executionLogSequence = getHighestExecutionLogSequence(state.execution.logs);
+    notifyChanged();
+    return getState();
   }
 
   function updateRecording(recording = {}) {
@@ -59,7 +72,7 @@ export function createRuntimeStateStore() {
         : Number(recording.recordedStepCount || 0),
     };
 
-    broadcast();
+    notifyChanged();
     return getState();
   }
 
@@ -72,7 +85,7 @@ export function createRuntimeStateStore() {
       ...patch,
     };
 
-    broadcast();
+    notifyChanged();
     return getState();
   }
 
@@ -87,7 +100,7 @@ export function createRuntimeStateStore() {
       ...patch,
       logs: appendBoundedExecutionLog(state.execution.logs, entry),
     };
-    broadcast();
+    notifyChanged();
     return entry;
   }
 
@@ -97,7 +110,7 @@ export function createRuntimeStateStore() {
       ...state.execution,
       logs: [],
     };
-    broadcast();
+    notifyChanged();
     return getState();
   }
 
@@ -109,17 +122,23 @@ export function createRuntimeStateStore() {
     return state.recording.isRecording;
   }
 
-  function broadcast() {
-    chrome.runtime
+  function notifyChanged() {
+    const snapshot = getState();
+    if (typeof onStateChanged === "function") {
+      Promise.resolve(onStateChanged(snapshot)).catch(() => {});
+    }
+
+    globalThis.chrome?.runtime
       .sendMessage({
         type: Messages.RuntimeStateChanged,
-        state: getState(),
+        state: snapshot,
       })
       .catch(() => {});
   }
 
   return {
     getState,
+    replaceState,
     updateRecording,
     updateExecution,
     appendExecutionLog,
@@ -127,4 +146,44 @@ export function createRuntimeStateStore() {
     isRunning,
     isRecording,
   };
+}
+
+function normalizeRuntimeState(input = {}) {
+  const defaults = createDefaultRuntimeState();
+  const recordedSteps = Array.isArray(input?.recording?.recordedSteps)
+    ? structuredClone(input.recording.recordedSteps)
+    : [];
+  return {
+    recording: {
+      ...defaults.recording,
+      ...(input?.recording || {}),
+      isRecording: Boolean(input?.recording?.isRecording),
+      sessionId: String(input?.recording?.sessionId || ""),
+      recordedSteps,
+      recordedStepCount: recordedSteps.length,
+    },
+    execution: {
+      ...defaults.execution,
+      ...(input?.execution || {}),
+      logs: Array.isArray(input?.execution?.logs)
+        ? structuredClone(input.execution.logs)
+        : [],
+      variables: Array.isArray(input?.execution?.variables)
+        ? structuredClone(input.execution.variables)
+        : [],
+      completedNodeIds: normalizeStringArray(input?.execution?.completedNodeIds),
+      skippedNodeIds: normalizeStringArray(input?.execution?.skippedNodeIds),
+      unresolvedNodeIds: normalizeStringArray(input?.execution?.unresolvedNodeIds),
+    },
+  };
+}
+
+function normalizeStringArray(value) {
+  return Array.isArray(value) ? value.map((item) => String(item)) : [];
+}
+
+function getHighestExecutionLogSequence(logs) {
+  return logs.reduce((maximum, entry) => {
+    return Math.max(maximum, Number(entry?.sequence) || 0);
+  }, 0);
 }

@@ -1,5 +1,5 @@
 BRunner - Current Development Handoff
-Updated: 2026-07-13
+Updated: 2026-07-17
 
 PURPOSE
 
@@ -31,28 +31,30 @@ TRUST AND DATA BOUNDARY
   real passwords, tokens, payment data, private messages, or confidential files.
 - The companion target is a cooperative one-profile host lock using a stable,
   non-secret per-profile instance ID. There is no pairing key or authentication
-  claim. Transitional key-based source remains to be replaced.
+  claim. The source pairing flow and single-active-connection lock are now
+  covered by real loopback WebSocket contract tests.
 - Do not describe the current pairing flow as a security boundary.
 
 CURRENT PRIORITY
 
-Mapper engine and reliability closure is the active milestone.
+Shared, companion, and mapper source closure is implemented. The extension/host
+round trip passed with `extension-host-roundtrip.txt |
+extension-host-roundtrip.txt | 1`. The active gate now contains only hands-on
+Companion/extension acceptance before the finalized node phase.
+
+The latest automated source gate passes 279 JavaScript tests and 175 Python
+tests. These results do not replace the hands-on acceptance below.
 
 Focus on:
 
-1. workflow/page-scoped component identity;
-2. deterministic primary-first resolution;
-3. strict uniqueness and ambiguity refusal;
-4. stable reconciliation under verified page drift;
-5. node-neutral structured resolution outcomes that later finalized nodes can
-   route without guessing;
-6. static-map reliability alongside bounded dynamic content;
-7. verified open Shadow DOM and extension-accessible frame behavior within
-   supported fixtures;
-8. concurrent-safe, revisioned mapper persistence with bounded large-page and
-   quota behavior;
-9. deterministic tests and focused live extension acceptance using synthetic
-   repository fixtures.
+1. running the remaining Companion UI checks for lifecycle/tray behavior,
+   two-profile pairing, visible storage/approved-folder state, visible fallback,
+   and unwritable-path recovery;
+2. reloading the unpacked extension and completing every live mapper fixture
+   check in `docs/MAPPER_MANUAL_ACCEPTANCE.md`;
+3. recording any failure against the shared foundation, companion, or mapper
+   engine without retrofitting provisional nodes;
+4. starting the finalized node program only after those gates pass.
 
 The existing Mapper Inspector is an engineering diagnostic surface for this
 work. Do not spend the current milestone polishing it into a final saved-map
@@ -61,25 +63,18 @@ and visual design are deferred to V2.
 
 CURRENT TODO SEQUENCE
 
-1. Remove disposable generated package/build output and add ignore rules.
-2. Replace transitional pairing keys with the cooperative profile-instance
-   lock and close companion foundation TODOs.
-3. Remove mapper sensitive-site/redaction policy code; leave provisional
-   node-specific masking for replacement during the finalized node phase.
-4. Diagnose and close mapper-engine reliability gaps through the node-neutral
-   mapper API.
-5. Run focused mapper deterministic tests and live fixture acceptance.
-6. Treat nonessential Inspector/saved-map visual work as deferred V2 work.
-7. Close generic Studio save/draft integrity and node-neutral MV3
-   restart/rehydration work from `docs/FOUNDATION_TODO_STATUS.md`.
-8. After the shared, companion, and mapper foundation gates pass, begin the final node program from
-   `workflow_nodes_implementation_blueprint.md`.
-9. At node-phase start, process every blueprint node and record whether its work
+1. Run the manual companion source checklist.
+2. Run the complete live mapper fixture checklist after reloading the extension.
+3. Fix and retest any shared-foundation, companion, or mapper failure.
+4. Treat nonessential Inspector/saved-map visual work as deferred V2 work.
+5. After the shared, companion, and mapper foundation gates pass, begin the
+   final node program from `workflow_nodes_implementation_blueprint.md`.
+6. At node-phase start, process every blueprint node and record whether its work
    is upgrade, rewrite/change, or add; remove provisional nodes absent from the
    blueprint.
-10. Implement nodes in blueprint order and complete integrated V1 source
+7. Implement nodes in blueprint order and complete integrated V1 source
    acceptance.
-11. Ask the user before any V2 viewer, product-boundary change, packaging,
+8. Ask the user before any V2 viewer, product-boundary change, packaging,
    installer, or release milestone.
 
 NODE CATALOG RULE
@@ -121,9 +116,10 @@ active mapper milestone:
 - current provisional browser, element, wait, data, file, clipboard, download,
   screenshot, and host-backed actions;
 - Windows companion source for workflow storage, approved folders, diagnostics,
-  transitional pairing/connection plumbing, and visible fallback foundations;
+  cooperative profile pairing/connection exclusivity, and visible fallback;
 - mapper core/coordinator/store, component identities, reconciliation,
-  diagnostics, fixtures, and the engineering Inspector.
+  diagnostics, complete operator fixtures, route-safe Inspector resolution, and
+  bounded transactional Chrome-storage persistence.
 
 This list records existing source, not final product acceptance. Do not infer
 that the mapper, viewer, node catalog, security posture, or release is complete.

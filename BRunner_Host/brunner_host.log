@@ -1,1056 +1,486 @@
-2026-07-01 23:25:26,509 [INFO] ========================================
-2026-07-01 23:25:26,509 [INFO]  BRunner Native OS Host Started
-2026-07-01 23:25:26,509 [INFO]  Listening on ws://localhost:8999
-2026-07-01 23:25:26,509 [INFO] ========================================
-2026-07-01 23:25:26,509 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-01 23:25:26,509 [INFO] ========================================
-2026-07-01 23:25:26,556 [INFO] server listening on [::1]:8999
-2026-07-01 23:25:26,556 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 18:32:50,286 [INFO] [Companion] Host start requested.
-2026-07-02 18:32:52,150 [INFO] ========================================
-2026-07-02 18:32:52,151 [INFO]  BRunner Native OS Host Started
-2026-07-02 18:32:52,152 [INFO]  Listening on ws://localhost:8999
-2026-07-02 18:32:52,152 [INFO] ========================================
-2026-07-02 18:32:52,152 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 18:32:52,153 [INFO] ========================================
-2026-07-02 18:32:52,345 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 18:32:52,345 [INFO] server listening on [::1]:8999
-2026-07-02 18:33:06,241 [INFO] connection open
-2026-07-02 18:33:06,241 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:33:06,268 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:33:06,269 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:33:12,561 [INFO] connection closed
-2026-07-02 18:33:12,890 [INFO] connection open
-2026-07-02 18:33:12,890 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:33:12,908 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:33:12,908 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:33:14,512 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 18:33:15,816 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-02 18:33:15,824 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:33:15,929 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-02 18:33:21,217 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 4
-2026-07-02 18:33:21,220 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:33:21,232 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 5
-2026-07-02 18:33:21,248 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 6
-2026-07-02 18:33:47,095 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
-2026-07-02 18:33:52,513 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 8
-2026-07-02 18:33:52,514 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:33:52,523 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 9
-2026-07-02 18:33:52,531 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
-2026-07-02 18:33:56,942 [INFO] [Inbound] Command: READ_FILE | Request ID: 11
-2026-07-02 18:33:57,075 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 18:34:57,989 [INFO] [Inbound] Command: READ_FILE | Request ID: 12
-2026-07-02 18:34:57,994 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 18:35:07,304 [INFO] [Inbound] Command: READ_FILE | Request ID: 13
-2026-07-02 18:35:07,318 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 18:35:52,314 [INFO] connection closed
-2026-07-02 18:36:07,749 [INFO] connection open
-2026-07-02 18:36:07,749 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:36:07,752 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:36:07,753 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:38:06,870 [INFO] connection closed
-2026-07-02 18:42:41,908 [INFO] [Companion] Host start requested.
-2026-07-02 18:42:43,265 [INFO] ========================================
-2026-07-02 18:42:43,265 [INFO]  BRunner Native OS Host Started
-2026-07-02 18:42:43,265 [INFO]  Listening on ws://localhost:8999
-2026-07-02 18:42:43,266 [INFO] ========================================
-2026-07-02 18:42:43,266 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 18:42:43,266 [INFO] ========================================
-2026-07-02 18:42:43,340 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 18:42:43,341 [INFO] server listening on [::1]:8999
-2026-07-02 18:42:51,306 [INFO] connection open
-2026-07-02 18:42:51,306 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:42:51,311 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:42:51,312 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:42:51,316 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 18:42:57,444 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-02 18:42:57,447 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:42:57,521 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-02 18:42:57,543 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 18:43:02,878 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 18:43:06,005 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-02 18:43:06,989 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
-2026-07-02 18:43:11,397 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 8
-2026-07-02 18:43:11,400 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:43:11,411 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 9
-2026-07-02 18:43:11,423 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 10
-2026-07-02 18:43:11,434 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 11
-2026-07-02 18:43:14,959 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 12
-2026-07-02 18:43:31,308 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 13
-2026-07-02 18:43:31,310 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:43:31,320 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 14
-2026-07-02 18:43:31,329 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 15
-2026-07-02 18:43:44,082 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:43:44,084 [INFO] connection closed
-2026-07-02 18:43:44,250 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:43:44,251 [INFO] connection closed
-2026-07-02 18:43:45,793 [INFO] [Inbound] Command: READ_FILE | Request ID: 16
-2026-07-02 18:43:45,939 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 18:44:00,903 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 17
-2026-07-02 18:44:00,916 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 18
-2026-07-02 18:44:02,320 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 19
-2026-07-02 18:44:11,912 [INFO] [Inbound] Command: SAVE_WORKFLOW | Request ID: 20
-2026-07-02 18:44:11,922 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 21
-2026-07-02 18:44:13,024 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 22
-2026-07-02 18:44:32,546 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:44:32,547 [INFO] connection closed
-2026-07-02 18:44:32,726 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:44:32,727 [INFO] connection closed
-2026-07-02 18:44:32,753 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:44:32,755 [INFO] connection closed
-2026-07-02 18:44:32,805 [INFO] connection rejected (426 Upgrade Required)
-2026-07-02 18:44:32,806 [INFO] connection closed
-2026-07-02 18:44:34,367 [INFO] [Inbound] Command: READ_FILE | Request ID: 23
-2026-07-02 18:44:34,371 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 18:45:12,646 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 24
-2026-07-02 18:45:12,648 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:45:12,657 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 25
-2026-07-02 18:45:12,667 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 26
-2026-07-02 18:45:12,709 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 27
-2026-07-02 18:47:38,482 [INFO] connection closed
-2026-07-02 18:48:37,184 [INFO] connection open
-2026-07-02 18:48:37,184 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:48:37,186 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:48:37,187 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:51:28,807 [INFO] connection closed
-2026-07-02 18:51:52,225 [INFO] server closing
-2026-07-02 18:51:52,227 [INFO] server closed
-2026-07-02 18:54:38,734 [INFO] [Companion] Host start requested.
-2026-07-02 18:54:40,018 [INFO] ========================================
-2026-07-02 18:54:40,019 [INFO]  BRunner Native OS Host Started
-2026-07-02 18:54:40,020 [INFO]  Listening on ws://localhost:8999
-2026-07-02 18:54:40,020 [INFO] ========================================
-2026-07-02 18:54:40,020 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 18:54:40,021 [INFO] ========================================
-2026-07-02 18:54:40,107 [INFO] server listening on [::1]:8999
-2026-07-02 18:54:40,108 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 18:54:44,599 [INFO] connection open
-2026-07-02 18:54:44,599 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:54:44,601 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:54:44,602 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:54:45,798 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 1
-2026-07-02 18:54:45,802 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:54:45,808 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-02 18:54:45,815 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 18:54:45,818 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 4
-2026-07-02 18:54:50,870 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 18:54:54,142 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 6
-2026-07-02 18:54:54,144 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 18:54:54,149 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
-2026-07-02 18:54:54,156 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 8
-2026-07-02 18:55:04,390 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 9
-2026-07-02 18:55:07,886 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
-2026-07-02 18:55:39,531 [INFO] connection closed
-2026-07-02 18:56:04,603 [INFO] connection open
-2026-07-02 18:56:04,604 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:56:04,605 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:56:04,606 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:56:39,497 [INFO] connection closed
-2026-07-02 18:57:19,107 [INFO] connection open
-2026-07-02 18:57:19,108 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:57:19,115 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:57:19,115 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:58:15,591 [INFO] connection closed
-2026-07-02 18:58:30,156 [INFO] connection open
-2026-07-02 18:58:30,157 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:58:30,158 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:58:30,159 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 18:58:35,847 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 18:58:41,375 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 18:59:29,536 [INFO] connection closed
-2026-07-02 18:59:30,375 [INFO] connection open
-2026-07-02 18:59:30,375 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 18:59:30,376 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 18:59:30,377 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:00:04,061 [INFO] connection closed
-2026-07-02 19:00:37,736 [INFO] connection open
-2026-07-02 19:00:37,736 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:00:37,755 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:00:37,756 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:01:48,964 [INFO] connection closed
-2026-07-02 19:02:17,082 [INFO] connection open
-2026-07-02 19:02:17,082 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:02:17,086 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:02:17,087 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:03:29,563 [INFO] connection closed
-2026-07-02 19:03:29,811 [INFO] connection open
-2026-07-02 19:03:29,812 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:03:29,823 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:03:29,824 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:03:34,087 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 19:03:38,367 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 19:03:42,539 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
-2026-07-02 19:03:42,541 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 19:03:42,604 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
-2026-07-02 19:03:42,640 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 19:04:12,686 [INFO] connection closed
-2026-07-02 19:11:41,159 [INFO] [Companion] Host start requested.
-2026-07-02 19:11:42,924 [INFO] ========================================
-2026-07-02 19:11:42,926 [INFO]  BRunner Native OS Host Started
-2026-07-02 19:11:42,926 [INFO]  Listening on ws://localhost:8999
-2026-07-02 19:11:42,927 [INFO] ========================================
-2026-07-02 19:11:42,927 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 19:11:42,927 [INFO] ========================================
-2026-07-02 19:11:43,024 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 19:11:43,025 [INFO] server listening on [::1]:8999
-2026-07-02 19:11:43,435 [INFO] connection open
-2026-07-02 19:11:43,436 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:11:43,438 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:11:43,438 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:11:43,462 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-02 19:11:47,070 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 19:12:30,527 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 19:13:26,030 [INFO] connection closed
-2026-07-02 19:13:36,135 [INFO] connection open
-2026-07-02 19:13:36,135 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:13:36,135 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:13:36,135 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:14:06,150 [INFO] connection closed
-2026-07-02 19:14:26,967 [INFO] connection open
-2026-07-02 19:14:26,980 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:14:26,981 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:14:26,982 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:14:27,081 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 19:14:30,479 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 19:15:06,432 [INFO] connection closed
-2026-07-02 19:16:25,795 [INFO] connection open
-2026-07-02 19:16:25,796 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:16:25,798 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:16:25,798 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:16:30,368 [INFO] connection closed
-2026-07-02 19:16:30,599 [INFO] connection open
-2026-07-02 19:16:30,599 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:16:30,599 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:16:30,599 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:16:33,975 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 19:16:37,240 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 19:16:49,212 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
-2026-07-02 19:16:49,214 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 19:16:49,235 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
-2026-07-02 19:16:49,345 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 19:17:00,205 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-02 19:17:54,986 [INFO] connection closed
-2026-07-02 19:19:14,654 [INFO] connection open
-2026-07-02 19:19:14,658 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:19:14,659 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:19:14,659 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:19:14,757 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 1
-2026-07-02 19:19:17,673 [INFO] [Inbound] Command: READ_FILE | Request ID: 2
-2026-07-02 19:19:17,789 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 19:19:48,463 [INFO] connection closed
-2026-07-02 19:19:50,727 [INFO] connection open
-2026-07-02 19:19:50,727 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:19:50,729 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:19:50,730 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:19:54,243 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 19:19:55,188 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-02 19:19:55,190 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 19:19:55,207 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-02 19:19:55,225 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 19:20:05,646 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 19:20:09,421 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-02 19:20:10,487 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
-2026-07-02 19:20:20,525 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 8
-2026-07-02 19:20:33,229 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 9
-2026-07-02 19:21:07,444 [INFO] connection closed
-2026-07-02 19:55:43,327 [INFO] [Companion] Host start requested.
-2026-07-02 19:55:44,566 [INFO] ========================================
-2026-07-02 19:55:44,566 [INFO]  BRunner Native OS Host Started
-2026-07-02 19:55:44,566 [INFO]  Listening on ws://localhost:8999
-2026-07-02 19:55:44,566 [INFO] ========================================
-2026-07-02 19:55:44,567 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 19:55:44,567 [INFO] ========================================
-2026-07-02 19:55:44,634 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 19:55:44,635 [INFO] server listening on [::1]:8999
-2026-07-02 19:55:46,145 [INFO] connection open
-2026-07-02 19:55:46,146 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:55:46,147 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:55:46,148 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:55:46,255 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-02 19:55:50,902 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 19:56:26,848 [INFO] connection closed
-2026-07-02 19:57:27,941 [INFO] connection open
-2026-07-02 19:57:27,941 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 19:57:27,943 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 19:57:27,943 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 19:57:30,263 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 1
-2026-07-02 19:57:52,222 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 19:58:13,109 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 19:58:28,254 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 19:58:29,494 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-02 19:58:42,605 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-02 19:58:45,511 [INFO] [Inbound] Command: READ_FILE | Request ID: 7
-2026-07-02 19:58:45,650 [INFO] [File] Read approved local file: name=local-upload-acceptance.txt size=35
-2026-07-02 19:58:49,551 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 8
-2026-07-02 19:59:00,799 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 9
-2026-07-02 19:59:13,685 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
-2026-07-02 19:59:14,557 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 11
-2026-07-02 19:59:15,342 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 12
-2026-07-02 19:59:33,069 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 13
-2026-07-02 19:59:33,941 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 14
-2026-07-02 19:59:34,638 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 15
-2026-07-02 19:59:35,973 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 16
-2026-07-02 19:59:37,310 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 17
-2026-07-02 19:59:41,579 [INFO] [Inbound] Command: v2:host.window | Request ID: 18
-2026-07-02 19:59:41,581 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 19:59:41,582 [INFO] [Inbound] Command: v2:host.action | Request ID: 19
-2026-07-02 19:59:41,585 [WARNING] [Fallback] v2:host.action refused: Invalid coordinate confidence.
-2026-07-02 20:00:36,141 [INFO] connection closed
-2026-07-02 20:08:20,079 [INFO] connection open
-2026-07-02 20:08:20,080 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:08:20,082 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:08:20,084 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:08:21,337 [INFO] connection closed
-2026-07-02 20:08:21,700 [INFO] connection open
-2026-07-02 20:08:21,700 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:08:21,708 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:08:21,708 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:08:26,170 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 20:08:27,019 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-02 20:08:27,021 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 20:08:27,117 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-02 20:08:27,129 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 20:08:31,853 [INFO] [Inbound] Command: v2:host.window | Request ID: 5
-2026-07-02 20:08:31,853 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:08:31,853 [INFO] [Inbound] Command: v2:host.action | Request ID: 6
-2026-07-02 20:08:31,853 [WARNING] [Fallback] v2:host.action refused: Invalid coordinate confidence.
-2026-07-02 20:09:05,804 [INFO] connection closed
-2026-07-02 20:09:09,108 [INFO] connection open
-2026-07-02 20:09:09,108 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:09:09,121 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:09:09,121 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:09:12,822 [INFO] connection closed
-2026-07-02 20:09:13,056 [INFO] connection open
-2026-07-02 20:09:13,056 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:09:13,073 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:09:13,074 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:09:14,932 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 20:09:15,746 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-02 20:09:15,749 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 20:09:15,824 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-02 20:09:15,849 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-02 20:09:19,203 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 5
-2026-07-02 20:09:21,239 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-02 20:09:24,404 [INFO] [Inbound] Command: v2:host.window | Request ID: 7
-2026-07-02 20:09:24,404 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:09:24,404 [INFO] [Inbound] Command: v2:host.action | Request ID: 8
-2026-07-02 20:09:24,404 [WARNING] [Fallback] v2:host.action refused: Invalid coordinate confidence.
-2026-07-02 20:09:54,426 [INFO] connection closed
-2026-07-02 20:10:59,019 [INFO] [Companion] Host start requested.
-2026-07-02 20:11:00,239 [INFO] ========================================
-2026-07-02 20:11:00,240 [INFO]  BRunner Native OS Host Started
-2026-07-02 20:11:00,240 [INFO]  Listening on ws://localhost:8999
-2026-07-02 20:11:00,240 [INFO] ========================================
-2026-07-02 20:11:00,241 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 20:11:00,241 [INFO] ========================================
-2026-07-02 20:11:00,316 [INFO] server listening on [::1]:8999
-2026-07-02 20:11:00,317 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 20:11:03,418 [INFO] connection open
-2026-07-02 20:11:03,418 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:11:03,442 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:11:03,443 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:11:05,103 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 20:11:09,416 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 20:11:11,548 [INFO] [Inbound] Command: v2:host.window | Request ID: 3
-2026-07-02 20:11:11,548 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:11:11,548 [INFO] [Inbound] Command: v2:host.action | Request ID: 4
-2026-07-02 20:11:11,669 [INFO] [Fallback] host.action performed: click
-2026-07-02 20:11:29,159 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 5
-2026-07-02 20:11:29,163 [ERROR] [Command] HOST_HELLO failed: __main__.response() got multiple values for keyword argument 'status'
-2026-07-02 20:11:29,230 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 6
-2026-07-02 20:11:29,274 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
-2026-07-02 20:11:32,817 [INFO] [Inbound] Command: v2:host.window | Request ID: 8
-2026-07-02 20:11:32,817 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:11:32,817 [INFO] [Inbound] Command: v2:host.action | Request ID: 9
-2026-07-02 20:11:32,935 [INFO] [Fallback] host.action performed: click
-2026-07-02 20:12:09,077 [INFO] connection closed
-2026-07-02 20:19:14,503 [INFO] connection open
-2026-07-02 20:19:14,504 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:19:14,506 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:19:14,506 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:19:51,322 [INFO] connection closed
-2026-07-02 20:20:40,228 [INFO] [Companion] Host start requested.
-2026-07-02 20:20:41,729 [INFO] ========================================
-2026-07-02 20:20:41,729 [INFO]  BRunner Native OS Host Started
-2026-07-02 20:20:41,730 [INFO]  Listening on ws://localhost:8999
-2026-07-02 20:20:41,730 [INFO] ========================================
-2026-07-02 20:20:41,730 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 20:20:41,731 [INFO] ========================================
-2026-07-02 20:20:41,825 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 20:20:41,825 [INFO] server listening on [::1]:8999
-2026-07-02 20:20:44,794 [INFO] connection open
-2026-07-02 20:20:44,794 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:20:44,796 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:20:44,797 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:20:44,894 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-02 20:20:47,239 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 20:20:49,461 [INFO] [Inbound] Command: v2:host.window | Request ID: 4
-2026-07-02 20:20:49,469 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:20:49,471 [INFO] [Inbound] Command: v2:host.action | Request ID: 5
-2026-07-02 20:20:49,595 [INFO] [Fallback] host.action performed: click x=960.0 y=689.4375 confidence=0.92
-2026-07-02 20:21:20,325 [INFO] connection closed
-2026-07-02 20:22:27,134 [INFO] connection open
-2026-07-02 20:22:27,134 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:22:27,137 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:22:27,138 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:22:27,140 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 1
-2026-07-02 20:22:27,142 [INFO] [Protocol] host.hello returned 18 capabilities
-2026-07-02 20:22:27,149 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-02 20:22:27,156 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-02 20:23:07,085 [INFO] connection closed
-2026-07-02 20:23:21,768 [INFO] connection open
-2026-07-02 20:23:21,768 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:23:21,770 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:23:21,770 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:23:54,905 [INFO] [Inbound] Command: v2:host.window | Request ID: 1
-2026-07-02 20:23:54,905 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-02 20:23:54,905 [INFO] [Inbound] Command: v2:host.action | Request ID: 2
-2026-07-02 20:23:55,024 [INFO] [Fallback] host.action performed: click x=960.0 y=810.4375 confidence=0.92
-2026-07-02 20:24:25,571 [INFO] connection closed
-2026-07-02 20:38:54,567 [INFO] connection open
-2026-07-02 20:38:54,568 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:38:54,576 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:38:54,576 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:38:55,894 [INFO] connection closed
-2026-07-02 20:38:56,266 [INFO] connection open
-2026-07-02 20:38:56,266 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:38:56,284 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:38:56,285 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:39:12,874 [INFO] [Companion] Host start requested.
-2026-07-02 20:39:15,655 [INFO] ========================================
-2026-07-02 20:39:15,656 [INFO]  BRunner Native OS Host Started
-2026-07-02 20:39:15,657 [INFO]  Listening on ws://localhost:8999
-2026-07-02 20:39:15,658 [INFO] ========================================
-2026-07-02 20:39:15,658 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-02 20:39:15,658 [INFO] ========================================
-2026-07-02 20:39:15,783 [INFO] server listening on [::1]:8999
-2026-07-02 20:39:15,784 [INFO] server listening on 127.0.0.1:8999
-2026-07-02 20:39:18,245 [INFO] connection open
-2026-07-02 20:39:18,245 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 20:39:18,254 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 20:39:18,255 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 20:39:20,527 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-02 20:39:26,328 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-02 20:39:28,215 [INFO] [Inbound] Command: WRITE_APPROVED_FILE | Request ID: 3
-2026-07-02 20:39:28,388 [INFO] [Directory] Wrote approved file: alias=allowedfiles name=generated-write.txt size=31
-2026-07-02 20:39:28,936 [INFO] [Inbound] Command: EXPORT_DATA_FILE | Request ID: 4
-2026-07-02 20:39:28,948 [INFO] [Directory] Exported approved data: alias=allowedfiles name=exported-data.json format=json
-2026-07-02 20:39:29,484 [INFO] [Inbound] Command: FIND_APPROVED_FILES | Request ID: 5
-2026-07-02 20:39:29,492 [INFO] [Directory] Listed approved files: alias=allowedfiles count=1
-2026-07-02 20:40:00,674 [INFO] connection closed
-2026-07-02 22:30:36,816 [INFO] connection open
-2026-07-02 22:30:36,816 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-02 22:30:36,819 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-02 22:30:36,819 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-02 22:31:06,831 [INFO] connection closed
-2026-07-03 00:10:14,227 [INFO] [Companion] Host start requested.
-2026-07-03 00:10:15,327 [INFO] ========================================
-2026-07-03 00:10:15,327 [INFO]  BRunner Native OS Host Started
-2026-07-03 00:10:15,327 [INFO]  Listening on ws://localhost:8999
-2026-07-03 00:10:15,327 [INFO] ========================================
-2026-07-03 00:10:15,327 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-03 00:10:15,327 [INFO] ========================================
-2026-07-03 00:10:15,409 [INFO] server listening on [::1]:8999
-2026-07-03 00:10:15,409 [INFO] server listening on 127.0.0.1:8999
-2026-07-03 00:10:16,186 [INFO] connection open
-2026-07-03 00:10:16,186 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 00:10:16,188 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 00:10:16,190 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 00:10:16,276 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-03 00:10:19,143 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-03 00:10:21,208 [INFO] [Inbound] Command: v2:host.window | Request ID: 5
-2026-07-03 00:10:21,208 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-03 00:10:21,208 [INFO] [Inbound] Command: v2:host.action | Request ID: 6
-2026-07-03 00:10:21,328 [INFO] [Fallback] host.action performed: click x=960.0 y=689.4375 confidence=0.92
-2026-07-03 00:10:30,086 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
-2026-07-03 00:10:31,002 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 8
-2026-07-03 00:10:31,002 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-03 00:10:31,014 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 9
-2026-07-03 00:10:31,015 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 10
-2026-07-03 00:10:37,079 [INFO] [Inbound] Command: v2:host.window | Request ID: 11
-2026-07-03 00:10:37,079 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-03 00:10:37,079 [INFO] [Inbound] Command: v2:host.action | Request ID: 12
-2026-07-03 00:10:37,192 [INFO] [Fallback] host.action performed: click x=960.0 y=810.4375 confidence=0.92
-2026-07-03 00:11:07,705 [INFO] connection closed
-2026-07-03 00:14:41,770 [INFO] connection open
-2026-07-03 00:14:41,770 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 00:14:41,770 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 00:14:41,770 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 00:14:43,253 [INFO] connection closed
-2026-07-03 00:14:43,529 [INFO] connection open
-2026-07-03 00:14:43,529 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 00:14:43,542 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 00:14:43,542 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 00:14:45,249 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-03 00:14:48,926 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-03 00:14:51,021 [INFO] [Inbound] Command: v2:host.window | Request ID: 3
-2026-07-03 00:14:51,021 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-03 00:14:51,175 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: 4
-2026-07-03 00:14:54,489 [ERROR] [Command] v2:host.visual_match failed: Could not locate the image.
-2026-07-03 00:14:54,489 [INFO] [Inbound] Command: v2:host.action | Request ID: 5
-2026-07-03 00:14:54,625 [INFO] [Fallback] host.action performed: click x=783.0 y=802.4375 confidence=0.92
-2026-07-03 00:14:58,653 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-03 00:15:00,550 [INFO] [Inbound] Command: v2:host.window | Request ID: 7
-2026-07-03 00:15:00,550 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-03 00:15:00,687 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: 8
-2026-07-03 00:15:14,207 [ERROR] [Command] v2:host.visual_match failed: Could not locate the image.
-2026-07-03 00:15:14,208 [INFO] [Inbound] Command: v2:host.action | Request ID: 9
-2026-07-03 00:15:14,321 [INFO] [Fallback] host.action performed: click x=783.0 y=802.4375 confidence=0.92
-2026-07-03 00:15:31,759 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 10
-2026-07-03 00:15:31,761 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-03 00:15:31,819 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 11
-2026-07-03 00:15:31,856 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 12
-2026-07-03 00:15:36,003 [INFO] [Inbound] Command: v2:host.window | Request ID: 13
-2026-07-03 00:15:36,003 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-03 00:15:36,003 [INFO] [Inbound] Command: v2:host.action | Request ID: 14
-2026-07-03 00:15:36,121 [INFO] [Fallback] host.action performed: click x=960.0 y=810.4375 confidence=0.92
-2026-07-03 00:16:11,785 [INFO] connection closed
-2026-07-03 00:25:18,974 [INFO] connection open
-2026-07-03 00:25:18,974 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 00:25:18,979 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 00:25:18,980 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 00:25:42,695 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-03 00:25:47,427 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 2
-2026-07-03 00:25:47,427 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-03 00:25:47,440 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-03 00:25:47,453 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 4
-2026-07-03 00:26:17,461 [INFO] connection closed
-2026-07-03 23:47:54,858 [INFO] [Companion] Host start requested.
-2026-07-03 23:47:56,743 [INFO] ========================================
-2026-07-03 23:47:56,744 [INFO]  BRunner Native OS Host Started
-2026-07-03 23:47:56,744 [INFO]  Listening on ws://localhost:8999
-2026-07-03 23:47:56,745 [INFO] ========================================
-2026-07-03 23:47:56,745 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-03 23:47:56,746 [INFO] ========================================
-2026-07-03 23:47:56,904 [INFO] server listening on [::1]:8999
-2026-07-03 23:47:56,907 [INFO] server listening on 127.0.0.1:8999
-2026-07-03 23:47:58,702 [INFO] connection open
-2026-07-03 23:47:58,702 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 23:47:58,705 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 23:47:58,706 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 23:47:59,640 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 1
-2026-07-03 23:47:59,642 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-03 23:47:59,653 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-03 23:48:02,665 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-03 23:48:02,677 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 4
-2026-07-03 23:48:08,575 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-03 23:49:03,256 [INFO] connection closed
-2026-07-03 23:49:03,549 [INFO] connection open
-2026-07-03 23:49:03,550 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 23:49:03,563 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 23:49:03,563 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 23:49:07,299 [INFO] connection closed
-2026-07-03 23:49:07,555 [INFO] connection open
-2026-07-03 23:49:07,556 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-03 23:49:07,565 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-03 23:49:07,566 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-03 23:49:37,579 [INFO] connection closed
-2026-07-04 00:59:39,061 [INFO] [Companion] Host start requested.
-2026-07-04 00:59:41,208 [INFO] ========================================
-2026-07-04 00:59:41,209 [INFO]  BRunner Native OS Host Started
-2026-07-04 00:59:41,209 [INFO]  Listening on ws://localhost:8999
-2026-07-04 00:59:41,210 [INFO] ========================================
-2026-07-04 00:59:41,210 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-04 00:59:41,210 [INFO] ========================================
-2026-07-04 00:59:41,298 [INFO] server listening on 127.0.0.1:8999
-2026-07-04 00:59:41,299 [INFO] server listening on [::1]:8999
-2026-07-04 00:59:55,210 [INFO] connection open
-2026-07-04 00:59:55,211 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 00:59:55,215 [INFO] [Inbound] Command: AUTH | Request ID: none
-2026-07-04 00:59:55,217 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 00:59:55,296 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 1
-2026-07-04 01:00:14,983 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-04 01:00:27,108 [INFO] connection closed
-2026-07-04 12:23:55,395 [INFO] [Companion] Host start requested.
-2026-07-04 12:23:56,592 [INFO] ========================================
-2026-07-04 12:23:56,592 [INFO]  BRunner Native OS Host Started
-2026-07-04 12:23:56,592 [INFO]  Listening on ws://localhost:8999
-2026-07-04 12:23:56,592 [INFO] ========================================
-2026-07-04 12:23:56,592 [INFO]  YOUR PAIRING KEY: ac1890957e38af28cd5d0961e6d0d530
-2026-07-04 12:23:56,592 [INFO] ========================================
-2026-07-04 12:23:56,670 [INFO] server listening on [::1]:8999
-2026-07-04 12:23:56,670 [INFO] server listening on 127.0.0.1:8999
-2026-07-04 12:24:04,015 [INFO] connection open
-2026-07-04 12:24:04,015 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 12:24:04,015 [INFO] [Network] Extension disconnected.
-2026-07-04 12:24:04,015 [INFO] connection closed
-2026-07-04 12:24:04,032 [INFO] connection open
-2026-07-04 12:24:04,033 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 12:24:04,036 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 12:24:04,036 [WARNING] [Auth] Blocked connection attempt with invalid key.
-2026-07-04 12:24:23,805 [INFO] [Companion] Pairing settings saved.
-2026-07-04 12:24:30,779 [INFO] connection open
-2026-07-04 12:24:30,779 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 12:24:30,780 [INFO] connection closed
-2026-07-04 12:24:30,782 [INFO] [Inbound] Command: AUTH | Request ID: 2
-2026-07-04 12:24:30,785 [INFO] [Auth] Paired extension instance: fogahjgbnddmdafeceodembojchcdmop
-2026-07-04 12:24:30,785 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 12:24:30,878 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 3
-2026-07-04 12:24:42,642 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
-2026-07-04 12:24:47,692 [INFO] [Companion] Host stop requested.
-2026-07-04 12:24:50,611 [INFO] [Companion] Host start requested.
-2026-07-04 12:24:51,767 [INFO] ========================================
-2026-07-04 12:24:51,767 [INFO]  BRunner Native OS Host Started
-2026-07-04 12:24:51,767 [INFO]  Listening on ws://localhost:8999
-2026-07-04 12:24:51,767 [INFO] ========================================
-2026-07-04 12:24:51,767 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-04 12:24:51,767 [INFO] ========================================
-2026-07-04 12:24:51,838 [INFO] server listening on [::1]:8999
-2026-07-04 12:24:51,838 [INFO] server listening on 127.0.0.1:8999
-2026-07-04 12:25:00,403 [INFO] connection open
-2026-07-04 12:25:00,403 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 12:25:00,403 [INFO] [Inbound] Command: AUTH | Request ID: 5
-2026-07-04 12:25:00,403 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 12:25:00,510 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
-2026-07-04 12:25:53,618 [INFO] connection closed
-2026-07-04 12:27:51,135 [INFO] connection open
-2026-07-04 12:27:51,135 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 12:27:51,135 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 12:27:51,135 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 12:28:11,521 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-04 12:28:23,087 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-04 12:29:05,006 [INFO] connection closed
-2026-07-04 13:49:55,643 [INFO] [Companion] Host start requested.
-2026-07-04 13:49:57,603 [INFO] ========================================
-2026-07-04 13:49:57,603 [INFO]  BRunner Native OS Host Started
-2026-07-04 13:49:57,604 [INFO]  Listening on ws://localhost:8999
-2026-07-04 13:49:57,604 [INFO] ========================================
-2026-07-04 13:49:57,605 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-04 13:49:57,605 [INFO] ========================================
-2026-07-04 13:49:57,762 [INFO] server listening on [::1]:8999
-2026-07-04 13:49:57,763 [INFO] server listening on 127.0.0.1:8999
-2026-07-04 13:50:34,257 [INFO] connection open
-2026-07-04 13:50:34,258 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:50:34,266 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:50:34,268 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:50:34,837 [INFO] connection closed
-2026-07-04 13:50:35,235 [INFO] connection open
-2026-07-04 13:50:35,235 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:50:35,273 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:50:35,274 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:51:00,963 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-04 13:51:20,029 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
-2026-07-04 13:51:39,513 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 4
-2026-07-04 13:51:39,516 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-04 13:51:39,627 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 5
-2026-07-04 13:51:49,565 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 6
-2026-07-04 13:51:49,566 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-04 13:51:49,576 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
-2026-07-04 13:51:49,617 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 8
-2026-07-04 13:52:01,419 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 9
-2026-07-04 13:52:35,085 [INFO] connection closed
-2026-07-04 13:52:47,736 [INFO] connection open
-2026-07-04 13:52:47,736 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:52:47,736 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:52:47,736 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:53:17,754 [INFO] connection closed
-2026-07-04 13:53:48,510 [INFO] connection open
-2026-07-04 13:53:48,510 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:53:48,513 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:53:48,515 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:54:31,437 [INFO] connection closed
-2026-07-04 13:54:54,101 [INFO] connection open
-2026-07-04 13:54:54,101 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:54:54,101 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:54:54,101 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:54:54,218 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
-2026-07-04 13:54:58,029 [INFO] [Inbound] Command: v2:host.window | Request ID: 3
-2026-07-04 13:54:58,029 [INFO] [Fallback] host.window returned foreground-window status
-2026-07-04 13:54:58,029 [INFO] [Inbound] Command: v2:host.action | Request ID: 4
-2026-07-04 13:54:58,150 [INFO] [Fallback] host.action performed: click x=1235.515625 y=293.4375 confidence=0.92
-2026-07-04 13:56:35,042 [INFO] connection closed
-2026-07-04 13:56:46,665 [INFO] connection open
-2026-07-04 13:56:46,665 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 13:56:46,675 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 13:56:46,675 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 13:57:22,764 [INFO] connection closed
-2026-07-04 14:02:35,593 [INFO] connection open
-2026-07-04 14:02:35,593 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 14:02:45,593 [INFO] [Network] Extension disconnected.
-2026-07-04 14:02:45,593 [INFO] connection closed
-2026-07-04 14:03:04,494 [INFO] connection open
-2026-07-04 14:03:04,496 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 14:03:04,497 [INFO] [Inbound] Command: HOST_HELLO | Request ID: unauth
-2026-07-04 14:03:04,497 [WARNING] [Security] Rejected unauthenticated command: HOST_HELLO
-2026-07-04 14:03:04,497 [INFO] [Inbound] Command: AUTH | Request ID: auth
-2026-07-04 14:03:04,497 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 14:03:04,497 [INFO] [Inbound] Command: HOST_HELLO | Request ID: hello
-2026-07-04 14:03:04,497 [INFO] [Protocol] host.hello returned 19 capabilities
-2026-07-04 14:03:04,497 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: dirs
-2026-07-04 14:03:04,509 [INFO] connection closed
-2026-07-04 14:03:18,845 [INFO] connection open
-2026-07-04 14:03:18,845 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 14:03:18,845 [INFO] [Inbound] Command: HOST_HELLO | Request ID: unauth
-2026-07-04 14:03:18,845 [WARNING] [Security] Rejected unauthenticated command: HOST_HELLO
-2026-07-04 14:03:18,845 [INFO] connection closed
-2026-07-04 14:11:27,702 [INFO] connection open
-2026-07-04 14:11:27,703 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-04 14:11:27,717 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-04 14:11:27,719 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-04 14:12:03,684 [INFO] connection closed
-2026-07-04 23:59:50,555 [INFO] [Companion] Host start requested.
-2026-07-04 23:59:51,659 [INFO] ========================================
-2026-07-04 23:59:51,660 [INFO]  BRunner Native OS Host Started
-2026-07-04 23:59:51,660 [INFO]  Listening on ws://localhost:8999
-2026-07-04 23:59:51,660 [INFO] ========================================
-2026-07-04 23:59:51,661 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-04 23:59:51,661 [INFO] ========================================
-2026-07-04 23:59:51,877 [INFO] server listening on 127.0.0.1:8999
-2026-07-04 23:59:51,877 [INFO] server listening on [::1]:8999
-2026-07-05 00:00:03,206 [INFO] connection open
-2026-07-05 00:00:03,206 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:00:03,217 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:00:03,219 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:00:10,416 [INFO] connection closed
-2026-07-05 00:00:10,684 [INFO] connection open
-2026-07-05 00:00:10,684 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:00:10,693 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:00:10,695 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:00:12,826 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-05 00:00:52,511 [INFO] connection closed
-2026-07-05 00:02:32,161 [INFO] connection open
-2026-07-05 00:02:32,161 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:02:32,165 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:02:32,166 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:02:33,274 [INFO] connection closed
-2026-07-05 00:02:33,544 [INFO] connection open
-2026-07-05 00:02:33,544 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:02:33,556 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:02:33,557 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:02:41,715 [INFO] connection closed
-2026-07-05 00:02:41,994 [INFO] connection open
-2026-07-05 00:02:41,994 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:02:42,004 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:02:42,007 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:02:43,598 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-05 00:03:17,934 [INFO] connection closed
-2026-07-05 00:05:24,096 [INFO] connection open
-2026-07-05 00:05:24,097 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:05:24,116 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:05:24,118 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:05:39,432 [INFO] connection closed
-2026-07-05 00:05:39,720 [INFO] connection open
-2026-07-05 00:05:39,720 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:05:39,730 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:05:39,732 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:05:43,582 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-05 00:07:43,871 [INFO] connection closed
-2026-07-05 00:07:50,645 [INFO] connection open
-2026-07-05 00:07:50,646 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:07:50,654 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:07:50,655 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:11:57,049 [INFO] connection closed
-2026-07-05 00:17:42,643 [INFO] connection open
-2026-07-05 00:17:42,644 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:17:42,647 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:17:42,649 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:18:24,872 [INFO] connection closed
-2026-07-05 00:22:32,955 [INFO] connection open
-2026-07-05 00:22:32,956 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:22:32,958 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:22:32,960 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:22:33,890 [INFO] connection closed
-2026-07-05 00:22:34,333 [INFO] connection open
-2026-07-05 00:22:34,334 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:22:34,353 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:22:34,355 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:22:36,491 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-05 00:26:19,751 [INFO] connection closed
-2026-07-05 00:37:05,433 [INFO] connection open
-2026-07-05 00:37:05,433 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:37:05,460 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:37:05,462 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:38:42,378 [INFO] connection closed
-2026-07-05 00:38:53,066 [INFO] connection open
-2026-07-05 00:38:53,067 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-05 00:38:53,073 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-05 00:38:53,075 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-05 00:39:43,087 [INFO] connection closed
-2026-07-09 22:41:33,270 [INFO] [Companion] Host start requested.
-2026-07-09 22:41:34,734 [INFO] ========================================
-2026-07-09 22:41:34,735 [INFO]  BRunner Native OS Host Started
-2026-07-09 22:41:34,736 [INFO]  Listening on ws://localhost:8999
-2026-07-09 22:41:34,736 [INFO] ========================================
-2026-07-09 22:41:34,737 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-09 22:41:34,738 [INFO] ========================================
-2026-07-09 22:41:34,911 [INFO] server listening on 127.0.0.1:8999
-2026-07-09 22:41:34,911 [INFO] server listening on [::1]:8999
-2026-07-09 22:45:00,266 [INFO] connection open
-2026-07-09 22:45:00,267 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-09 22:45:00,288 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-09 22:45:00,291 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-09 22:49:02,452 [INFO] connection closed
-2026-07-09 22:56:21,695 [INFO] connection open
-2026-07-09 22:56:21,696 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-09 22:56:21,707 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-09 22:56:21,709 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-09 22:57:22,295 [INFO] connection closed
-2026-07-09 22:57:22,803 [INFO] connection open
-2026-07-09 22:57:22,804 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-09 22:57:22,862 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-09 22:57:22,864 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-09 22:57:26,147 [INFO] connection closed
-2026-07-09 22:57:26,477 [INFO] connection open
-2026-07-09 22:57:26,478 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-09 22:57:26,486 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-09 22:57:26,487 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-09 22:57:35,765 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-09 22:59:20,424 [INFO] connection closed
-2026-07-10 22:50:46,398 [INFO] [Companion] Host start requested.
-2026-07-10 22:50:48,089 [INFO] ========================================
-2026-07-10 22:50:48,090 [INFO]  BRunner Native OS Host Started
-2026-07-10 22:50:48,090 [INFO]  Listening on ws://localhost:8999
-2026-07-10 22:50:48,091 [INFO] ========================================
-2026-07-10 22:50:48,092 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-10 22:50:48,093 [INFO] ========================================
-2026-07-10 22:50:48,241 [INFO] server listening on [::1]:8999
-2026-07-10 22:50:48,242 [INFO] server listening on 127.0.0.1:8999
-2026-07-10 22:51:00,869 [INFO] connection open
-2026-07-10 22:51:00,869 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 22:51:00,877 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 22:51:00,879 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 22:51:05,435 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-10 22:51:37,138 [INFO] connection closed
-2026-07-10 22:51:38,074 [INFO] connection open
-2026-07-10 22:51:38,074 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 22:51:38,077 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 22:51:38,078 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 22:53:10,222 [INFO] connection closed
-2026-07-10 22:53:12,772 [INFO] connection open
-2026-07-10 22:53:12,772 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 22:53:12,787 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 22:53:12,789 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 22:54:02,052 [INFO] connection closed
-2026-07-10 22:54:18,233 [INFO] connection open
-2026-07-10 22:54:18,233 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 22:54:18,242 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 22:54:18,248 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 22:55:17,819 [INFO] connection closed
-2026-07-10 22:55:26,488 [INFO] connection open
-2026-07-10 22:55:26,489 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 22:55:26,499 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 22:55:26,501 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 22:56:02,744 [INFO] connection closed
-2026-07-10 23:04:27,063 [INFO] connection open
-2026-07-10 23:04:27,063 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:04:27,067 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:04:27,070 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:04:27,952 [INFO] connection closed
-2026-07-10 23:04:28,410 [INFO] connection open
-2026-07-10 23:04:28,410 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:04:28,430 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:04:28,432 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:04:34,505 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-10 23:05:43,748 [INFO] connection closed
-2026-07-10 23:29:43,601 [INFO] connection open
-2026-07-10 23:29:43,602 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:29:43,605 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:29:43,607 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:29:44,600 [INFO] connection closed
-2026-07-10 23:29:44,984 [INFO] connection open
-2026-07-10 23:29:44,985 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:29:45,022 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:29:45,024 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:29:47,327 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-10 23:31:41,903 [INFO] connection closed
-2026-07-10 23:42:47,240 [INFO] connection open
-2026-07-10 23:42:47,241 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:42:47,243 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:42:47,245 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:43:37,176 [INFO] connection closed
-2026-07-10 23:44:31,957 [INFO] connection open
-2026-07-10 23:44:31,958 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:44:31,960 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:44:31,962 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:45:17,498 [INFO] connection closed
-2026-07-10 23:45:28,362 [INFO] connection open
-2026-07-10 23:45:28,363 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:45:28,365 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:45:28,367 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:48:14,729 [INFO] connection closed
-2026-07-10 23:56:24,384 [INFO] connection open
-2026-07-10 23:56:24,385 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-10 23:56:24,388 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-10 23:56:24,389 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-10 23:57:06,646 [INFO] connection closed
-2026-07-11 00:00:16,157 [INFO] connection open
-2026-07-11 00:00:16,158 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 00:00:16,161 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 00:00:16,162 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 00:01:02,299 [INFO] connection closed
-2026-07-11 00:11:26,180 [INFO] connection open
-2026-07-11 00:11:26,181 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 00:11:26,183 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 00:11:26,185 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 00:11:28,797 [INFO] connection closed
-2026-07-11 00:11:29,122 [INFO] connection open
-2026-07-11 00:11:29,123 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 00:11:29,134 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 00:11:29,135 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 00:11:35,716 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 00:13:26,210 [INFO] connection closed
-2026-07-11 00:22:43,710 [INFO] connection open
-2026-07-11 00:22:43,710 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 00:22:43,710 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 00:22:43,725 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 00:22:44,943 [INFO] connection closed
-2026-07-11 00:22:45,311 [INFO] connection open
-2026-07-11 00:22:45,312 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 00:22:45,327 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 00:22:45,331 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 00:22:49,941 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 00:24:41,089 [INFO] connection closed
-2026-07-11 01:07:02,437 [INFO] connection open
-2026-07-11 01:07:02,437 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:07:02,437 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:07:02,452 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:07:32,467 [INFO] connection closed
-2026-07-11 01:08:59,520 [INFO] connection open
-2026-07-11 01:08:59,521 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:08:59,530 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:08:59,531 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:09:01,218 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 01:11:55,538 [INFO] connection closed
-2026-07-11 01:23:49,813 [INFO] connection open
-2026-07-11 01:23:49,814 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:23:49,817 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:23:49,819 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:23:52,204 [INFO] connection closed
-2026-07-11 01:23:52,570 [INFO] connection open
-2026-07-11 01:23:52,571 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:23:52,584 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:23:52,585 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:23:55,970 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 01:26:36,050 [INFO] connection closed
-2026-07-11 01:36:40,542 [INFO] connection open
-2026-07-11 01:36:40,543 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:36:40,546 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:36:40,548 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:36:47,575 [INFO] connection closed
-2026-07-11 01:36:47,917 [INFO] connection open
-2026-07-11 01:36:47,918 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:36:47,924 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:36:47,926 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:37:09,227 [INFO] connection closed
-2026-07-11 01:37:09,496 [INFO] connection open
-2026-07-11 01:37:09,496 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:37:09,513 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:37:09,513 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:37:16,268 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 01:39:41,461 [INFO] connection closed
-2026-07-11 01:58:54,139 [INFO] connection open
-2026-07-11 01:58:54,140 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:58:54,158 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:58:54,160 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:59:33,398 [INFO] connection closed
-2026-07-11 01:59:33,533 [INFO] connection open
-2026-07-11 01:59:33,534 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 01:59:33,543 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 01:59:33,545 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 01:59:36,287 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 02:00:20,657 [INFO] connection closed
-2026-07-11 02:02:03,346 [INFO] connection open
-2026-07-11 02:02:03,346 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 02:02:03,346 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 02:02:03,346 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 02:03:59,079 [INFO] connection closed
-2026-07-11 02:04:20,181 [INFO] connection open
-2026-07-11 02:04:20,182 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 02:04:20,196 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 02:04:20,197 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 02:04:50,304 [INFO] connection closed
-2026-07-11 02:05:01,250 [INFO] connection open
-2026-07-11 02:05:01,250 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 02:05:01,270 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 02:05:01,283 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 02:05:58,544 [INFO] connection closed
-2026-07-11 02:06:16,048 [INFO] connection open
-2026-07-11 02:06:16,049 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 02:06:16,061 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 02:06:16,063 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 02:08:29,657 [INFO] connection closed
-2026-07-11 22:14:37,908 [INFO] [Companion] Host start requested.
-2026-07-11 22:14:38,759 [INFO] ========================================
-2026-07-11 22:14:38,759 [INFO]  BRunner Native OS Host Started
-2026-07-11 22:14:38,760 [INFO]  Listening on ws://localhost:8999
-2026-07-11 22:14:38,760 [INFO] ========================================
-2026-07-11 22:14:38,760 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-11 22:14:38,760 [INFO] ========================================
-2026-07-11 22:14:38,909 [INFO] server listening on 127.0.0.1:8999
-2026-07-11 22:14:38,910 [INFO] server listening on [::1]:8999
-2026-07-11 22:14:44,407 [INFO] connection open
-2026-07-11 22:14:44,407 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 22:14:44,501 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 22:14:44,502 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 22:14:47,435 [INFO] connection closed
-2026-07-11 22:14:47,720 [INFO] connection open
-2026-07-11 22:14:47,721 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 22:14:47,737 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 22:14:47,738 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 22:14:52,701 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-11 22:16:56,099 [INFO] connection closed
-2026-07-11 22:17:15,411 [INFO] connection open
-2026-07-11 22:17:15,411 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-11 22:17:15,413 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-11 22:17:15,415 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-11 22:21:44,330 [INFO] connection closed
-2026-07-12 14:44:57,171 [INFO] [Companion] Host start requested.
-2026-07-12 14:44:58,937 [INFO] ========================================
-2026-07-12 14:44:58,937 [INFO]  BRunner Native OS Host Started
-2026-07-12 14:44:58,938 [INFO]  Listening on ws://localhost:8999
-2026-07-12 14:44:58,938 [INFO] ========================================
-2026-07-12 14:44:58,938 [INFO]  YOUR PAIRING KEY: ec2be507ecc8ed55621ad6f95383c793
-2026-07-12 14:44:58,938 [INFO] ========================================
-2026-07-12 14:44:59,024 [INFO] server listening on [::1]:8999
-2026-07-12 14:44:59,025 [INFO] server listening on 127.0.0.1:8999
-2026-07-12 14:45:08,461 [INFO] [Companion] Host start requested; host is already running.
-2026-07-12 14:45:23,035 [INFO] connection open
-2026-07-12 14:45:23,035 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:45:23,151 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:45:23,152 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 14:45:26,486 [INFO] connection closed
-2026-07-12 14:45:26,764 [INFO] connection open
-2026-07-12 14:45:26,765 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:45:26,776 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:45:26,778 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 14:45:28,003 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 2
-2026-07-12 14:45:54,007 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
-2026-07-12 14:45:54,009 [INFO] [Protocol] host.hello returned 23 capabilities
-2026-07-12 14:45:54,020 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
-2026-07-12 14:45:54,135 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
-2026-07-12 14:46:25,738 [INFO] connection closed
-2026-07-12 14:49:29,786 [INFO] connection open
-2026-07-12 14:49:29,786 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:49:30,332 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:49:30,332 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 14:51:12,452 [INFO] connection closed
-2026-07-12 14:52:20,417 [INFO] connection open
-2026-07-12 14:52:20,418 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:52:20,424 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:52:20,426 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 14:53:24,398 [INFO] connection closed
-2026-07-12 14:53:48,986 [INFO] connection open
-2026-07-12 14:53:48,987 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:53:49,000 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:53:49,002 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 14:57:35,003 [INFO] connection closed
-2026-07-12 14:58:23,162 [INFO] connection open
-2026-07-12 14:58:23,162 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 14:58:23,193 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 14:58:23,193 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 15:00:21,350 [INFO] connection closed
-2026-07-12 15:06:31,722 [INFO] connection open
-2026-07-12 15:06:31,723 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 15:06:31,730 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 15:06:31,731 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 15:08:44,481 [INFO] connection closed
-2026-07-12 15:08:58,160 [INFO] connection open
-2026-07-12 15:08:58,160 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 15:08:58,163 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 15:08:58,165 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 15:09:28,171 [INFO] connection closed
-2026-07-12 15:10:34,593 [INFO] connection open
-2026-07-12 15:10:34,593 [INFO] [Network] New connection attempt from 127.0.0.1
-2026-07-12 15:10:34,597 [INFO] [Inbound] Command: AUTH | Request ID: 1
-2026-07-12 15:10:34,599 [INFO] [Auth] Extension connected and authenticated securely.
-2026-07-12 15:10:38,469 [INFO] connection closed
+2026-07-16 23:57:55,109 [INFO] [Companion] Host start requested.
+2026-07-16 23:57:56,758 [INFO] ========================================
+2026-07-16 23:57:56,759 [INFO]  BRunner Native OS Host Started
+2026-07-16 23:57:56,760 [INFO]  Listening on ws://localhost:8999
+2026-07-16 23:57:56,761 [INFO] ========================================
+2026-07-16 23:57:56,863 [INFO] server listening on 127.0.0.1:8999
+2026-07-16 23:57:56,863 [INFO] server listening on [::1]:8999
+2026-07-17 00:00:56,558 [INFO] connection open
+2026-07-17 00:00:56,559 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:00:56,629 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:00:56,630 [INFO] [Pairing] Profile hello: pairing_required
+2026-07-17 00:00:59,263 [INFO] connection closed
+2026-07-17 00:00:59,620 [INFO] connection open
+2026-07-17 00:00:59,620 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:00:59,640 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:00:59,641 [INFO] [Pairing] Profile hello: pairing_required
+2026-07-17 00:01:01,702 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 2
+2026-07-17 00:01:01,704 [INFO] [Pairing] Profile hello: pairing_required
+2026-07-17 00:01:11,770 [INFO] [Companion] Chrome profile paired.
+2026-07-17 00:01:11,965 [INFO] [Companion] Managed host restarted to apply pairing changes and close existing connections.
+2026-07-17 00:01:13,203 [INFO] ========================================
+2026-07-17 00:01:13,204 [INFO]  BRunner Native OS Host Started
+2026-07-17 00:01:13,204 [INFO]  Listening on ws://localhost:8999
+2026-07-17 00:01:13,205 [INFO] ========================================
+2026-07-17 00:01:13,311 [INFO] server listening on [::1]:8999
+2026-07-17 00:01:13,312 [INFO] server listening on 127.0.0.1:8999
+2026-07-17 00:01:19,162 [INFO] [Companion] Chrome profile paired.
+2026-07-17 00:01:21,962 [INFO] [Companion] Profile instance ID copied.
+2026-07-17 00:01:23,035 [INFO] connection open
+2026-07-17 00:01:23,036 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:01:23,040 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 3
+2026-07-17 00:01:23,161 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:01:23,166 [INFO] [Inbound] Command: PAIR_PROFILE | Request ID: 4
+2026-07-17 00:01:23,175 [INFO] [Pairing] Pair request: paired
+2026-07-17 00:01:23,179 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 5
+2026-07-17 00:01:23,182 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:01:23,187 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 6
+2026-07-17 00:01:51,022 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 7
+2026-07-17 00:01:51,042 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 8
+2026-07-17 00:01:51,048 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:01:51,051 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 9
+2026-07-17 00:01:51,055 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:01:52,405 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 10
+2026-07-17 00:01:52,412 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:01:52,414 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 11
+2026-07-17 00:01:52,417 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:01:52,525 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 12
+2026-07-17 00:01:52,538 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 13
+2026-07-17 00:02:22,554 [INFO] connection closed
+2026-07-17 00:15:59,120 [INFO] connection open
+2026-07-17 00:15:59,121 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:15:59,126 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:15:59,134 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:15:59,248 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 2
+2026-07-17 00:15:59,254 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:15:59,257 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
+2026-07-17 00:15:59,261 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:15:59,279 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-07-17 00:15:59,286 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 5
+2026-07-17 00:15:59,291 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 6
+2026-07-17 00:15:59,297 [INFO] [Inbound] Command: LIST_APPROVED_DIRECTORIES | Request ID: 7
+2026-07-17 00:15:59,305 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 8
+2026-07-17 00:16:29,323 [INFO] connection closed
+2026-07-17 00:22:56,223 [INFO] [Companion] Host start requested.
+2026-07-17 00:22:57,282 [INFO] ========================================
+2026-07-17 00:22:57,282 [INFO]  BRunner Native OS Host Started
+2026-07-17 00:22:57,282 [INFO]  Listening on ws://localhost:8999
+2026-07-17 00:22:57,282 [INFO] ========================================
+2026-07-17 00:22:57,360 [INFO] server listening on 127.0.0.1:8999
+2026-07-17 00:22:57,366 [INFO] server listening on [::1]:8999
+2026-07-17 00:23:01,237 [INFO] [Companion] Host start requested; host is already running.
+2026-07-17 00:23:06,716 [INFO] connection open
+2026-07-17 00:23:06,716 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:23:06,716 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:23:06,716 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:23:06,831 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 2
+2026-07-17 00:23:06,831 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:23:06,831 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
+2026-07-17 00:23:06,831 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:23:06,847 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-07-17 00:23:06,858 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 5
+2026-07-17 00:23:19,494 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
+2026-07-17 00:23:22,487 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 7
+2026-07-17 00:23:38,447 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 8
+2026-07-17 00:23:39,831 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 9
+2026-07-17 00:24:09,848 [INFO] connection closed
+2026-07-17 00:36:59,502 [INFO] connection open
+2026-07-17 00:36:59,503 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:36:59,512 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:36:59,520 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:38:12,048 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 2
+2026-07-17 00:38:12,055 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:38:12,057 [INFO] [Inbound] Command: HOST_HELLO | Request ID: 3
+2026-07-17 00:38:12,060 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 00:38:12,065 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 4
+2026-07-17 00:38:14,279 [INFO] [Inbound] Command: LIST_WORKFLOWS | Request ID: 5
+2026-07-17 00:38:19,423 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 6
+2026-07-17 00:38:24,095 [INFO] [Inbound] Command: WRITE_APPROVED_FILE | Request ID: 7
+2026-07-17 00:38:24,265 [INFO] [Directory] Wrote approved file: alias=allowedfiles name=extension-host-roundtrip.txt size=34
+2026-07-17 00:38:24,850 [INFO] [Inbound] Command: FIND_APPROVED_FILES | Request ID: 8
+2026-07-17 00:38:24,850 [INFO] [Directory] Listed approved files: alias=allowedfiles count=1
+2026-07-17 00:39:04,249 [INFO] connection closed
+2026-07-17 00:52:15,706 [INFO] connection open
+2026-07-17 00:52:15,706 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:52:15,717 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:52:15,722 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:52:15,722 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
+2026-07-17 00:52:25,672 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 3
+2026-07-17 00:53:01,090 [INFO] connection closed
+2026-07-17 00:53:19,134 [INFO] connection open
+2026-07-17 00:53:19,134 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 00:53:19,151 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: 1
+2026-07-17 00:53:19,304 [INFO] [Pairing] Profile hello: paired
+2026-07-17 00:53:22,338 [INFO] [Inbound] Command: LOAD_WORKFLOW | Request ID: 2
+2026-07-17 00:53:57,521 [INFO] connection closed
+2026-07-17 01:12:37,868 [INFO] ========================================
+2026-07-17 01:12:37,868 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:12:37,868 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:12:37,868 [INFO] ========================================
+2026-07-17 01:12:38,902 [INFO] <Server sockets=(<asyncio.TransportSocket fd=324, family=2, type=1, proto=6, laddr=('127.0.0.1', 11492)>,)> is serving
+2026-07-17 01:12:38,902 [INFO] server listening on 127.0.0.1:11492
+2026-07-17 01:12:39,076 [INFO] connection open
+2026-07-17 01:12:39,865 [INFO] server closing
+2026-07-17 01:12:39,885 [INFO] connection closed
+2026-07-17 01:12:39,888 [INFO] server closed
+2026-07-17 01:12:39,969 [INFO] <Server sockets=(<asyncio.TransportSocket fd=572, family=2, type=1, proto=6, laddr=('127.0.0.1', 11496)>,)> is serving
+2026-07-17 01:12:39,969 [INFO] server listening on 127.0.0.1:11496
+2026-07-17 01:12:40,018 [INFO] connection open
+2026-07-17 01:12:40,262 [INFO] connection open
+2026-07-17 01:12:40,515 [INFO] connection closed
+2026-07-17 01:12:40,626 [INFO] connection closed
+2026-07-17 01:12:40,657 [INFO] server closing
+2026-07-17 01:12:40,657 [INFO] server closed
+2026-07-17 01:12:40,715 [INFO] <Server sockets=(<asyncio.TransportSocket fd=616, family=2, type=1, proto=6, laddr=('127.0.0.1', 11501)>,)> is serving
+2026-07-17 01:12:40,715 [INFO] server listening on 127.0.0.1:11501
+2026-07-17 01:12:40,778 [INFO] connection open
+2026-07-17 01:12:41,093 [INFO] connection closed
+2026-07-17 01:12:41,123 [INFO] server closing
+2026-07-17 01:12:41,124 [INFO] server closed
+2026-07-17 01:12:41,194 [INFO] <Server sockets=(<asyncio.TransportSocket fd=684, family=2, type=1, proto=6, laddr=('127.0.0.1', 11505)>,)> is serving
+2026-07-17 01:12:41,194 [INFO] server listening on 127.0.0.1:11505
+2026-07-17 01:12:41,255 [INFO] connection open
+2026-07-17 01:12:41,529 [INFO] connection open
+2026-07-17 01:12:41,769 [INFO] connection closed
+2026-07-17 01:12:41,940 [INFO] connection closed
+2026-07-17 01:12:41,956 [INFO] server closing
+2026-07-17 01:12:41,966 [INFO] server closed
+2026-07-17 01:12:42,027 [INFO] <Server sockets=(<asyncio.TransportSocket fd=688, family=2, type=1, proto=6, laddr=('127.0.0.1', 11514)>,)> is serving
+2026-07-17 01:12:42,027 [INFO] server listening on 127.0.0.1:11514
+2026-07-17 01:12:42,097 [INFO] connection open
+2026-07-17 01:12:42,240 [INFO] connection open
+2026-07-17 01:12:42,419 [INFO] connection closed
+2026-07-17 01:12:42,436 [INFO] connection open
+2026-07-17 01:12:42,555 [INFO] connection closed
+2026-07-17 01:12:42,595 [INFO] connection closed
+2026-07-17 01:12:42,646 [INFO] connection open
+2026-07-17 01:12:42,798 [INFO] server closing
+2026-07-17 01:12:42,819 [INFO] connection closed
+2026-07-17 01:12:42,819 [INFO] server closed
+2026-07-17 01:12:42,889 [INFO] <Server sockets=(<asyncio.TransportSocket fd=836, family=2, type=1, proto=6, laddr=('127.0.0.1', 11527)>,)> is serving
+2026-07-17 01:12:42,889 [INFO] server listening on 127.0.0.1:11527
+2026-07-17 01:12:42,960 [INFO] connection open
+2026-07-17 01:12:43,138 [INFO] server closing
+2026-07-17 01:12:43,170 [INFO] connection closed
+2026-07-17 01:12:43,170 [INFO] server closed
+2026-07-17 01:13:12,153 [INFO] ========================================
+2026-07-17 01:13:12,153 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:13:12,161 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:13:12,161 [INFO] ========================================
+2026-07-17 01:13:13,035 [INFO] <Server sockets=(<asyncio.TransportSocket fd=528, family=2, type=1, proto=6, laddr=('127.0.0.1', 11599)>,)> is serving
+2026-07-17 01:13:13,035 [INFO] server listening on 127.0.0.1:11599
+2026-07-17 01:13:13,104 [INFO] connection open
+2026-07-17 01:13:13,674 [INFO] server closing
+2026-07-17 01:13:13,685 [INFO] connection closed
+2026-07-17 01:13:13,685 [INFO] server closed
+2026-07-17 01:13:13,744 [INFO] <Server sockets=(<asyncio.TransportSocket fd=512, family=2, type=1, proto=6, laddr=('127.0.0.1', 11607)>,)> is serving
+2026-07-17 01:13:13,744 [INFO] server listening on 127.0.0.1:11607
+2026-07-17 01:13:13,784 [INFO] connection open
+2026-07-17 01:13:13,934 [INFO] connection open
+2026-07-17 01:13:14,189 [INFO] connection closed
+2026-07-17 01:13:14,317 [INFO] connection closed
+2026-07-17 01:13:14,341 [INFO] server closing
+2026-07-17 01:13:14,345 [INFO] server closed
+2026-07-17 01:13:14,400 [INFO] <Server sockets=(<asyncio.TransportSocket fd=364, family=2, type=1, proto=6, laddr=('127.0.0.1', 11612)>,)> is serving
+2026-07-17 01:13:14,401 [INFO] server listening on 127.0.0.1:11612
+2026-07-17 01:13:14,440 [INFO] connection open
+2026-07-17 01:13:14,795 [INFO] connection closed
+2026-07-17 01:13:14,822 [INFO] server closing
+2026-07-17 01:13:14,826 [INFO] server closed
+2026-07-17 01:13:14,888 [INFO] <Server sockets=(<asyncio.TransportSocket fd=476, family=2, type=1, proto=6, laddr=('127.0.0.1', 11616)>,)> is serving
+2026-07-17 01:13:14,889 [INFO] server listening on 127.0.0.1:11616
+2026-07-17 01:13:14,952 [INFO] connection open
+2026-07-17 01:13:15,190 [INFO] connection open
+2026-07-17 01:13:15,372 [INFO] connection closed
+2026-07-17 01:13:15,489 [INFO] connection closed
+2026-07-17 01:13:15,505 [INFO] server closing
+2026-07-17 01:13:15,505 [INFO] server closed
+2026-07-17 01:13:15,558 [INFO] <Server sockets=(<asyncio.TransportSocket fd=720, family=2, type=1, proto=6, laddr=('127.0.0.1', 11622)>,)> is serving
+2026-07-17 01:13:15,558 [INFO] server listening on 127.0.0.1:11622
+2026-07-17 01:13:15,589 [INFO] connection open
+2026-07-17 01:13:15,718 [INFO] connection open
+2026-07-17 01:13:15,836 [INFO] connection closed
+2026-07-17 01:13:15,869 [INFO] connection open
+2026-07-17 01:13:15,987 [INFO] connection closed
+2026-07-17 01:13:16,021 [INFO] connection closed
+2026-07-17 01:13:16,053 [INFO] connection open
+2026-07-17 01:13:16,185 [INFO] server closing
+2026-07-17 01:13:16,205 [INFO] connection closed
+2026-07-17 01:13:16,206 [INFO] server closed
+2026-07-17 01:13:16,235 [INFO] <Server sockets=(<asyncio.TransportSocket fd=316, family=2, type=1, proto=6, laddr=('127.0.0.1', 11629)>,)> is serving
+2026-07-17 01:13:16,235 [INFO] server listening on 127.0.0.1:11629
+2026-07-17 01:13:16,288 [INFO] connection open
+2026-07-17 01:13:16,435 [INFO] server closing
+2026-07-17 01:13:16,452 [INFO] connection closed
+2026-07-17 01:13:16,452 [INFO] server closed
+2026-07-17 01:13:40,966 [INFO] ========================================
+2026-07-17 01:13:40,966 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:13:40,966 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:13:40,966 [INFO] ========================================
+2026-07-17 01:13:44,307 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 01:13:44,308 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: profile
+2026-07-17 01:13:44,308 [INFO] [Pairing] Profile hello: connected
+2026-07-17 01:13:44,311 [INFO] [Inbound] Command: v2:host.hello | Request ID: request-1
+2026-07-17 01:13:44,311 [INFO] [Protocol] host.hello returned 23 capabilities
+2026-07-17 01:13:44,311 [INFO] [Inbound] Command: v2:host.window | Request ID: request-2
+2026-07-17 01:13:44,311 [INFO] [Fallback] host.window returned foreground-window status
+2026-07-17 01:13:44,311 [INFO] [Inbound] Command: v2:host.action | Request ID: request-3
+2026-07-17 01:13:44,311 [INFO] [Fallback] host.action performed: click x=None y=None confidence=None
+2026-07-17 01:13:44,311 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: request-4
+2026-07-17 01:13:44,311 [INFO] [Fallback] host.visual_match performed: click x=None y=None confidence=None search_ms=None region=None
+2026-07-17 01:13:44,342 [INFO] [Hardware] Dispatching OS keystroke: ['ctrl', 'l']
+2026-07-17 01:13:44,342 [INFO] [Hardware] Keystroke executed successfully: ['ctrl', 'l']
+2026-07-17 01:13:44,750 [WARNING] Executing <Task finished name='Task-13' coro=<HostTransportContractTests.test_websocket_server_applies_bounded_payload_and_queue_limits() done, defined at C:\Users\MASTER\Desktop\project\BR\tests\test_host_transport_contract.py:171> result=None created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.375 seconds
+2026-07-17 01:13:44,801 [INFO] <Server sockets=(<asyncio.TransportSocket fd=692, family=2, type=1, proto=6, laddr=('127.0.0.1', 11649)>,)> is serving
+2026-07-17 01:13:44,801 [INFO] server listening on 127.0.0.1:11649
+2026-07-17 01:13:44,901 [INFO] connection open
+2026-07-17 01:13:45,354 [INFO] server closing
+2026-07-17 01:13:45,370 [INFO] connection closed
+2026-07-17 01:13:45,370 [INFO] server closed
+2026-07-17 01:13:45,428 [INFO] <Server sockets=(<asyncio.TransportSocket fd=692, family=2, type=1, proto=6, laddr=('127.0.0.1', 11653)>,)> is serving
+2026-07-17 01:13:45,428 [INFO] server listening on 127.0.0.1:11653
+2026-07-17 01:13:45,475 [INFO] connection open
+2026-07-17 01:13:45,644 [INFO] connection open
+2026-07-17 01:13:45,828 [INFO] connection closed
+2026-07-17 01:13:45,897 [INFO] connection closed
+2026-07-17 01:13:45,913 [INFO] server closing
+2026-07-17 01:13:45,928 [INFO] server closed
+2026-07-17 01:13:45,955 [INFO] <Server sockets=(<asyncio.TransportSocket fd=436, family=2, type=1, proto=6, laddr=('127.0.0.1', 11658)>,)> is serving
+2026-07-17 01:13:45,955 [INFO] server listening on 127.0.0.1:11658
+2026-07-17 01:13:45,987 [INFO] connection open
+2026-07-17 01:13:46,201 [INFO] connection closed
+2026-07-17 01:13:46,201 [INFO] server closing
+2026-07-17 01:13:46,217 [INFO] server closed
+2026-07-17 01:13:46,244 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1000, family=2, type=1, proto=6, laddr=('127.0.0.1', 11662)>,)> is serving
+2026-07-17 01:13:46,244 [INFO] server listening on 127.0.0.1:11662
+2026-07-17 01:13:46,275 [INFO] connection open
+2026-07-17 01:13:46,429 [INFO] connection open
+2026-07-17 01:13:46,551 [INFO] connection closed
+2026-07-17 01:13:46,629 [INFO] connection closed
+2026-07-17 01:13:46,651 [INFO] server closing
+2026-07-17 01:13:46,651 [INFO] server closed
+2026-07-17 01:13:46,688 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1148, family=2, type=1, proto=6, laddr=('127.0.0.1', 11667)>,)> is serving
+2026-07-17 01:13:46,688 [INFO] server listening on 127.0.0.1:11667
+2026-07-17 01:13:46,718 [INFO] connection open
+2026-07-17 01:13:46,801 [INFO] connection open
+2026-07-17 01:13:46,915 [INFO] connection closed
+2026-07-17 01:13:46,935 [INFO] connection open
+2026-07-17 01:13:47,030 [INFO] connection closed
+2026-07-17 01:13:47,051 [INFO] connection closed
+2026-07-17 01:13:47,083 [INFO] connection open
+2026-07-17 01:13:47,168 [INFO] server closing
+2026-07-17 01:13:47,183 [INFO] connection closed
+2026-07-17 01:13:47,183 [INFO] server closed
+2026-07-17 01:13:47,230 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1088, family=2, type=1, proto=6, laddr=('127.0.0.1', 11674)>,)> is serving
+2026-07-17 01:13:47,230 [INFO] server listening on 127.0.0.1:11674
+2026-07-17 01:13:47,261 [INFO] connection open
+2026-07-17 01:13:47,385 [INFO] server closing
+2026-07-17 01:13:47,401 [INFO] connection closed
+2026-07-17 01:13:47,401 [INFO] server closed
+2026-07-17 01:14:46,720 [INFO] ========================================
+2026-07-17 01:14:46,720 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:14:46,720 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:14:46,720 [INFO] ========================================
+2026-07-17 01:14:46,820 [INFO] <Server sockets=(<asyncio.TransportSocket fd=540, family=2, type=1, proto=6, laddr=('127.0.0.1', 11703)>,)> is serving
+2026-07-17 01:14:46,820 [INFO] server listening on 127.0.0.1:11703
+2026-07-17 01:14:46,873 [INFO] connection open
+2026-07-17 01:14:47,234 [WARNING] Executing <Task pending name='Task-6' coro=<WebSocketServerProtocol.handler() running at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\websockets\legacy\server.py:236> wait_for=<Future pending cb=[Task.task_wakeup()] created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:427> created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\websockets\legacy\server.py:153> took 0.281 seconds
+2026-07-17 01:14:47,720 [INFO] server closing
+2026-07-17 01:14:47,740 [INFO] connection closed
+2026-07-17 01:14:47,740 [INFO] server closed
+2026-07-17 01:25:46,971 [INFO] ========================================
+2026-07-17 01:25:46,971 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:25:46,971 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:25:46,973 [INFO] ========================================
+2026-07-17 01:25:47,023 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 01:25:47,023 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: profile
+2026-07-17 01:25:47,023 [INFO] [Pairing] Profile hello: connected
+2026-07-17 01:25:47,023 [INFO] [Inbound] Command: v2:host.hello | Request ID: request-1
+2026-07-17 01:25:47,023 [INFO] [Protocol] host.hello returned 19 capabilities
+2026-07-17 01:25:47,023 [INFO] [Inbound] Command: v2:host.window | Request ID: request-2
+2026-07-17 01:25:47,023 [INFO] [Fallback] host.window returned foreground-window status
+2026-07-17 01:25:47,023 [INFO] [Inbound] Command: v2:host.action | Request ID: request-3
+2026-07-17 01:25:47,023 [INFO] [Fallback] host.action performed: click x=None y=None confidence=None
+2026-07-17 01:25:47,023 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: request-4
+2026-07-17 01:25:47,023 [INFO] [Fallback] host.visual_match performed: click x=None y=None confidence=None search_ms=None region=None
+2026-07-17 01:25:47,054 [INFO] [Hardware] Dispatching OS keystroke: ['ctrl', 'l']
+2026-07-17 01:25:47,054 [INFO] [Hardware] Keystroke executed successfully: ['ctrl', 'l']
+2026-07-17 01:25:47,213 [INFO] <Server sockets=(<asyncio.TransportSocket fd=648, family=2, type=1, proto=6, laddr=('127.0.0.1', 12060)>,)> is serving
+2026-07-17 01:25:47,213 [INFO] server listening on 127.0.0.1:12060
+2026-07-17 01:25:47,255 [INFO] connection open
+2026-07-17 01:25:47,573 [WARNING] Executing <Task pending name='Task-22' coro=<WebSocketServerProtocol.handler() running at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\websockets\legacy\server.py:236> wait_for=<Future pending cb=[Task.task_wakeup()] created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:427> created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\websockets\legacy\server.py:153> took 0.250 seconds
+2026-07-17 01:25:47,937 [INFO] server closing
+2026-07-17 01:25:47,940 [INFO] connection closed
+2026-07-17 01:25:47,940 [INFO] server closed
+2026-07-17 01:25:47,983 [INFO] <Server sockets=(<asyncio.TransportSocket fd=692, family=2, type=1, proto=6, laddr=('127.0.0.1', 12064)>,)> is serving
+2026-07-17 01:25:47,983 [INFO] server listening on 127.0.0.1:12064
+2026-07-17 01:25:48,023 [INFO] connection open
+2026-07-17 01:25:48,183 [INFO] connection open
+2026-07-17 01:25:48,383 [INFO] connection closed
+2026-07-17 01:25:48,483 [INFO] connection closed
+2026-07-17 01:25:48,499 [INFO] server closing
+2026-07-17 01:25:48,514 [INFO] server closed
+2026-07-17 01:25:48,554 [INFO] <Server sockets=(<asyncio.TransportSocket fd=740, family=2, type=1, proto=6, laddr=('127.0.0.1', 12069)>,)> is serving
+2026-07-17 01:25:48,554 [INFO] server listening on 127.0.0.1:12069
+2026-07-17 01:25:48,606 [INFO] connection open
+2026-07-17 01:25:48,899 [INFO] connection closed
+2026-07-17 01:25:48,922 [INFO] server closing
+2026-07-17 01:25:48,922 [INFO] server closed
+2026-07-17 01:25:48,990 [INFO] <Server sockets=(<asyncio.TransportSocket fd=416, family=2, type=1, proto=6, laddr=('127.0.0.1', 12073)>,)> is serving
+2026-07-17 01:25:48,990 [INFO] server listening on 127.0.0.1:12073
+2026-07-17 01:25:49,038 [INFO] connection open
+2026-07-17 01:25:49,240 [INFO] connection open
+2026-07-17 01:25:49,442 [INFO] connection closed
+2026-07-17 01:25:49,523 [INFO] connection closed
+2026-07-17 01:25:49,555 [INFO] server closing
+2026-07-17 01:25:49,555 [INFO] server closed
+2026-07-17 01:25:49,630 [INFO] <Server sockets=(<asyncio.TransportSocket fd=788, family=2, type=1, proto=6, laddr=('127.0.0.1', 12078)>,)> is serving
+2026-07-17 01:25:49,630 [INFO] server listening on 127.0.0.1:12078
+2026-07-17 01:25:49,684 [INFO] connection open
+2026-07-17 01:25:49,799 [INFO] connection open
+2026-07-17 01:25:49,922 [INFO] connection closed
+2026-07-17 01:25:49,940 [INFO] connection open
+2026-07-17 01:25:50,031 [INFO] connection closed
+2026-07-17 01:25:50,055 [INFO] connection closed
+2026-07-17 01:25:50,099 [INFO] connection open
+2026-07-17 01:25:50,199 [INFO] server closing
+2026-07-17 01:25:50,199 [INFO] connection closed
+2026-07-17 01:25:50,215 [INFO] server closed
+2026-07-17 01:25:50,246 [INFO] <Server sockets=(<asyncio.TransportSocket fd=732, family=2, type=1, proto=6, laddr=('127.0.0.1', 12085)>,)> is serving
+2026-07-17 01:25:50,246 [INFO] server listening on 127.0.0.1:12085
+2026-07-17 01:25:50,297 [INFO] connection open
+2026-07-17 01:25:50,411 [INFO] server closing
+2026-07-17 01:25:50,424 [INFO] connection closed
+2026-07-17 01:25:50,424 [INFO] server closed
+2026-07-17 01:30:19,045 [INFO] ========================================
+2026-07-17 01:30:19,047 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:30:19,047 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:30:19,047 [INFO] ========================================
+2026-07-17 01:34:29,135 [INFO] ========================================
+2026-07-17 01:34:29,135 [INFO]  BRunner Native OS Host Started
+2026-07-17 01:34:29,135 [INFO]  Listening on ws://localhost:8999
+2026-07-17 01:34:29,135 [INFO] ========================================
+2026-07-17 01:34:31,710 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 01:34:31,710 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: profile
+2026-07-17 01:34:31,711 [INFO] [Pairing] Profile hello: connected
+2026-07-17 01:34:31,715 [INFO] [Inbound] Command: v2:host.hello | Request ID: request-1
+2026-07-17 01:34:31,716 [INFO] [Protocol] host.hello returned 19 capabilities
+2026-07-17 01:34:31,716 [INFO] [Inbound] Command: v2:host.window | Request ID: request-2
+2026-07-17 01:34:31,717 [INFO] [Fallback] host.window returned foreground-window status
+2026-07-17 01:34:31,717 [INFO] [Inbound] Command: v2:host.action | Request ID: request-3
+2026-07-17 01:34:31,718 [INFO] [Fallback] host.action performed: click x=None y=None confidence=None
+2026-07-17 01:34:31,718 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: request-4
+2026-07-17 01:34:31,719 [INFO] [Fallback] host.visual_match performed: click x=None y=None confidence=None search_ms=None region=None
+2026-07-17 01:34:31,753 [INFO] [Hardware] Dispatching OS keystroke: ['ctrl', 'l']
+2026-07-17 01:34:31,754 [INFO] [Hardware] Keystroke executed successfully: ['ctrl', 'l']
+2026-07-17 01:34:31,883 [WARNING] Executing <Task finished name='Task-13' coro=<HostTransportContractTests.test_websocket_server_applies_bounded_payload_and_queue_limits() done, defined at C:\Users\MASTER\Desktop\project\BR\tests\test_host_transport_contract.py:175> result=None created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+2026-07-17 01:34:31,935 [INFO] <Server sockets=(<asyncio.TransportSocket fd=964, family=2, type=1, proto=6, laddr=('127.0.0.1', 12311)>,)> is serving
+2026-07-17 01:34:31,935 [INFO] server listening on 127.0.0.1:12311
+2026-07-17 01:34:32,001 [INFO] connection open
+2026-07-17 01:34:32,547 [INFO] server closing
+2026-07-17 01:34:32,568 [INFO] connection closed
+2026-07-17 01:34:32,568 [INFO] server closed
+2026-07-17 01:34:32,634 [INFO] <Server sockets=(<asyncio.TransportSocket fd=892, family=2, type=1, proto=6, laddr=('127.0.0.1', 12315)>,)> is serving
+2026-07-17 01:34:32,635 [INFO] server listening on 127.0.0.1:12315
+2026-07-17 01:34:32,668 [INFO] connection open
+2026-07-17 01:34:32,836 [INFO] connection open
+2026-07-17 01:34:33,045 [INFO] connection closed
+2026-07-17 01:34:33,149 [INFO] connection closed
+2026-07-17 01:34:33,175 [INFO] server closing
+2026-07-17 01:34:33,175 [INFO] server closed
+2026-07-17 01:34:33,256 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1008, family=2, type=1, proto=6, laddr=('127.0.0.1', 12320)>,)> is serving
+2026-07-17 01:34:33,256 [INFO] server listening on 127.0.0.1:12320
+2026-07-17 01:34:33,301 [INFO] connection open
+2026-07-17 01:34:33,623 [INFO] connection closed
+2026-07-17 01:34:33,635 [INFO] server closing
+2026-07-17 01:34:33,635 [INFO] server closed
+2026-07-17 01:34:33,688 [INFO] <Server sockets=(<asyncio.TransportSocket fd=952, family=2, type=1, proto=6, laddr=('127.0.0.1', 12324)>,)> is serving
+2026-07-17 01:34:33,689 [INFO] server listening on 127.0.0.1:12324
+2026-07-17 01:34:33,734 [INFO] connection open
+2026-07-17 01:34:33,951 [INFO] connection open
+2026-07-17 01:34:34,134 [INFO] connection closed
+2026-07-17 01:34:34,250 [INFO] connection closed
+2026-07-17 01:34:34,288 [INFO] server closing
+2026-07-17 01:34:34,292 [INFO] server closed
+2026-07-17 01:34:34,362 [INFO] <Server sockets=(<asyncio.TransportSocket fd=960, family=2, type=1, proto=6, laddr=('127.0.0.1', 12330)>,)> is serving
+2026-07-17 01:34:34,363 [INFO] server listening on 127.0.0.1:12330
+2026-07-17 01:34:34,424 [INFO] connection open
+2026-07-17 01:34:34,619 [INFO] connection open
+2026-07-17 01:34:34,896 [INFO] connection closed
+2026-07-17 01:34:34,957 [INFO] connection open
+2026-07-17 01:34:35,121 [INFO] connection closed
+2026-07-17 01:34:35,202 [INFO] connection closed
+2026-07-17 01:34:35,263 [INFO] connection open
+2026-07-17 01:34:35,426 [INFO] server closing
+2026-07-17 01:34:35,454 [INFO] connection closed
+2026-07-17 01:34:35,456 [INFO] server closed
+2026-07-17 01:34:35,537 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1112, family=2, type=1, proto=6, laddr=('127.0.0.1', 12337)>,)> is serving
+2026-07-17 01:34:35,537 [INFO] server listening on 127.0.0.1:12337
+2026-07-17 01:34:35,598 [INFO] connection open
+2026-07-17 01:34:35,905 [INFO] server closing
+2026-07-17 01:34:35,923 [INFO] connection closed
+2026-07-17 01:34:35,923 [INFO] server closed
+2026-07-17 02:06:50,718 [INFO] ========================================
+2026-07-17 02:06:50,734 [INFO]  BRunner Native OS Host Started
+2026-07-17 02:06:50,734 [INFO]  Listening on ws://localhost:8999
+2026-07-17 02:06:50,734 [INFO] ========================================
+2026-07-17 02:06:53,218 [INFO] [Network] New connection attempt from 127.0.0.1
+2026-07-17 02:06:53,218 [INFO] [Inbound] Command: PROFILE_HELLO | Request ID: profile
+2026-07-17 02:06:53,218 [INFO] [Pairing] Profile hello: connected
+2026-07-17 02:06:53,218 [INFO] [Inbound] Command: v2:host.hello | Request ID: request-1
+2026-07-17 02:06:53,218 [INFO] [Protocol] host.hello returned 19 capabilities
+2026-07-17 02:06:53,218 [INFO] [Inbound] Command: v2:host.window | Request ID: request-2
+2026-07-17 02:06:53,218 [INFO] [Fallback] host.window returned foreground-window status
+2026-07-17 02:06:53,218 [INFO] [Inbound] Command: v2:host.action | Request ID: request-3
+2026-07-17 02:06:53,218 [INFO] [Fallback] host.action performed: click x=None y=None confidence=None
+2026-07-17 02:06:53,218 [INFO] [Inbound] Command: v2:host.visual_match | Request ID: request-4
+2026-07-17 02:06:53,218 [INFO] [Fallback] host.visual_match performed: click x=None y=None confidence=None search_ms=None region=None
+2026-07-17 02:06:53,257 [INFO] [Hardware] Dispatching OS keystroke: ['ctrl', 'l']
+2026-07-17 02:06:53,257 [INFO] [Hardware] Keystroke executed successfully: ['ctrl', 'l']
+2026-07-17 02:06:53,401 [WARNING] Executing <Task finished name='Task-13' coro=<HostTransportContractTests.test_websocket_server_applies_bounded_payload_and_queue_limits() done, defined at C:\Users\MASTER\Desktop\project\BR\tests\test_host_transport_contract.py:175> result=None created at C:\Users\MASTER\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+2026-07-17 02:06:53,451 [INFO] <Server sockets=(<asyncio.TransportSocket fd=956, family=2, type=1, proto=6, laddr=('127.0.0.1', 13169)>,)> is serving
+2026-07-17 02:06:53,451 [INFO] server listening on 127.0.0.1:13169
+2026-07-17 02:06:53,518 [INFO] connection open
+2026-07-17 02:06:53,909 [INFO] server closing
+2026-07-17 02:06:53,918 [INFO] connection closed
+2026-07-17 02:06:53,918 [INFO] server closed
+2026-07-17 02:06:53,968 [INFO] <Server sockets=(<asyncio.TransportSocket fd=900, family=2, type=1, proto=6, laddr=('127.0.0.1', 13173)>,)> is serving
+2026-07-17 02:06:53,968 [INFO] server listening on 127.0.0.1:13173
+2026-07-17 02:06:54,001 [INFO] connection open
+2026-07-17 02:06:54,135 [INFO] connection open
+2026-07-17 02:06:54,354 [INFO] connection closed
+2026-07-17 02:06:54,451 [INFO] connection closed
+2026-07-17 02:06:54,468 [INFO] server closing
+2026-07-17 02:06:54,468 [INFO] server closed
+2026-07-17 02:06:54,535 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1060, family=2, type=1, proto=6, laddr=('127.0.0.1', 13178)>,)> is serving
+2026-07-17 02:06:54,535 [INFO] server listening on 127.0.0.1:13178
+2026-07-17 02:06:54,585 [INFO] connection open
+2026-07-17 02:06:54,801 [INFO] connection closed
+2026-07-17 02:06:54,818 [INFO] server closing
+2026-07-17 02:06:54,818 [INFO] server closed
+2026-07-17 02:06:54,873 [INFO] <Server sockets=(<asyncio.TransportSocket fd=1116, family=2, type=1, proto=6, laddr=('127.0.0.1', 13182)>,)> is serving
+2026-07-17 02:06:54,873 [INFO] server listening on 127.0.0.1:13182
+2026-07-17 02:06:54,909 [INFO] connection open
+2026-07-17 02:06:55,120 [INFO] connection open
+2026-07-17 02:06:55,285 [INFO] connection closed
+2026-07-17 02:06:55,410 [INFO] connection closed
+2026-07-17 02:06:55,418 [INFO] server closing
+2026-07-17 02:06:55,434 [INFO] server closed
+2026-07-17 02:06:55,468 [INFO] <Server sockets=(<asyncio.TransportSocket fd=932, family=2, type=1, proto=6, laddr=('127.0.0.1', 13189)>,)> is serving
+2026-07-17 02:06:55,468 [INFO] server listening on 127.0.0.1:13189
+2026-07-17 02:06:55,510 [INFO] connection open
+2026-07-17 02:06:55,618 [INFO] connection open
+2026-07-17 02:06:55,752 [INFO] connection closed
+2026-07-17 02:06:55,768 [INFO] connection open
+2026-07-17 02:06:55,885 [INFO] connection closed
+2026-07-17 02:06:55,918 [INFO] connection closed
+2026-07-17 02:06:55,951 [INFO] connection open
+2026-07-17 02:06:56,051 [INFO] server closing
+2026-07-17 02:06:56,051 [INFO] connection closed
+2026-07-17 02:06:56,067 [INFO] server closed
+2026-07-17 02:06:56,110 [INFO] <Server sockets=(<asyncio.TransportSocket fd=912, family=2, type=1, proto=6, laddr=('127.0.0.1', 13196)>,)> is serving
+2026-07-17 02:06:56,110 [INFO] server listening on 127.0.0.1:13196
+2026-07-17 02:06:56,150 [INFO] connection open
+2026-07-17 02:06:56,268 [INFO] server closing
+2026-07-17 02:06:56,284 [INFO] connection closed
+2026-07-17 02:06:56,284 [INFO] server closed

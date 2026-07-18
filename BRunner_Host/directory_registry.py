@@ -147,9 +147,13 @@ def require_directory(config, base_dir, request, permission):
         raise DirectoryRegistryError("Approved directory alias is unavailable.")
     if directory.get(permission) is not True:
         raise DirectoryRegistryError(f"Approved directory does not allow {permission}s.")
+    try:
+        root = resolve_directory_path(base_dir, directory.get("path"))
+    except LocalFileAccessError as error:
+        raise DirectoryRegistryError(str(error)) from error
     return {
         "directory": directory,
-        "root": resolve_directory_path(base_dir, directory.get("path")),
+        "root": root,
     }
 
 

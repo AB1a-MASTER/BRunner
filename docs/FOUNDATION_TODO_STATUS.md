@@ -18,15 +18,15 @@ repair of provisional nodes.
 
 ## Repository and Build Hygiene
 
-- [ ] Delete tracked/generated `release/`, `BRunner_Host/build/`, and
+- [x] Delete tracked/generated `release/`, `BRunner_Host/build/`, and
   `BRunner_Host/dist/` output.
-- [ ] Ignore those generated paths while keeping required source/build scripts.
-- [ ] Rebuild `BRunner/studio-graph/` from `BRunner/studio-graph-src/` so the
+- [x] Ignore those generated paths while keeping required source/build scripts.
+- [x] Rebuild `BRunner/studio-graph/` from `BRunner/studio-graph-src/` so the
   unpacked extension does not load stale Graph Studio code.
-- [ ] Add a deterministic build-parity test that verifies the emitted Graph
+- [x] Add a deterministic build-parity test that verifies the emitted Graph
   Studio bundle contains the current source schema/features and referenced
   assets.
-- [ ] Make a changed Graph Studio source tree with stale generated assets fail
+- [x] Make a changed Graph Studio source or imported dependency tree with stale generated assets fail
   validation before live acceptance.
 
 These are source-development tasks, not release packaging. Do not rebuild ZIP or
@@ -34,15 +34,15 @@ EXE deliverables during this milestone.
 
 ## Generic Studio and Workflow Integrity
 
-- [ ] Protect dirty drafts when creating/loading a workflow, switching Studios,
+- [x] Protect dirty drafts when creating/loading a workflow, switching Studios,
   reloading, or closing a Studio window.
-- [ ] Track a mutation revision/hash for asynchronous saves; clear dirty state
+- [x] Track a mutation revision/hash for asynchronous saves; clear dirty state
   only when the saved snapshot still matches the current draft.
-- [ ] Serialize conflicting save operations and retain a recoverable draft when
+- [x] Serialize conflicting save operations and retain a recoverable draft when
   host persistence fails.
-- [ ] Keep Graph Studio usable at supported development widths without hiding
+- [x] Keep Graph Studio usable at supported development widths without hiding
   generic workflow/save/data controls.
-- [ ] Test workflow metadata and generic graph persistence independently of any
+- [x] Test workflow metadata and generic graph persistence independently of any
   provisional node contract.
 
 Do not redesign provisional node palettes, property editors, node validation,
@@ -50,15 +50,15 @@ recorded steps, or node execution while closing these items.
 
 ## MV3 and Shared Runtime Lifecycle
 
-- [ ] Define one serializable session model for extension runtime, cancellation,
+- [x] Define one serializable session model for extension runtime, cancellation,
   and host-connection state that does not embed provisional node behavior.
-- [ ] Persist appropriate active-session/checkpoint state in
+- [x] Persist appropriate active-session/checkpoint state in
   `chrome.storage.session` and rehydrate it after service-worker restart.
-- [ ] Reconcile restored state with open tabs/content scripts and reject stale
+- [x] Reconcile restored state with open tabs/content scripts and reject stale
   session messages deterministically.
-- [ ] Require a successful companion hello and accepted paired-profile state
+- [x] Require a successful companion hello and accepted paired-profile state
   before reporting host capabilities as ready.
-- [ ] Add service-worker restart tests for session rehydration, cancellation,
+- [x] Add service-worker restart tests for session rehydration, cancellation,
   stale messages, and host reconnection without asserting provisional node
   outcomes.
 
@@ -75,6 +75,16 @@ to the node phase.
 - [x] Removed the empty `latest user info todo.txt` placeholder.
 
 ## Completion Gate
+
+The shared source implementation and automated regression work are complete.
+The overall foundation is not yet accepted for the finalized node phase because
+the companion and mapper hands-on acceptance checklists remain open.
+
+All remaining unchecked foundation items now require interaction with the real
+Companion, unpacked extension, Chrome/Chromium window state, Windows shell, or
+physical monitor configuration. Fixture URLs, negative host contracts, mapper
+route isolation, storage races/schema/quota bounds, and acceptance-script syntax
+are deterministic source gates rather than manual operator work.
 
 The shared foundation is ready for the finalized node phase when:
 

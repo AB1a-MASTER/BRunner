@@ -1,22 +1,29 @@
 import base64
 import io
+import math
 import time
 
 from PIL import Image
 
 from window_validation import (
     HostFallbackError,
-    expected_window_title,
-    foreground_window_snapshot,
     host_fallback_settings,
+    intersection_rect,
     normalize_action,
     normalize_confidence,
-    point_inside_screen,
-    screen_snapshot,
+    rect_inside_rect,
+    revalidate_visible_context,
+    validate_visible_context,
 )
 
 
 VISUAL_POINTER_ACTIONS = {"click", "doubleClick"}
+MAX_TEMPLATE_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_TEMPLATE_BASE64_CHARS = ((MAX_TEMPLATE_IMAGE_BYTES + 2) // 3) * 4
+MAX_TEMPLATE_DIMENSION = 4096
+MAX_TEMPLATE_PIXELS = 16 * 1024 * 1024
+ALLOWED_TEMPLATE_FORMATS = {"JPEG", "PNG", "WEBP"}
+ALLOWED_TEMPLATE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 def execute_visual_match_action(config, payload=None, adapter=None):
@@ -30,27 +37,37 @@ def execute_visual_match_action(config, payload=None, adapter=None):
     if action not in VISUAL_POINTER_ACTIONS:
         raise HostFallbackError(f"Unsupported visual-match action: {action or 'missing'}.")
 
-    screen = screen_snapshot(provider)
-    foreground = foreground_window_snapshot(provider)
-    expected = expected_window_title(request)
-    if expected:
-        title = str((foreground or {}).get("title") or "")
-        if expected.lower() not in title.lower():
-            raise HostFallbackError("Expected browser window is not foreground.")
+    context = validate_visible_context(request, provider)
+    screen = context["screen"]
+    foreground = context["foregroundWindow"]
+    search_region = foreground_search_region(foreground, screen)
+    if search_region is None:
+        raise HostFallbackError("Foreground browser capture region is unavailable.")
 
     threshold = visual_match_confidence(request, settings)
     template = decode_template_image(request)
-    search_region = foreground_search_region(foreground, screen)
     started_at = time.perf_counter()
     match = locate_single_match(provider, template, threshold, search_region)
     search_duration_ms = max(0, round((time.perf_counter() - started_at) * 1000))
+
+    region_rect = region_to_dict(search_region)
+    if not rect_inside_rect(match, region_rect):
+        raise HostFallbackError("Visual match extends outside the foreground browser window.")
+
+    context = revalidate_visible_context(request, context, provider)
+    refreshed_region = foreground_search_region(
+        context["foregroundWindow"],
+        context["screen"],
+    )
+    if refreshed_region != search_region:
+        raise HostFallbackError("Foreground browser capture region changed before host input.")
+    if not rect_inside_rect(match, region_to_dict(refreshed_region)):
+        raise HostFallbackError("Visual match extends outside the foreground browser window.")
+
     point = {
         "x": match["left"] + match["width"] / 2,
         "y": match["top"] + match["height"] / 2,
     }
-    if not point_inside_screen(point, screen):
-        raise HostFallbackError("Visual match coordinates are outside the visible screen.")
-
     clicks = 2 if action == "doubleClick" else 1
     provider.click(point["x"], point["y"], clicks=clicks, button="left")
 
@@ -63,7 +80,7 @@ def execute_visual_match_action(config, payload=None, adapter=None):
         "matchConfidence": match.get("confidence", threshold),
         "minimumMatchConfidence": threshold,
         "matchedBox": match,
-        "foregroundWindow": foreground,
+        "foregroundWindow": context["foregroundWindow"],
         "searchRegion": region_to_dict(search_region),
         "searchDurationMs": search_duration_ms,
     }
@@ -89,107 +106,146 @@ def decode_template_image(request):
     if not text:
         raise HostFallbackError("Missing visual-match component image.")
 
-    if "," in text and text.lower().startswith("data:"):
-        text = text.split(",", 1)[1]
+    encoded = text
+    declared_mime = None
+    if text.casefold().startswith("data:"):
+        header, separator, encoded = text.partition(",")
+        header_parts = header[5:].split(";")
+        declared_mime = str(header_parts[0] or "").strip().casefold()
+        flags = {part.strip().casefold() for part in header_parts[1:]}
+        if (
+            not separator
+            or declared_mime not in ALLOWED_TEMPLATE_MIME_TYPES
+            or "base64" not in flags
+        ):
+            raise HostFallbackError("Invalid visual-match component image.")
+
+    if not encoded or len(encoded) > MAX_TEMPLATE_BASE64_CHARS:
+        raise HostFallbackError("Visual-match component image exceeds the size limit.")
 
     try:
-        raw = base64.b64decode(text, validate=True)
-        image = Image.open(io.BytesIO(raw))
-        image.load()
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise HostFallbackError("Invalid visual-match component image.") from exc
+    if not raw or len(raw) > MAX_TEMPLATE_IMAGE_BYTES:
+        raise HostFallbackError("Visual-match component image exceeds the size limit.")
+
+    try:
+        with Image.open(io.BytesIO(raw)) as candidate:
+            image_format = str(candidate.format or "").upper()
+            width, height = candidate.size
+            if image_format not in ALLOWED_TEMPLATE_FORMATS:
+                raise HostFallbackError("Unsupported visual-match component image format.")
+            if declared_mime and not format_matches_mime(image_format, declared_mime):
+                raise HostFallbackError("Visual-match image type does not match its data URL.")
+            if (
+                width <= 0
+                or height <= 0
+                or width > MAX_TEMPLATE_DIMENSION
+                or height > MAX_TEMPLATE_DIMENSION
+                or width * height > MAX_TEMPLATE_PIXELS
+            ):
+                raise HostFallbackError("Visual-match component image dimensions exceed the limit.")
+            candidate.load()
+            return candidate.copy()
+    except HostFallbackError:
+        raise
     except Exception as exc:
         raise HostFallbackError("Invalid visual-match component image.") from exc
 
-    width, height = image.size
-    if width <= 0 or height <= 0:
-        raise HostFallbackError("Invalid visual-match component image.")
 
-    return image
+def format_matches_mime(image_format, mime_type):
+    expected = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "WEBP": "image/webp",
+    }
+    return expected.get(image_format) == mime_type
 
 
-def locate_single_match(provider, template, threshold, region=None):
+def locate_single_match(provider, template, threshold, region):
     matches = list(first_two_matches(provider, template, threshold, region))
     if not matches:
         raise HostFallbackError("Visual match target was not found.")
     if len(matches) > 1:
         raise HostFallbackError("Visual match target is ambiguous.")
 
-    match = box_to_dict(matches[0])
+    match = matches[0]
     confidence = match.get("confidence")
     if confidence is not None and confidence < threshold:
         raise HostFallbackError("Visual match confidence is below host fallback threshold.")
     return match
 
 
-def first_two_matches(provider, template, threshold, region=None):
-    locator = getattr(provider, "locateAllOnScreen", None)
+def first_two_matches(provider, template, threshold, region):
+    if not region:
+        raise HostFallbackError("Foreground browser capture region is unavailable.")
+    capture = getattr(provider, "capture_region", None)
+    if not callable(capture):
+        raise HostFallbackError("Bounded Windows screen capture is unavailable.")
+    try:
+        haystack = capture(region)
+    except Exception as exc:
+        raise HostFallbackError("Could not capture the foreground browser window.") from exc
+
+    expected_size = (int(region[2]), int(region[3]))
+    if getattr(haystack, "size", None) != expected_size:
+        raise HostFallbackError("Foreground browser capture has unexpected dimensions.")
+
+    locator = getattr(provider, "locateAll", None)
     if callable(locator):
-        yield from locate_with_supported_options(locator, template, threshold, region)
-        return
+        local_matches = locate_with_supported_options(locator, template, haystack, threshold)
+    else:
+        locator = getattr(provider, "locate", None)
+        if not callable(locator):
+            raise HostFallbackError("PyAutoGUI visual matching is unavailable.")
+        local_match = locate_one_with_supported_options(locator, template, haystack, threshold)
+        local_matches = [] if local_match is None else [local_match]
 
-    locator = getattr(provider, "locateOnScreen", None)
-    if not callable(locator):
-        raise HostFallbackError("PyAutoGUI visual matching is unavailable.")
+    local_bounds = {"left": 0, "top": 0, "width": region[2], "height": region[3]}
+    for match in limited_matches(local_matches, 2):
+        local = box_to_dict(match)
+        if not rect_inside_rect(local, local_bounds):
+            raise HostFallbackError("Visual match extends outside the captured browser region.")
+        yield {
+            **local,
+            "left": local["left"] + region[0],
+            "top": local["top"] + region[1],
+        }
 
-    match = locate_one_with_supported_options(locator, template, threshold, region)
-    if match is not None:
-        yield match
 
-
-def locate_with_supported_options(locator, template, threshold, region):
-    option_sets = visual_locator_option_sets(threshold, region)
+def locate_with_supported_options(locator, template, haystack, threshold):
     last_error = None
-    for options in option_sets:
+    for options in visual_locator_option_sets(threshold):
         try:
-            yield from limited_matches(locator(template, **options), 2)
-            return
+            return list(limited_matches(locator(template, haystack, **options), 2))
         except (TypeError, NotImplementedError) as error:
             last_error = error
-    if last_error:
-        raise HostFallbackError("PyAutoGUI visual matching is unavailable.") from last_error
+    raise HostFallbackError("Confidence-aware visual matching is unavailable.") from last_error
 
 
-def locate_one_with_supported_options(locator, template, threshold, region):
+def locate_one_with_supported_options(locator, template, haystack, threshold):
     last_error = None
-    for options in visual_locator_option_sets(threshold, region):
+    for options in visual_locator_option_sets(threshold):
         try:
-            return locator(template, **options)
+            return locator(template, haystack, **options)
         except (TypeError, NotImplementedError) as error:
             last_error = error
-    if last_error:
-        raise HostFallbackError("PyAutoGUI visual matching is unavailable.") from last_error
-    return None
+    raise HostFallbackError("Confidence-aware visual matching is unavailable.") from last_error
 
 
-def visual_locator_option_sets(threshold, region):
-    full = {"confidence": threshold, "grayscale": True}
-    if region:
-        full["region"] = region
-    options = [full]
-    if region:
-        options.append({"region": region})
-    options.append({})
-    return options
+def visual_locator_option_sets(threshold):
+    return [
+        {"confidence": threshold, "grayscale": True},
+        {"confidence": threshold},
+    ]
 
 
 def foreground_search_region(foreground, screen):
-    window = foreground if isinstance(foreground, dict) else {}
-    desktop = screen if isinstance(screen, dict) else {}
-    screen_left = int(desktop.get("left") or 0)
-    screen_top = int(desktop.get("top") or 0)
-    screen_width = max(0, int(desktop.get("width") or 0))
-    screen_height = max(0, int(desktop.get("height") or 0))
-    window_width = max(0, int(window.get("width") or 0))
-    window_height = max(0, int(window.get("height") or 0))
-    if screen_width <= 0 or screen_height <= 0 or window_width <= 0 or window_height <= 0:
+    region = intersection_rect(screen or {}, foreground or {})
+    if region is None:
         return None
-
-    left = max(screen_left, int(window.get("left") or 0))
-    top = max(screen_top, int(window.get("top") or 0))
-    right = min(screen_left + screen_width, int(window.get("left") or 0) + window_width)
-    bottom = min(screen_top + screen_height, int(window.get("top") or 0) + window_height)
-    if right <= left or bottom <= top:
-        return None
-    return (left, top, right - left, bottom - top)
+    return (region["left"], region["top"], region["width"], region["height"])
 
 
 def region_to_dict(region):
@@ -230,13 +286,25 @@ def box_to_dict(box):
         confidence = getattr(box, "confidence", None)
 
     result = {
-        "left": float(left),
-        "top": float(top),
-        "width": float(width),
-        "height": float(height),
+        "left": finite_number(left),
+        "top": finite_number(top),
+        "width": finite_number(width),
+        "height": finite_number(height),
     }
+    if result["width"] <= 0 or result["height"] <= 0:
+        raise HostFallbackError("Visual match returned invalid bounds.")
     if confidence is not None:
-        result["confidence"] = float(confidence)
+        result["confidence"] = finite_number(confidence)
+    return result
+
+
+def finite_number(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise HostFallbackError("Visual match returned invalid bounds.") from exc
+    if not math.isfinite(result):
+        raise HostFallbackError("Visual match returned invalid bounds.")
     return result
 
 
@@ -247,5 +315,6 @@ def box_value(box, attribute, index):
 
 
 def default_adapter():
-    import pyautogui
-    return pyautogui
+    from windows_desktop import WindowsDesktopAdapter
+
+    return WindowsDesktopAdapter()

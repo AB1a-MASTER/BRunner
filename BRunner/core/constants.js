@@ -35,8 +35,8 @@ export const Messages = Object.freeze({
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
   BridgeStatus: "BRIDGE_STATUS",
   GetNativePairing: "GET_NATIVE_PAIRING",
-  SaveNativePairing: "SAVE_NATIVE_PAIRING",
-  GenerateNativePairingKey: "GENERATE_NATIVE_PAIRING_KEY",
+  PairNativeProfile: "PAIR_NATIVE_PROFILE",
+  UnpairNativeProfile: "UNPAIR_NATIVE_PROFILE",
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
   ClearExecutionLogs: "CLEAR_EXECUTION_LOGS",
@@ -167,7 +167,9 @@ export const MapperResolverStates = Object.freeze({
 });
 
 export const NativeCommands = Object.freeze({
-  Auth: "AUTH",
+  ProfileHello: "PROFILE_HELLO",
+  PairProfile: "PAIR_PROFILE",
+  UnpairProfile: "UNPAIR_PROFILE",
   HostHello: "HOST_HELLO",
   HostWindow: "HOST_WINDOW",
   HostAction: "HOST_ACTION",
@@ -197,8 +199,7 @@ export const Defaults = Object.freeze({
   NativeHostUrl: "ws://127.0.0.1:8999",
   NativeRequestTimeoutMs: 10000,
   NativeMapperRequestTimeoutMs: 7000,
-  PairingKey: "ac1890957e38af28cd5d0961e6d0d530",
-  NativePairingStorageKey: "brunner.nativePairing.v1",
+  ProfileInstanceStorageKey: "brunner.profileInstanceId.v1",
   MapperStorageKey: "brunner.mapper.v1",
 
   WorkflowFileExtension: ".json",

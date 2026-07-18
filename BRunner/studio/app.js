@@ -16,6 +16,7 @@ const Messages = Object.freeze({
   StartWorkflow: "START_WORKFLOW",
   StopWorkflow: "STOP_WORKFLOW",
   CheckBridgeStatus: "CHECK_BRIDGE_STATUS",
+  BridgeStatus: "BRIDGE_STATUS",
 
   ToggleRecording: "TOGGLE_RECORDING",
   StudioReceiveStep: "STUDIO_RECEIVE_STEP",
@@ -60,6 +61,8 @@ const NavigationTargets = Object.freeze({
 
 const STUDIO_SESSION_KEY = "brunner.studio.session.v1";
 const STUDIO_KIND = "sequential";
+const STUDIO_DRAFT_KEY = "brunner.studio.draft.sequential.v1";
+const STUDIO_DRAFT_VERSION = 1;
 
 const StudioValidation = globalThis.BRunnerStudioValidation;
 
@@ -73,10 +76,17 @@ let workflow = {
 
 let isRecording = false;
 let isWorkflowRunning = false;
+let activeWorkflowRunId = "";
 let isWorkflowDirty = false;
 let loadedWorkflowFilename = "";
+let workflowRevision = 0;
+let queuedSaveCount = 0;
+let draftPersistTimer = 0;
+let draftRestorePromise = Promise.resolve(false);
+let saveQueue = Promise.resolve();
 let lastRunVariables = {};
 let runtimeVariableEntries = [];
+let bridgeReady = null;
 const nodeDefinitionsByType = new Map();
 let autocompleteState = null;
 let initialStudioSessionApplied = false;
@@ -90,6 +100,7 @@ const workflowListContainer = document.getElementById("workflow-list");
 const btnRecord = document.getElementById("btn-record");
 const btnRun = document.getElementById("btn-run");
 const btnSave = document.getElementById("btn-save");
+const draftStatus = document.getElementById("draft-status");
 const validationStatus = document.getElementById("validation-status");
 const statusText = document.getElementById("status-text");
 const recordingTabPolicyInput = document.getElementById(
@@ -114,6 +125,7 @@ init();
 function init() {
   wireLayoutControls();
   wireWorkflowFileControls();
+  wireDraftLifecycle();
   wireActionPalette();
   wireCanvasEditing();
   wireStudioSessionSync();
@@ -130,16 +142,160 @@ function init() {
 
   renderCanvas();
   renderDataInspector();
+  draftRestorePromise = restoreRecoverableDraft().catch(() => false);
   checkBridgeStatus();
   syncRuntimeState();
+}
+
+function markWorkflowDirty(message = "Unsaved changes") {
+  workflowRevision += 1;
+  isWorkflowDirty = true;
+  updateDraftStatus(message, "warning");
+  scheduleRecoverableDraft();
+}
+
+function setWorkflowClean(message = "Saved") {
+  isWorkflowDirty = false;
+  updateDraftStatus(message, "success");
+}
+
+function updateDraftStatus(message, kind = "neutral") {
+  if (!draftStatus) return;
+  draftStatus.textContent = message;
+  draftStatus.dataset.kind = kind;
+}
+
+function confirmDiscardDirtyDraft(action) {
+  return !isWorkflowDirty || confirm(
+    `Unsaved workflow changes will be discarded if you ${action}. Continue?`,
+  );
+}
+
+function wireDraftLifecycle() {
+  globalThis.addEventListener("beforeunload", (event) => {
+    if (!isWorkflowDirty) return;
+    void persistRecoverableDraft().catch(() => {});
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  globalThis.addEventListener("pagehide", () => {
+    if (isWorkflowDirty) void persistRecoverableDraft().catch(() => {});
+  });
+
+  document.getElementById("graph-studio-link")?.addEventListener("click", async (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (queuedSaveCount > 0) {
+      event.preventDefault();
+      alert("Wait for the current workflow save to finish before switching Studios.");
+      return;
+    }
+    if (!isWorkflowDirty) return;
+    event.preventDefault();
+    if (!confirmDiscardDirtyDraft("open Graph Studio")) return;
+    isWorkflowDirty = false;
+    await clearRecoverableDraft().catch(() => {});
+    globalThis.location.assign(event.currentTarget.href);
+  });
+}
+
+function scheduleRecoverableDraft() {
+  globalThis.clearTimeout(draftPersistTimer);
+  draftPersistTimer = globalThis.setTimeout(() => {
+    void persistRecoverableDraft().catch((error) => {
+      updateDraftStatus(
+        `Local draft backup failed: ${error.message || error}`,
+        "error",
+      );
+    });
+  }, 180);
+}
+
+function captureRecoverableDraft() {
+  const content = getWorkflowFromUI();
+  const workflowName = workflowNameInput.value || "Untitled";
+  return {
+    version: STUDIO_DRAFT_VERSION,
+    studio: STUDIO_KIND,
+    revision: workflowRevision,
+    loadedFilename: loadedWorkflowFilename,
+    workflowName,
+    fingerprint: hashWorkflowSnapshot({ workflowName, content }),
+    content,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function persistRecoverableDraft(snapshot = null) {
+  if (!isWorkflowDirty && !snapshot) return false;
+  const draft = snapshot || captureRecoverableDraft();
+  await chrome.storage.local.set({ [STUDIO_DRAFT_KEY]: draft });
+  return true;
+}
+
+async function clearRecoverableDraft() {
+  globalThis.clearTimeout(draftPersistTimer);
+  draftPersistTimer = 0;
+  await chrome.storage.local.remove(STUDIO_DRAFT_KEY);
+}
+
+async function restoreRecoverableDraft() {
+  const stored = await chrome.storage.local.get(STUDIO_DRAFT_KEY);
+  const draft = stored?.[STUDIO_DRAFT_KEY];
+  if (
+    draft?.version !== STUDIO_DRAFT_VERSION
+    || draft?.studio !== STUDIO_KIND
+    || !draft.content
+  ) return false;
+
+  const label = draft.workflowName || draft.loadedFilename || "Untitled";
+  if (!confirm(`Recover unsaved Sequential Studio draft "${label}"?`)) {
+    await clearRecoverableDraft();
+    return false;
+  }
+
+  workflow = normalizeWorkflow(draft.content);
+  workflowRevision = Math.max(1, Number(draft.revision) || 1);
+  loadedWorkflowFilename = String(draft.loadedFilename || "");
+  workflowNameInput.value = String(draft.workflowName || "Untitled");
+  workflowDomainInput.value = workflow.boundDomain || "";
+  if (workflowDescriptionInput) workflowDescriptionInput.value = workflow.description || "";
+  workflowReuseTabsInput.checked = workflow.settings?.reuseExistingTabs === true;
+  lastRunVariables = {};
+  runtimeVariableEntries = [];
+  initialStudioSessionApplied = true;
+  isWorkflowDirty = true;
+  renderCanvas();
+  renderDataInspector();
+  refreshValidationUI();
+  updateDraftStatus("Recovered unsaved draft", "warning");
+  return true;
+}
+
+function hashWorkflowSnapshot(snapshot) {
+  const source = stableStringify(snapshot);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => (
+    `${JSON.stringify(key)}:${stableStringify(value[key])}`
+  )).join(",")}}`;
 }
 
 function wireLayoutControls() {
   [workflowNameInput, workflowDomainInput, workflowDescriptionInput, workflowReuseTabsInput]
     .filter(Boolean)
     .forEach((control) => control.addEventListener("input", () => {
-      isWorkflowDirty = true;
       updateStateFromUI();
+      markWorkflowDirty();
       refreshValidationUI();
     }));
   [btnTogglePalette, btnCollapsePalette].filter(Boolean).forEach((button) => {
@@ -170,8 +326,13 @@ function wireLayoutControls() {
   dataInspectorSearch?.addEventListener("input", renderDataInspector);
   dataInspectorList?.addEventListener("click", handleDataInspectorClick);
 
-  document.getElementById("btn-new")?.addEventListener("click", () => {
+  document.getElementById("btn-new")?.addEventListener("click", async () => {
     updateStateFromUI();
+    if (queuedSaveCount > 0) {
+      alert("Wait for the current workflow save to finish before creating a new workflow.");
+      return;
+    }
+    if (!confirmDiscardDirtyDraft("create a new workflow")) return;
 
     workflow = {
       description: "",
@@ -188,7 +349,8 @@ function wireLayoutControls() {
     loadedWorkflowFilename = "";
     lastRunVariables = {};
     runtimeVariableEntries = [];
-    isWorkflowDirty = true;
+    await clearRecoverableDraft().catch(() => {});
+    markWorkflowDirty("New workflow has unsaved changes");
 
     renderCanvas();
     renderDataInspector();
@@ -317,7 +479,7 @@ function wireCanvasEditing() {
     const input = event.target.closest("input, textarea, select");
     if (!input || !canvas.contains(input)) return;
     updateStateFromUI();
-    isWorkflowDirty = true;
+    markWorkflowDirty();
     refreshContextualFieldVisibility();
     refreshValidationUI();
     if (input.matches("[data-expression='true']")) {
@@ -356,6 +518,7 @@ async function stopCurrentWorkflow() {
   try {
     const response = await chrome.runtime.sendMessage({
       type: Messages.StopWorkflow,
+      runId: activeWorkflowRunId,
     });
 
     if (!response?.ok) {
@@ -387,6 +550,8 @@ function wireRecordingControls() {
       if (recording?.boundDomain && !workflowDomainInput.value.trim()) {
         workflowDomainInput.value = recording.boundDomain;
         workflow.boundDomain = recording.boundDomain;
+        markWorkflowDirty("Workflow domain auto-bound from recording");
+        refreshValidationUI();
       }
 
       if (!isRecording) {
@@ -413,7 +578,7 @@ function wireRuntimeMessages() {
 
       const step = normalizeStep(request.step);
       workflow.steps.push(step);
-      isWorkflowDirty = true;
+      markWorkflowDirty("Recorded step is unsaved");
 
       renderCanvas();
       canvas.scrollTop = canvas.scrollHeight;
@@ -434,20 +599,49 @@ function wireRuntimeMessages() {
       return true;
     }
 
+    if (request?.type === Messages.BridgeStatus) {
+      applyBridgeStatus(request.bridge || request);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     return false;
   });
 }
 
-async function saveWorkflowToOS() {
+function saveWorkflowToOS() {
   updateStateFromUI();
+  if (!validateCurrentWorkflow({ focusFirst: true })) return Promise.resolve(false);
 
-  if (!validateCurrentWorkflow({ focusFirst: true })) return;
+  queuedSaveCount += 1;
+  updateDraftStatus(queuedSaveCount > 1 ? "Save queued" : "Saving...", "neutral");
+  refreshValidationUI();
+
+  const queued = saveQueue.then(
+    () => performWorkflowSave(),
+    () => performWorkflowSave(),
+  );
+  saveQueue = queued.catch(() => {});
+  return queued.finally(() => {
+    queuedSaveCount = Math.max(0, queuedSaveCount - 1);
+    refreshValidationUI();
+  });
+}
+
+async function performWorkflowSave() {
+  updateStateFromUI();
+  if (!validateCurrentWorkflow({ focusFirst: true })) return false;
 
   const desiredFilename = ensureJsonFilename(
     workflowNameInput.value || "Untitled",
   );
   const filename = loadedWorkflowFilename || desiredFilename;
-  const content = getWorkflowFromUI();
+  const submittedDraft = captureRecoverableDraft();
+  const submittedState = {
+    revision: submittedDraft.revision,
+    fingerprint: submittedDraft.fingerprint,
+  };
+  const content = submittedDraft.content;
 
   try {
     const isRename =
@@ -469,23 +663,39 @@ async function saveWorkflowToOS() {
           },
     );
 
-    if (isSuccess(response)) {
-      loadedWorkflowFilename =
-        response.newFilename || response.filename || desiredFilename;
-      isWorkflowDirty = false;
-      workflowNameInput.value = loadedWorkflowFilename.replace(/\.json$/i, "");
-      refreshValidationUI();
-      await saveStudioSession({
-        activeWorkflowFilename: loadedWorkflowFilename,
-        activeStudio: STUDIO_KIND,
-      }).catch(() => {});
-      alert(`Workflow "${loadedWorkflowFilename}" saved.`);
-      refreshWorkflowList();
+    if (!isSuccess(response)) throw new Error(response?.error || "Unknown error");
+
+    const savedFilename = response.newFilename || response.filename || desiredFilename;
+    loadedWorkflowFilename = savedFilename;
+    const currentDraft = captureRecoverableDraft();
+    const submittedStillCurrent = submittedState.revision === workflowRevision
+      && submittedState.fingerprint === currentDraft.fingerprint;
+
+    if (submittedStillCurrent) {
+      setWorkflowClean(`Saved ${savedFilename}`);
+      await clearRecoverableDraft().catch(() => {});
     } else {
-      alert(`Failed to save: ${response?.error || "Unknown error"}`);
+      isWorkflowDirty = true;
+      updateDraftStatus("Older snapshot saved; newer edits remain", "warning");
+      await persistRecoverableDraft().catch(() => {});
     }
+
+    refreshValidationUI();
+    await saveStudioSession({
+      activeWorkflowFilename: savedFilename,
+      activeStudio: STUDIO_KIND,
+    }).catch(() => {});
+    alert(submittedStillCurrent
+      ? `Workflow "${savedFilename}" saved.`
+      : `Workflow "${savedFilename}" saved. Newer edits remain unsaved.`);
+    void refreshWorkflowList();
+    return true;
   } catch (error) {
+    isWorkflowDirty = true;
+    await persistRecoverableDraft().catch(() => {});
+    updateDraftStatus("Save failed; draft kept locally", "error");
     alert(`Failed to save: ${error.message || error}`);
+    return false;
   }
 }
 
@@ -520,6 +730,16 @@ async function refreshWorkflowList() {
 }
 
 async function loadWorkflowFromOS(filename, options = {}) {
+  updateStateFromUI();
+  if (queuedSaveCount > 0) {
+    alert("Wait for the current workflow save to finish before loading another workflow.");
+    return false;
+  }
+  if (options.skipDirtyPrompt !== true && !confirmDiscardDirtyDraft(`load "${filename}"`)) {
+    return false;
+  }
+  const loadStartedAtRevision = workflowRevision;
+
   try {
     const response = await chrome.runtime.sendMessage({
       type: Messages.OsLoadWorkflow,
@@ -528,8 +748,14 @@ async function loadWorkflowFromOS(filename, options = {}) {
 
     if (!isSuccess(response)) {
       alert(`Failed to load workflow: ${response?.error || "Unknown error"}`);
-      return;
+      return false;
     }
+
+    if (
+      isWorkflowDirty
+      && workflowRevision !== loadStartedAtRevision
+      && !confirmDiscardDirtyDraft(`finish loading "${filename}"`)
+    ) return false;
 
     const content =
       response.content || response.workflow || response.data || response;
@@ -544,7 +770,9 @@ async function loadWorkflowFromOS(filename, options = {}) {
       workflow.settings?.reuseExistingTabs === true;
     lastRunVariables = {};
     runtimeVariableEntries = [];
-    isWorkflowDirty = false;
+    workflowRevision += 1;
+    setWorkflowClean(`Loaded ${filename}`);
+    await clearRecoverableDraft().catch(() => {});
 
     renderCanvas();
     renderDataInspector();
@@ -554,8 +782,10 @@ async function loadWorkflowFromOS(filename, options = {}) {
         activeStudio: STUDIO_KIND,
       }).catch(() => {});
     }
+    return true;
   } catch (error) {
     alert(`Failed to load workflow: ${error.message || error}`);
+    return false;
   }
 }
 
@@ -648,6 +878,12 @@ async function deleteWorkflow(filename) {
     if (isSuccess(response)) {
       if (loadedWorkflowFilename === filename) {
         loadedWorkflowFilename = "";
+        markWorkflowDirty("Saved source deleted; this open workflow is now an unsaved draft");
+        refreshValidationUI();
+        saveStudioSession({
+          activeWorkflowFilename: "",
+          activeStudio: STUDIO_KIND,
+        }).catch(() => {});
       }
       refreshWorkflowList();
     } else {
@@ -701,7 +937,7 @@ function addStepToWorkflow(action) {
   updateStateFromUI();
 
   workflow.steps.push(createStep(action));
-  isWorkflowDirty = true;
+  markWorkflowDirty();
   renderCanvas();
 }
 
@@ -763,18 +999,20 @@ function createStep(action) {
 function deleteStep(stepId) {
   updateStateFromUI();
   workflow.steps = workflow.steps.filter((step) => step.id !== stepId);
-  isWorkflowDirty = true;
+  markWorkflowDirty();
   renderCanvas();
 }
 
 function moveStep(index, direction) {
   updateStateFromUI();
+  let moved = false;
 
   if (direction === "up" && index > 0) {
     [workflow.steps[index - 1], workflow.steps[index]] = [
       workflow.steps[index],
       workflow.steps[index - 1],
     ];
+    moved = true;
   }
 
   if (direction === "down" && index < workflow.steps.length - 1) {
@@ -782,8 +1020,10 @@ function moveStep(index, direction) {
       workflow.steps[index],
       workflow.steps[index + 1],
     ];
+    moved = true;
   }
 
+  if (moved) markWorkflowDirty();
   renderCanvas();
 }
 
@@ -979,8 +1219,6 @@ function normalizeStep(step) {
     }
   }
 
-  isWorkflowDirty = true;
-
   const primaryPayload = payload.primary;
 
   switch (action) {
@@ -1040,6 +1278,7 @@ function wireStudioSessionSync() {
 }
 
 async function applyInitialStudioSession(files = []) {
+  await draftRestorePromise.catch(() => false);
   if (initialStudioSessionApplied || loadedWorkflowFilename || isWorkflowDirty) return;
   initialStudioSessionApplied = true;
   const session = await loadStudioSession().catch(() => null);
@@ -1096,6 +1335,7 @@ function applyRuntimeState(state) {
   const running = ["running", "cancelling"].includes(executionStatus);
   const stopping = executionStatus === "cancelling";
   isWorkflowRunning = running;
+  activeWorkflowRunId = state.execution?.runId || "";
 
   setRunButtonRunning(running, stopping);
   if (btnRecord) btnRecord.disabled = running;
@@ -1277,10 +1517,18 @@ function refreshValidationUI() {
     validationStatus.classList.toggle("has-errors", issues.length > 0);
   }
   if (btnSave) {
-    btnSave.disabled = Boolean(issues.length || !isWorkflowDirty || isWorkflowRunning || isRecording);
+    btnSave.disabled = Boolean(
+      issues.length
+      || !isWorkflowDirty
+      || isWorkflowRunning
+      || isRecording
+      || queuedSaveCount > 0,
+    );
     btnSave.title = issues.length
       ? "Fix validation errors before saving"
-      : !isWorkflowDirty ? "No unsaved workflow changes" : "Save workflow changes";
+      : queuedSaveCount > 0
+        ? "Workflow save in progress"
+        : !isWorkflowDirty ? "No unsaved workflow changes" : "Save workflow changes";
   }
   if (btnRun && !isWorkflowRunning) {
     btnRun.title = issues.length ? "Fix validation errors before running" : "Run workflow";
@@ -1900,7 +2148,7 @@ function getInstructionText(action) {
     case Actions.FileInputUpload:
       return "Creates a text/base64 file and assigns it to a web file input.";
     case Actions.FileLocalUpload:
-      return "Reads an allowlisted file through the native host and assigns it to a web file input.";
+      return "Reads an approved local file path through the native host and assigns it to a web file input.";
     case Actions.DownloadWait:
       return "Waits for a recent browser download and stores safe metadata.";
     case Actions.ScreenshotCapture:
@@ -1939,20 +2187,22 @@ async function checkBridgeStatus() {
     const response = await chrome.runtime.sendMessage({
       type: Messages.CheckBridgeStatus,
     });
-
-    const connected = Boolean(response?.connected);
-
-    statusText.innerText = connected ? "Connected to Host" : "Disconnected";
-    statusText.className = connected
-      ? "status-connected"
-      : "status-disconnected";
-
-    if (connected) {
-      refreshWorkflowList();
-    }
+    applyBridgeStatus(response);
   } catch {
-    statusText.innerText = "Disconnected";
-    statusText.className = "status-disconnected";
+    applyBridgeStatus({ connected: false, ready: false });
+  }
+}
+
+function applyBridgeStatus(bridge = {}) {
+  const previousReady = bridgeReady;
+  bridgeReady = bridge.ready === true || bridge.connected === true;
+  statusText.innerText = bridgeReady ? "Connected to Host" : "Disconnected";
+  statusText.className = bridgeReady
+    ? "status-connected"
+    : "status-disconnected";
+
+  if (bridgeReady && previousReady !== true) {
+    refreshWorkflowList();
   }
 }
 

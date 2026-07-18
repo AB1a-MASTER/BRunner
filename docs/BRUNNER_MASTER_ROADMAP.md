@@ -1,7 +1,7 @@
 # BRunner Master Roadmap
 
 **Status:** Current product scope and implementation sequence
-**Updated:** 2026-07-13
+**Updated:** 2026-07-16
 
 ## Authority
 
@@ -69,9 +69,9 @@ The repository already contains a substantial working foundation:
   traversal, and legacy workflow adapters;
 - tab/page tracking, variables, expressions, existing browser/data/file nodes,
   and host-backed workflow persistence;
-- the Windows companion source with workflow storage, approved folders,
-  transitional key-based pairing code, diagnostics, and visible fallback
-  foundations; the target cooperative profile-instance lock remains open;
+- the Windows companion source with workflow storage, approved folders, the
+  cooperative profile-instance lock, live diagnostics, and fail-closed visible
+  fallback foundations;
 - workflow/page-scoped mapper storage, component identity, reconciliation,
   resolver diagnostics, open-shadow and frame-related source support, test
   fixtures, and an engineering-oriented Mapper Inspector.
@@ -83,14 +83,16 @@ phase begins.
 
 ## Current implementation sequence
 
-### Milestone 0 - Shared and companion foundation closure (current supporting work)
+### Milestone 0 - Shared and companion foundation closure (source complete)
 
-Complete the non-node infrastructure listed in
+The automated source work listed in
 `FOUNDATION_TODO_STATUS.md` and `COMPANION_TODO_STATUS.md`: generated-artifact
 cleanup, Graph Studio build parity, generic draft/save integrity, node-neutral
 MV3 session recovery, the cooperative profile-instance lock, companion storage,
 approved-folder semantics, transport readiness, and visible-fallback
-correctness.
+correctness is implemented. The extension/host round trip has passed with its
+exact expected value. The remaining companion gate consists only of real
+Companion/Chrome/Windows UI and hardware checks.
 
 This work may proceed alongside mapper-engine closure, but it must not repair or
 redesign provisional nodes.
@@ -99,10 +101,17 @@ redesign provisional nodes.
 deterministic and focused live tests. Packaged release acceptance is not part of
 this gate.
 
-### Milestone 1 - Mapper engine and reliability closure (current)
+### Milestone 1 - Mapper engine and reliability closure (source complete)
 
-The mapper engine is the current product priority. Finish and verify the engine
-before expanding workflow nodes or polishing the saved-map UI.
+The mapper engine source and deterministic regression gates are implemented.
+The operator fixtures now cover isolated evidence drift, ambiguity/capability
+requirements, keyed and unkeyed loaded windows, deterministic mutation and
+component overflow, shadow/frame boundaries, platform contexts, and SPA routes.
+Stored exact page identity is enforced during tab selection and in-page
+resolution. DOM-capture ordering, malformed direct records/tombstones, bounded
+whitelisted state, unrelated-legacy preservation, oversized evidence, and
+terminal quota rollback are deterministic gates. Complete the live extension
+checklist before expanding workflow nodes or polishing the saved-map UI.
 
 Required V1 outcomes:
 
@@ -119,9 +128,13 @@ Required V1 outcomes:
 7. Open Shadow DOM and extension-accessible frame behavior work only within the
    source and live scenarios that are actually verified. Inaccessible contexts
    fail honestly.
-8. Map persistence uses serialized or revision-checked per-workflow/page writes
-   so concurrent frames, tabs, and diagnostics cannot lose updates.
-9. Deterministic mapper tests pass, followed by focused live extension
+8. Map persistence uses serialized, generation/revision-checked per-workflow
+   writes, bounded aggregate retention, and deterministic quota recovery so
+   concurrent frames, tabs, and diagnostics cannot lose or resurrect updates.
+9. Candidate discovery, fact construction, mutation rescans, frame aggregation,
+   and runtime resolution are bounded before content-script CPU/message work;
+   overflow defers honestly instead of accepting a truncated map.
+10. Deterministic mapper tests pass, followed by focused live extension
    acceptance against the repository fixtures.
 
 The existing Mapper Inspector may be used as an engineering diagnostic surface
@@ -217,26 +230,20 @@ user explicitly starts a release milestone.
 Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
 `MAPPER_TODO_STATUS.md` as the detailed current checklists.
 
-1. Remove disposable generated package/build output, add the corresponding
-   ignore rules, restore Graph Studio source/bundle parity, and add a build
-   freshness gate.
-2. Replace transitional pairing keys with the cooperative profile-instance
-   lock and close the other companion foundation TODOs.
-3. Remove mapper redaction/sensitive-site policy code. Remove provisional
-   node-specific masking later when each finalized node is implemented rather
-   than repairing the current node catalog.
-4. Close mapper-engine reliability gaps and run focused source/live fixture
-   acceptance.
-5. Record any mapper failure as an engine issue; defer nonessential saved-map
-   viewer polish to V2.
-6. Close generic Studio save/draft integrity and node-neutral MV3
-   restart/rehydration work from `FOUNDATION_TODO_STATUS.md`.
-7. After all shared, companion, and mapper foundation gates pass, start the
+1. Run only the remaining Companion/extension UI checks in
+   `COMPANION_TODO_STATUS.md`; the round trip and non-UI cases are automated or
+   already accepted.
+2. Reload the unpacked extension and run the complete live mapper fixture
+   checklist in `MAPPER_MANUAL_ACCEPTANCE.md`.
+3. Record any acceptance failure as a companion, shared-foundation, or mapper
+   issue and close it without changing provisional node contracts.
+4. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
+5. After all shared, companion, and mapper foundation gates pass, start the
    finalized node program from `workflow_nodes_implementation_blueprint.md` and
    track upgrade, rewrite/change, add, and removal status for every catalog
    item.
-8. Complete integrated V1 source acceptance.
-9. Ask the user before beginning any V2 viewer, product-boundary change, or
+6. Complete integrated V1 source acceptance.
+7. Ask the user before beginning any V2 viewer, product-boundary change, or
    release work.
 
 ## Development rules

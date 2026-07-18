@@ -1403,12 +1403,6 @@ pre {
   border-color: var(--border);
 }
 
-.sensitive-badge {
-  border-color: #f43f5e;
-  color: #fecdd3;
-  background: rgba(244, 63, 94, 0.14);
-}
-
 .status-same,
 .status-resolved {
   color: var(--ok);

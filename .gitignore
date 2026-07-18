@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 node_modules/
 release/
+BRunner_Host/build/
+BRunner_Host/dist/
+BRunner_Host/*.log

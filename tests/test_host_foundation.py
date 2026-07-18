@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 HOST_DIR = Path(__file__).resolve().parents[1] / "BRunner_Host"
@@ -22,6 +23,7 @@ from app import (
     SELF_CHECK_FLAG,
     SERVE_HOST_ENV,
     launcher_log_file,
+    companion_startup_error_message,
     run_self_check,
     should_run_self_check,
     should_serve_host,
@@ -45,7 +47,7 @@ class HostFoundationTests(unittest.TestCase):
         self.assertEqual(default_config_file(anchor), anchor.parent / "brunner_config.json")
         self.assertEqual(default_workflows_directory(anchor), anchor.parent / "Workflows")
         self.assertEqual(default_logs_directory(anchor), anchor.parent / "Logs")
-        self.assertEqual(default_log_file(anchor), anchor.parent / "brunner_host.log")
+        self.assertEqual(default_log_file(anchor), anchor.parent / "Logs" / "brunner_host.log")
 
     def test_source_mode_accepts_directory_anchor(self):
         self.assertEqual(application_directory(self.base_dir), self.base_dir)
@@ -144,6 +146,32 @@ class HostFoundationTests(unittest.TestCase):
             sys.argv = original_argv
             app.run_embedded_host = original_run_embedded_host
             app.write_launcher_error = original_write_launcher_error
+
+    def test_companion_startup_failure_is_logged_and_shown_actionably(self):
+        error = PermissionError("workflow folder is read-only")
+        original_argv = sys.argv
+        try:
+            sys.argv = ["app.py"]
+            with mock.patch(
+                "desktop.main_window.run_companion_app",
+                side_effect=error,
+            ), mock.patch.object(app, "write_launcher_error") as write_error, mock.patch.object(
+                app,
+                "show_companion_startup_error",
+            ) as show_error, mock.patch.dict(
+                "os.environ",
+                {SERVE_HOST_ENV: ""},
+            ):
+                self.assertEqual(app.main(), 2)
+        finally:
+            sys.argv = original_argv
+
+        write_error.assert_called_once_with(error)
+        show_error.assert_called_once_with(error)
+        message = companion_startup_error_message(error)
+        self.assertIn("workflow folder", message)
+        self.assertIn("writable", message)
+        self.assertIn("move the source folder", message)
 
     def test_atomic_json_write_creates_normalized_file_without_temp_leftovers(self):
         destination = self.base_dir / "nested" / "config.json"

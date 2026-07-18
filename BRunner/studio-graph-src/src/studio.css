@@ -732,6 +732,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .execution-log-entry > div { display: grid; gap: 2px; }
 }
 
+@media (max-width: 780px) {
+  .studio-command-bar { scrollbar-gutter: stable; }
+  .command-sections,
+  .saved-workflow-group { flex: 0 0 auto; }
+  .saved-workflow-group .command-button { min-width: 36px; min-height: 36px; }
+  .graph-layout,
+  .graph-layout.inspector-collapsed {
+    position: relative;
+    grid-template-columns: clamp(120px, 23vw, 180px) minmax(0, 1fr);
+  }
+  .graph-layout.library-collapsed,
+  .graph-layout.library-collapsed.inspector-collapsed {
+    grid-template-columns: var(--graph-rail-width) minmax(0, 1fr);
+  }
+  .properties-panel {
+    position: absolute;
+    z-index: 9;
+    inset: 0 0 0 auto;
+    display: flex;
+    width: min(var(--graph-right-panel-width), calc(100vw - 48px));
+    max-width: calc(100vw - 48px);
+    box-shadow: -16px 0 32px rgba(0,0,0,0.38);
+  }
+  .panel-restore-rail.rail-right {
+    position: absolute;
+    z-index: 8;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--graph-rail-width);
+    border-left: 1px solid var(--border);
+  }
+}
+
 @media (max-height: 600px) {
   .graph-shell.logs-open { grid-template-rows: calc(58px * var(--studio-density-scale)) minmax(calc(150px * var(--studio-density-scale)), 1fr) calc(150px * var(--studio-density-scale)); }
   .studio-command-bar { min-height: calc(58px * var(--studio-density-scale)); padding-block: calc(4px * var(--studio-density-scale)); }

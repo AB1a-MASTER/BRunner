@@ -5,8 +5,9 @@
 Active implementation spec for the Windows companion transition. A July 2026
 source audit reopened pairing, storage-transition, approved-folder,
 visible-fallback, and packaging claims that were present in source but not
-correct or sufficiently verified. The companion is not source-complete and the
-current ZIP/EXE outputs are development test artifacts, not releases.
+correct or sufficiently verified. The automated source work is now complete;
+hands-on source acceptance and release packaging remain open. Current ZIP/EXE
+outputs are development test artifacts, not releases.
 
 This spec is derived from:
 
@@ -52,7 +53,9 @@ structured result.
 - Desktop framework: PySide6 is the recommended target.
 - Supported browser family for this transition: Chrome/Chromium on Windows.
 - The browser manager UI on port 8998 is retired from production use.
-- The WebSocket host remains loopback-only and keeps default port 8999.
+- The WebSocket host remains loopback-only on fixed port 8999, matching the
+  extension endpoint. The port is displayed for diagnostics but is not
+  user-configurable.
 - Existing v1 WebSocket commands remain during transition.
 - A versioned protocol v2 is introduced for structured capabilities.
 - Workflows remain beside the executable by default:
@@ -91,8 +94,8 @@ Required main-window sections:
 - Host Fallback: enabled state, coordinate confidence threshold, diagnostics
   screenshot setting, supported action status.
 - Pairing: current paired instance ID, explicit Pair and Unpair controls, live
-  connection state, one-active-connection status, and WebSocket port
-  configuration. The instance ID may be displayed or copied; it is not a
+  connection state, one-active-connection status, and read-only fixed WebSocket
+  port display. The instance ID may be displayed or copied; it is not a
   credential.
 - Diagnostics: host log view, recent capability requests, logs folder, export
   diagnostics.
@@ -150,9 +153,7 @@ fingerprints in the accepted model.
 ```json
 {
   "schemaVersion": 3,
-  "pairing": {
-    "pairedInstanceId": null
-  },
+  "pairedInstanceId": null,
   "host": {
     "port": 8999,
     "startWithApp": true
@@ -173,8 +174,7 @@ fingerprints in the accepted model.
   ],
   "hostFallback": {
     "enabled": true,
-    "minimumCoordinateConfidence": 0.9,
-    "captureDiagnosticsScreenshots": false
+    "minimumCoordinateConfidence": 0.9
   }
 }
 ```
@@ -182,8 +182,9 @@ fingerprints in the accepted model.
 Migration from the current schema-2 config:
 
 1. Load `brunner_config.json` if present.
-2. Preserve the host port, workflow location, approved-directory state, and
-   fallback preferences.
+2. Normalize any legacy custom host-port value to the fixed loopback port 8999;
+   preserve workflow location, approved-directory state, and fallback
+   preferences.
 3. Remove the transitional pairing key and runtime extension ID. Start the new
    cooperative pairing state as unpaired so the user explicitly selects one
    Chrome/Chromium profile.
@@ -224,11 +225,16 @@ fingerprint.
 
 Current implementation status:
 
-- The source still uses a transitional pairing-key `AUTH` flow and browser
-  runtime ID. That implementation is not accepted and must be replaced.
-- No source-complete claim applies until generated per-profile IDs, explicit
-  Pair/Unpair, one-active-connection enforcement, and live connection reporting
-  have executable contract tests.
+- Each extension profile has a stable non-secret instance ID and explicit
+  Pair/Unpair controls.
+- The host stores one paired ID, accepts one active matching connection, and
+  reports stored pairing separately from live connection state. Live state is
+  backed by a short-lived completed-handshake heartbeat and is accepted only
+  when its profile, fixed port 8999, and live host process match. For an
+  externally started host, the reported process must also own the loopback
+  listener.
+- Real loopback WebSocket tests cover pairing, other-profile and duplicate
+  refusal, disconnect release, reconnect, and protocol-v2 hello reporting.
 
 ## Atomic Persistence
 
@@ -331,12 +337,16 @@ Required flow:
 
 1. Extension resolves the user-provided identifier first.
 2. Extension attempts browser-native automation.
-3. On allowed fallback, extension scrolls target into view and computes
-   candidate coordinates.
+3. On allowed fallback, extension focuses and activates the target tab, then
+   scrolls the target into view and captures one coordinate snapshot.
 4. Extension sends run, node, attempt, browser-window, URL, target bounds,
-   display data, and confidence.
-5. Companion app verifies foreground window, display mapping, coordinate
-   confidence, and policy.
+   CSS viewport/client data, device-pixel ratio, and confidence.
+5. Companion app verifies foreground window, per-monitor DPI mode, coordinate
+   confidence, policy, and exactly one visible Chrome renderer viewport whose
+   physical dimensions match that CSS viewport and device-pixel ratio. It
+   refuses missing, stale, or multiple matching renderer geometry. Page zoom
+   and side UI remain valid when the renderer transform is uniquely verified;
+   no browser-chrome offset is estimated.
 6. Companion app performs the visible input.
 7. Extension verifies the intended page-state change.
 8. If coordinate fallback was performed but verification still fails and the
@@ -362,20 +372,23 @@ Visual-match fallback constraints:
   screenshots unless explicitly required for matching context.
 - The companion must apply a confidence threshold and refuse ambiguous,
   off-window, off-screen, or multi-match results.
-- Current acceptance covers bounded metadata only. Screenshot-diagnostics
-  persistence is deferred; the existing setting must be implemented with clear
-  behavior or removed before source acceptance.
+- Screenshot-diagnostics persistence is deferred and the inactive setting has
+  been removed from the accepted source configuration and UI.
 - Visual matching remains a fallback tier, never a replacement for semantic DOM
   resolution or browser-native execution.
 
 ## Protocol Transition
 
-Keep the non-pairing v1 commands available while the extension migrates. The
-current key-based `AUTH` command is transitional and must be removed or
-reinterpreted as non-secret instance announcement before source acceptance:
+The cooperative profile transition is implemented. The key-based `AUTH`
+command has been removed. Each connection starts with `PROFILE_HELLO`; explicit
+`PAIR_PROFILE` and `UNPAIR_PROFILE` requests change the stored selection. The
+existing non-pairing v1 commands remain available after a profile session is
+accepted:
 
 ```text
-AUTH (legacy transitional pairing-key flow; not accepted target behavior)
+PROFILE_HELLO
+PAIR_PROFILE
+UNPAIR_PROFILE
 OS_KEYSTROKE
 READ_FILE
 READ_DATA_SOURCE
@@ -462,8 +475,9 @@ breaks current extension behavior.
 - Add dependency manifest. **Implemented.**
 - Add tests for current workflow CRUD, config load/save, allowed-file
   resolution, data parsing, execution-log save, and protocol behavior.
-  **Unit coverage exists, but live WebSocket, pairing, permission-composition,
-  and visible-window refusal coverage remains open.**
+  **Implemented, including real loopback WebSocket pairing, exclusivity,
+  approved-file, permission-denial, and traversal contracts. Hands-on Windows
+  visible-input acceptance remains separate.**
 - Remove or isolate obsolete production-build files such as copied host source.
   **Obsolete copied host source was removed after user approval; defensive
   packaging exclusions remain.**
@@ -476,9 +490,9 @@ Exit: existing operations are testable without launching the UI.
 - Add shared `atomic_write_json` and `atomic_write_text`. **Implemented.**
 - Route config, workflow upgrade, normal workflow save, duplicate, rename, and
   logs through atomic I/O. **Implemented.**
-- Introduce settings schema versioning and migration. **Implemented with
-  schema v2 plus legacy compatibility aliases. Schema 3 cooperative pairing and
-  explicit-empty approved-directory migration remain open.**
+- Introduce settings schema versioning and migration. **Implemented with schema
+  3 cooperative pairing, legacy compatibility inputs, and explicit-empty
+  approved-directory preservation.**
 
 Exit: workflow saves are atomic and source-mode storage resolves through the
 shared application-path helper. Packaged-path acceptance remains deferred to
@@ -488,8 +502,8 @@ Phase 7.
 
 - Move all workflow path validation and CRUD into `workflow_repository.py`.
   **Implemented.**
-- Return workflow summaries. **Implemented in the repository; the WebSocket
-  list handler still returns filenames and must be aligned.**
+- Return workflow summaries. **Implemented for the companion UI. The v1
+  WebSocket list command intentionally retains its filename-list contract.**
 - Preserve v1 command compatibility. **Implemented for existing workflow
   commands.**
 - Add import/export foundations if package format is settled.
@@ -500,30 +514,31 @@ Exit: WebSocket handlers no longer write workflow files directly.
 
 - Add PySide6 app entry point and service lifecycle controller. **Implemented.**
 - Implement Status, Workflow Storage, Pairing, and Diagnostics first.
-  **Shells exist. Pairing is transitional and live connection/version status,
-  Open Logs, Export Diagnostics, and screenshot-diagnostics behavior remain
-  open.**
-- Add tray behavior and clean shutdown. **Basic behavior exists; dynamic status,
-  Open Workflows Folder, and process-tree failure handling remain open.**
+  **Implemented with cooperative Pair/Unpair, live connection/version state,
+  Open Logs, and Export Diagnostics. The inactive screenshot option was
+  removed.**
+- Add tray behavior and clean shutdown. **Implemented with dynamic status, Open
+  Workflows Folder, and process-tree fallback when `taskkill` fails.**
 - Remove HTTP manager UI from the desktop source path. **Implemented; release
   packaging is deferred.**
 - Keep `app.py` as the internal test-artifact entry point. **Implemented.**
 
 Exit: the source app opens a Windows companion and accurately starts, stops, and
-reports one managed WebSocket host. **Not yet accepted.**
+reports one managed WebSocket host. **Implemented; hands-on acceptance remains
+open.**
 
 ### Phase 4 - User-Selectable Workflow Directory
 
 - Add current path, open folder, change location, and use default controls.
   **Controls exist.**
 - Implement use-new, copy, and move migration options. **Implemented in
-  `workflow_location.py`, but live-host repository rebinding and failed-config
-  recovery are open.**
+  `workflow_location.py` with transactional rollback and live managed-host
+  restart. External-host use produces an explicit restart warning.**
 - Verify target-folder write access before applying changes. **Implemented.**
 
 Exit: a user can move the active workflow library without hand-editing JSON,
 and the running extension and companion immediately use the same recoverable
-location. **Reopened.**
+location. **Implemented in source; hands-on acceptance remains open.**
 
 ### Phase 5 - Approved Directory Registry
 
@@ -531,49 +546,53 @@ location. **Reopened.**
   dedicated Approved Folders UI implemented.**
 - Migrate allowed roots to provisional aliases. **Implemented.**
 - Update file and data-source call paths to use alias plus relative path.
-  **Partially implemented; ordinary local upload still uses a raw path.**
-- Add find/read/write behavior under configured permissions. **Service paths
-  exist, but legacy raw paths can bypass per-alias read/recursive settings and
-  removing the final alias is not preserved. Acceptance is reopened.**
+  **Implemented for companion services and future node integration. The current
+  local-upload node remains provisional and keeps its legacy input until the
+  node phase.**
+- Add find/read/write behavior under configured permissions. **Implemented for
+  alias-shaped and legacy-compatible inputs; empty registries, recursion,
+  read/write flags, unavailable folders, and path escape are covered.**
 
 Exit: normal file operations use alias plus relative path, and every legacy path
-honors the same alias permission and recursive rules. **Reopened.**
+honors the same alias permission and recursive rules. **Implemented in source;
+hands-on acceptance remains open.**
 
 ### Phase 6 - Structured Host Fallback
 
-- Add `host.hello` and v2 capability reporting. **Initial implementation
-  present, but the host advertises v2 capability names it does not route.**
-- Add cooperative profile pairing. **Reopened: replace the transitional key and
-  runtime-extension-ID flow with a generated per-profile non-secret instance
-  ID, explicit Pair/Unpair, one active connection, and live connection state.**
+- Add `host.hello` and v2 capability reporting. **Implemented. The hello payload
+  separates the complete host capability set from the four routed v2 envelope
+  capabilities.**
+- Add cooperative profile pairing. **Implemented with a generated per-profile
+  non-secret instance ID, explicit Pair/Unpair, one active connection, and live
+  connection state.**
 - Implement `host.window` and `host.action`. **Initial service and extension
   bridge foundations implemented.**
-- Add foreground-window validation and coordinate conversion. **Partial checks
-  exist; the host can still accept missing window identity or coordinates
-  outside the foreground window, and multi-monitor/session correctness remains
-  open.**
+- Add foreground-window validation and coordinate conversion. **Implemented
+  with foreground Chrome/Chromium identity, exact renderer-viewport mapping,
+  explicit CSS-viewport-to-physical conversion, per-monitor DPI awareness,
+  window-bounded coordinates, interactive-session, mixed-DPI multi-monitor,
+  and stale-display/window/renderer checks.**
 - Implement click, double-click, scroll, typing, key press, shortcut, and paste.
-  **Dispatch helpers exist; acceptance depends on fail-closed window checks.**
-- Add Host Fallback companion UI and diagnostics. **Initial tab implemented
-  with enable/threshold/screenshot settings, foreground status, supported
-  actions, and filtered capability activity. Screenshot diagnostics are not
-  implemented and the setting must be completed or removed.**
+  **Implemented; hands-on acceptance still validates the fail-closed checks.**
+- Add Host Fallback companion UI and diagnostics. **Implemented with
+  enable/threshold controls, visible refusal/context state, supported actions,
+  and diagnostics export. The inactive screenshot setting was removed.**
 - Integrate browser-runtime fallback only where a node explicitly allows it.
   **Initial opt-in integration implemented for click, double-click, and type,
   with content-side target preparation, post-action verification, and a live
-  acceptance workflow. Prior manual results do not close the reopened host-side
-  correctness gaps.**
+  acceptance workflow. Final per-node fallback decisions remain provisional
+  until the node phase; hands-on host acceptance is still required.**
 - Add PyAutoGUI visual-match fallback after coordinate fallback: extension
   captures the resolved component image, companion matches it on the foreground
   browser window, clicks the matched center, and reports match confidence and
-  bounded diagnostics. **Initial opt-in implementation exists, but a missing
-  foreground region currently permits whole-screen matching. Acceptance is
-  reopened until that path fails closed and image decoding is bounded.**
+  bounded diagnostics. **Implemented with bounded image decoding and mandatory
+  verified foreground-window search regions.**
 - Keep v1 `OS_KEYSTROKE` until migration is complete.
 
 Exit: browser-first nodes can request validated visible fallback, every action
 or match stays inside the verified foreground Chrome/Chromium window, and the
-extension reports and verifies the result. **Reopened.**
+extension reports and verifies the result. **Implemented in source; hands-on
+Windows acceptance remains open.**
 
 ### Phase 7 - Packaging and Release (Deferred)
 
@@ -608,7 +627,8 @@ notes, and any affected user-facing guide before the next phase begins.
 ### Inactive Mapper Compatibility Adapter
 
 The repository contains a host mapper repository and `NativeMapStore` adapter
-from an earlier transition experiment. They are not part of the product path.
+from an earlier transition experiment. They are not part of the product path,
+and the companion does not advertise or route `mapper.state.*` capabilities.
 Mapper persistence remains in Chrome storage; maps are disposable and recreated
 after loss. Do not harden, package, or reactivate the filesystem adapter unless
 a later product decision explicitly changes mapper storage.

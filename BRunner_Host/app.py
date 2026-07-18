@@ -70,6 +70,31 @@ def write_launcher_debug(message):
         pass
 
 
+def companion_startup_error_message(error):
+    return (
+        "BRunner could not start its companion window. The configuration or "
+        "workflow folder may be unavailable or unwritable. Make the BRunner "
+        "application folder writable, move the source folder to a writable "
+        "location, or correct the configured workflow path, then restart.\n\n"
+        f"Details: {error}"
+    )
+
+
+def show_companion_startup_error(error):
+    message = companion_startup_error_message(error)
+    try:
+        print(message, file=sys.stderr)
+    except Exception:
+        pass
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        app = QApplication.instance() or QApplication([])
+        QMessageBox.critical(None, "BRunner Startup", message)
+    except Exception:
+        pass
+
+
 def main():
     write_launcher_debug(
         f"argv={sys.argv!r} frozen={getattr(sys, 'frozen', False)!r} "
@@ -93,9 +118,14 @@ def main():
         return 0
 
     write_launcher_debug("mode=companion-app")
-    from desktop.main_window import run_companion_app
+    try:
+        from desktop.main_window import run_companion_app
 
-    return run_companion_app()
+        return run_companion_app()
+    except Exception as error:
+        write_launcher_error(error)
+        show_companion_startup_error(error)
+        return 2
 
 
 if __name__ == "__main__":

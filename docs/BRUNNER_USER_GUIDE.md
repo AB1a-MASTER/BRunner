@@ -126,7 +126,9 @@ Maps are workflow-scoped and stored locally through the mapper store. A mapped
 component receives a persistent Component ID and a ComponentRef. Identity
 evidence may include locators, accessible role/name, labels, attributes,
 hierarchy, nearby semantic text, component state, frame/page context, and
-bounded history.
+bounded history. Page maps persist normalized origin, path, and allowlisted
+query-route identity so same-looking controls on different SPA routes remain
+separate.
 
 Component IDs remain stable when reconciliation shows that the logical
 component survived an ordinary label, class, position, or layout change. Static,
@@ -148,7 +150,10 @@ The mapper exposes a node-neutral contract:
 - report ambiguity or failure with structured evidence; and
 - update component history after relevant page changes.
 
-Resolution must use current page, origin, tab, and frame context. It must not
+Resolution must use current page, origin, allowlisted SPA route, tab, and frame
+context. Inspector target selection and the final in-page resolver both reject a
+page-profile mismatch so a route change cannot race into a cross-route match. It
+must not
 silently choose the first candidate when multiple components remain materially
 ambiguous. A targeted refresh/reconciliation may run before returning a final
 unresolved result.
@@ -214,7 +219,9 @@ authentication.
 6. The user explicitly unpairs before switching profiles.
 
 There is no pairing key, PIN, credential, secret rotation, or protection against
-a local program deliberately impersonating an instance ID.
+a local program deliberately impersonating an instance ID. Companion transport
+is fixed at `ws://127.0.0.1:8999` to match the extension; legacy custom port
+values normalize back to `8999` and are not user-configurable.
 
 ### Approved folders
 
@@ -228,8 +235,12 @@ configuration.
 Visible operating-system fallback is a correctness-sensitive last resort. It
 must verify the intended foreground Chrome window, use valid virtual-screen and
 client coordinates, remain within that window, and refuse to act when the
-browser region cannot be established. A missing region must never expand a
-visual search to the whole desktop.
+browser region cannot be established. Coordinate input requires one exact,
+visible Chrome renderer viewport matching the focused page's CSS viewport and
+device-pixel ratio. Zero or multiple matching renderer viewports, or stale
+renderer geometry, is a refusal; ordinary page zoom remains valid when one
+exact transform matches. A missing region must never expand a visual search to
+the whole desktop.
 
 ## Generated packages
 

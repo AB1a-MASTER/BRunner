@@ -17,7 +17,7 @@
             <button id="btn-reconnect" class="micro-btn" title="Retry native host connection">Retry</button>
         </div>
         <div class="header-controls">
-            <a class="graph-studio-link" href="../studio-graph/index.html" title="Open Graph Studio">Graph Studio</a>
+            <a id="graph-studio-link" class="graph-studio-link" href="../studio-graph/index.html" title="Open Graph Studio">Graph Studio</a>
             <label class="header-select-label" for="studio-density">View</label>
             <select id="studio-density" title="Change the display size in both Studios" aria-label="Studio display size">
                 <option value="compact">Compact</option>
@@ -86,6 +86,7 @@
                 <button id="btn-save" class="icon-btn" title="Save workflow changes">Save Changes</button>
                 <button id="btn-refresh" class="icon-btn" title="Refresh saved workflows">Refresh</button>
             </div>
+            <div id="draft-status" class="draft-status" role="status" aria-live="polite">Saved</div>
 
             <div class="workflow-list" id="workflow-list">
                 <div class="empty-state" style="font-size: 0.8rem; margin-top: 1rem;">

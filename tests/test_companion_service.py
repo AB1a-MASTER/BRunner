@@ -1,22 +1,30 @@
 import os
 import sys
+import json
+import socket
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 HOST_DIR = Path(__file__).resolve().parents[1] / "BRunner_Host"
 sys.path.insert(0, str(HOST_DIR))
 
-from companion_service import HostServiceController
+from companion_service import HostServiceController, windows_listening_process_ids
 from app import SERVE_HOST_ENV
+from host_runtime_status import runtime_status_file, write_connection_status
+
+
+PROFILE_INSTANCE_ID = "123e4567-e89b-42d3-a456-426614174000"
 
 
 class FakeProcess:
     def __init__(self):
         self.terminated = False
         self.killed = False
+        self.pid = 4321
 
     def poll(self):
         return 1 if self.terminated else None
@@ -111,20 +119,21 @@ class HostServiceControllerTests(unittest.TestCase):
         self.assertTrue(self.controller.restart())
         self.assertEqual(len(self.popen.calls), 2)
 
-    def test_status_uses_v2_and_legacy_config_values(self):
+    def test_status_reports_configured_profile_without_live_connection(self):
         self.assertEqual(
             self.controller.status({
                 "host": {"port": 9001},
-                "pairedExtensionId": "extension",
+                "pairedInstanceId": PROFILE_INSTANCE_ID,
             }),
-            {"running": False, "external": False, "port": 9001, "pairedExtensionId": "extension"},
-        )
-        self.assertEqual(
-            self.controller.status({
-                "port": 9002,
-                "paired_extension_id": "legacy",
-            }),
-            {"running": False, "external": False, "port": 9002, "pairedExtensionId": "legacy"},
+            {
+                "running": False,
+                "external": False,
+                "port": 9001,
+                "pairedInstanceId": PROFILE_INSTANCE_ID,
+                "extensionConnected": False,
+                "connectedProfileInstanceId": None,
+                "pairingState": "disconnected",
+            },
         )
 
     def test_start_refuses_when_configured_port_is_already_listening(self):
@@ -144,9 +153,105 @@ class HostServiceControllerTests(unittest.TestCase):
                 "running": True,
                 "external": True,
                 "port": 9011,
-                "pairedExtensionId": None,
+                "pairedInstanceId": None,
+                "extensionConnected": False,
+                "connectedProfileInstanceId": None,
+                "pairingState": "unpaired",
             },
         )
+
+    def test_status_requires_matching_live_profile_and_process(self):
+        config = {
+            "host": {"port": 9003},
+            "pairedInstanceId": PROFILE_INSTANCE_ID,
+        }
+        self.assertTrue(self.controller.start(config))
+        write_connection_status(
+            self.base_dir,
+            profile_instance_id=PROFILE_INSTANCE_ID,
+            port=9003,
+            host_process_id=self.controller.process.pid,
+        )
+
+        status = self.controller.status(config)
+
+        self.assertTrue(status["extensionConnected"])
+        self.assertEqual(status["connectedProfileInstanceId"], PROFILE_INSTANCE_ID)
+        self.assertEqual(status["pairingState"], "connected")
+
+    def test_status_rejects_stale_or_mismatched_runtime_heartbeat(self):
+        config = {
+            "host": {"port": 9003},
+            "pairedInstanceId": PROFILE_INSTANCE_ID,
+        }
+        self.assertTrue(self.controller.start(config))
+        base_arguments = {
+            "profile_instance_id": PROFILE_INSTANCE_ID,
+            "port": 9003,
+            "host_process_id": self.controller.process.pid,
+        }
+        cases = [
+            {"now": datetime(2020, 1, 1, tzinfo=timezone.utc)},
+            {"port": 9004},
+            {"profile_instance_id": "223e4567-e89b-42d3-a456-426614174001"},
+            {"host_process_id": self.controller.process.pid + 1},
+        ]
+
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                arguments = dict(base_arguments)
+                arguments.update(overrides)
+                write_connection_status(self.base_dir, **arguments)
+                self.assertFalse(self.controller.status(config)["extensionConnected"])
+
+        write_connection_status(self.base_dir, **base_arguments)
+        path = runtime_status_file(self.base_dir)
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record["handshakeComplete"] = False
+        path.write_text(json.dumps(record), encoding="utf-8")
+        self.assertFalse(self.controller.status(config)["extensionConnected"])
+
+    def test_external_status_requires_live_pid_to_own_configured_listener(self):
+        process_alive = True
+        listener_process_ids = {7777}
+        controller = HostServiceController(
+            self.base_dir,
+            self.host_script,
+            popen_factory=self.popen,
+            process_alive_factory=lambda process_id: process_alive and process_id == 7777,
+            listener_process_ids_factory=lambda port: (
+                listener_process_ids if port == 9011 else None
+            ),
+        )
+        controller.is_port_listening = lambda port: port == 9011
+        config = {
+            "host": {"port": 9011},
+            "pairedInstanceId": PROFILE_INSTANCE_ID,
+        }
+        write_connection_status(
+            self.base_dir,
+            profile_instance_id=PROFILE_INSTANCE_ID,
+            port=9011,
+            host_process_id=7777,
+        )
+
+        self.assertTrue(controller.status(config)["extensionConnected"])
+
+        listener_process_ids = {8888}
+        self.assertFalse(controller.status(config)["extensionConnected"])
+
+        listener_process_ids = {7777}
+        process_alive = False
+        self.assertFalse(controller.status(config)["extensionConnected"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows listener ownership contract")
+    def test_windows_listener_lookup_reports_actual_owning_process(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+
+            self.assertIn(os.getpid(), windows_listening_process_ids(port))
 
     def test_stop_kills_process_when_terminate_times_out(self):
         popen = StubbornPopen()
@@ -171,7 +276,10 @@ class HostServiceControllerTests(unittest.TestCase):
             self.base_dir,
             self.host_script,
             popen_factory=self.popen,
-            run_factory=lambda command, **kwargs: calls.append((command, kwargs)),
+            run_factory=lambda command, **kwargs: (
+                calls.append((command, kwargs))
+                or subprocess.CompletedProcess(command, 0)
+            ),
         )
         original_os_name = os.name
         try:
@@ -181,6 +289,30 @@ class HostServiceControllerTests(unittest.TestCase):
             os.name = original_os_name
 
         self.assertEqual(calls[0][0], ["taskkill", "/PID", "4321", "/T", "/F"])
+
+    def test_windows_tree_stop_nonzero_falls_back_to_process_terminate(self):
+        calls = []
+        process = FakeProcess()
+        controller = HostServiceController(
+            self.base_dir,
+            self.host_script,
+            popen_factory=self.popen,
+            run_factory=lambda command, **kwargs: (
+                calls.append((command, kwargs))
+                or subprocess.CompletedProcess(command, 128)
+            ),
+        )
+        controller.process = process
+        original_os_name = os.name
+        try:
+            os.name = "nt"
+            self.assertTrue(controller.stop())
+        finally:
+            os.name = original_os_name
+
+        self.assertEqual(calls[0][0], ["taskkill", "/PID", "4321", "/T", "/F"])
+        self.assertTrue(process.terminated)
+        self.assertFalse(process.killed)
 
 
 if __name__ == "__main__":
