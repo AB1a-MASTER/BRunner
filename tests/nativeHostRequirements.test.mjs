@@ -21,18 +21,18 @@ test("every node definition has serializable native-host metadata", () => {
 });
 
 test("native host required nodes declare exact capabilities", () => {
-  assert.deepEqual(getNodeDefinition("keyboard.send_keys").nativeHost, {
+  assert.deepEqual(getNodeDefinition("keyboard.send_keys", 1).nativeHost, {
     mode: NativeHostRequirementModes.Required,
     capabilities: [NativeHostCapabilities.OsKeystroke],
   });
   assert.equal(NativeHostCapabilities.HostWindow, "host.window");
   assert.equal(NativeHostCapabilities.HostAction, "host.action");
   assert.equal(NativeHostCapabilities.HostVisualMatch, "host.visual_match");
-  assert.deepEqual(getNodeDefinition("file.local.upload").nativeHost, {
+  assert.deepEqual(getNodeDefinition("file.local.upload", 1).nativeHost, {
     mode: NativeHostRequirementModes.Required,
     capabilities: [NativeHostCapabilities.LocalFileRead],
   });
-  assert.deepEqual(getNodeDefinition("element.click").nativeHost, {
+  assert.deepEqual(getNodeDefinition("element.click", 1).nativeHost, {
     mode: NativeHostRequirementModes.Fallback,
     capabilities: [
       NativeHostCapabilities.HostWindow,
@@ -40,7 +40,7 @@ test("native host required nodes declare exact capabilities", () => {
       NativeHostCapabilities.HostVisualMatch,
     ],
   });
-  assert.deepEqual(getNodeDefinition("element.type").nativeHost, {
+  assert.deepEqual(getNodeDefinition("element.type", 1).nativeHost, {
     mode: NativeHostRequirementModes.Fallback,
     capabilities: [
       NativeHostCapabilities.HostWindow,
@@ -48,7 +48,7 @@ test("native host required nodes declare exact capabilities", () => {
       NativeHostCapabilities.HostVisualMatch,
     ],
   });
-  assert.deepEqual(getNodeDefinition("element.double_click").nativeHost, {
+  assert.deepEqual(getNodeDefinition("element.double_click", 1).nativeHost, {
     mode: NativeHostRequirementModes.Fallback,
     capabilities: [
       NativeHostCapabilities.HostWindow,

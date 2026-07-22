@@ -1,6 +1,8 @@
 import {
+  NodeErrorCategories,
   NodeErrorCodes,
   NodeExecutionError,
+  getNodeErrorCategory,
 } from "./nodeContracts.js";
 
 export const RetrySafety = Object.freeze({
@@ -112,8 +114,21 @@ export function normalizeRetryPolicy(config = {}, definition = {}) {
 
 export function classifyRetryError(error = {}) {
   const code = String(error?.code || error?.details?.code || "").toUpperCase();
+  const category = getNodeErrorCategory(
+    error?.code,
+    error?.category || error?.details?.category,
+  );
   if (error?.details?.retryReason === RetryReasons.NavigationFailure) {
     return RetryReasons.NavigationFailure;
+  }
+  if (category === NodeErrorCategories.Navigation) {
+    return RetryReasons.NavigationFailure;
+  }
+  if (category === NodeErrorCategories.Timeout) return RetryReasons.Timeout;
+  if (category === NodeErrorCategories.Target) return RetryReasons.TargetNotFound;
+  if (category === NodeErrorCategories.Host) return RetryReasons.HostUnavailable;
+  if (category === NodeErrorCategories.Dependency) {
+    return RetryReasons.DependencyNotReady;
   }
   if (code === NodeErrorCodes.Timeout) return RetryReasons.Timeout;
   if (
@@ -147,6 +162,10 @@ export function shouldRetry({
 } = {}) {
   const normalized = normalizeRetryPolicy(policy, policy);
   const code = String(error?.code || "").toUpperCase();
+  const category = getNodeErrorCategory(
+    error?.code,
+    error?.category || error?.details?.category,
+  );
   if (error?.details?.retryable === false) return false;
   const retryReason = classifyRetryError(error);
   const retryableNavigationValidation =
@@ -154,7 +173,12 @@ export function shouldRetry({
     retryReason === RetryReasons.NavigationFailure;
   if (
     attempt > normalized.retryCount ||
-    (NEVER_RETRY_CODES.has(code) && !retryableNavigationValidation)
+    ((NEVER_RETRY_CODES.has(code) || [
+      NodeErrorCategories.Configuration,
+      NodeErrorCategories.Validation,
+      NodeErrorCategories.ProtectedPage,
+      NodeErrorCategories.Cancelled,
+    ].includes(category)) && !retryableNavigationValidation)
   ) {
     return false;
   }

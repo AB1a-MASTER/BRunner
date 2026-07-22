@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import {
   FinalizedNodeRoutes,
-  executeFinalizedNode,
+  executeFinalizedNode as executeVersionedNode,
 } from "../BRunner/nodes/runtime/executeFinalizedNode.js";
 import {
   NodeErrorCodes,
@@ -37,6 +37,26 @@ function createHarness() {
   };
 }
 
+function executeFinalizedNode(request, services) {
+  const supplied = request.definition || {};
+  const type = request.nodeType || request.node?.type || supplied.type || "test.node";
+  const definition = {
+    type,
+    version: 1,
+    outputPorts: [
+      { id: "success", label: "Success" },
+      { id: "error", label: "Error" },
+    ],
+    ...supplied,
+  };
+  return executeVersionedNode({
+    ...request,
+    nodeType: type,
+    nodeVersion: request.nodeVersion ?? request.node?.version ?? definition.version,
+    definition,
+  }, services);
+}
+
 test("disabled finalized nodes do not execute and clear stale output", async () => {
   const harness = createHarness();
   harness.values["nodes.disabled.output"] = { stale: true };
@@ -56,6 +76,26 @@ test("disabled finalized nodes do not execute and clear stale output", async () 
   assert.equal(harness.values["nodes.disabled.output"], null);
   assert.equal(harness.values["variables.old_result"], null);
   assert.equal(outcome.route, FinalizedNodeRoutes.Success);
+});
+
+test("finalized runtime requires invocation type and version even with a definition", async () => {
+  await assert.rejects(
+    executeVersionedNode({
+      nodeId: "missing-contract",
+      definition: { type: "test.node", version: 1, outputs: ["success"] },
+      executor: async () => ({ output: true }),
+    }),
+    (error) => error.code === NodeErrorCodes.NodeTypeUnsupported,
+  );
+  await assert.rejects(
+    executeVersionedNode({
+      nodeId: "missing-version",
+      nodeType: "test.node",
+      definition: { type: "test.node", version: 1, outputs: ["success"] },
+      executor: async () => ({ output: true }),
+    }),
+    (error) => error.code === NodeErrorCodes.NodeVersionUnsupported,
+  );
 });
 
 test("disabled finalized nodes do not require an executor", async () => {
@@ -289,4 +329,49 @@ test("missing registry fails clearly instead of losing node output", async () =>
     }, harness.services),
     (error) => error.code === NodeErrorCodes.DEPENDENCY_NOT_READY,
   );
+});
+
+test("finalized dispatch rejects missing and mismatched version contracts", async () => {
+  const harness = createHarness();
+  await assert.rejects(
+    executeVersionedNode({
+      nodeId: "missing-definition",
+      nodeType: "test.node",
+      nodeVersion: 1,
+      async executor() {},
+    }, harness.services),
+    (error) => error.code === NodeErrorCodes.NODE_VERSION_UNSUPPORTED,
+  );
+  await assert.rejects(
+    executeVersionedNode({
+      nodeId: "wrong-version",
+      nodeType: "test.node",
+      nodeVersion: 2,
+      definition: { type: "test.node", version: 1, outputPorts: [] },
+      async executor() {},
+    }, harness.services),
+    (error) => error.code === NodeErrorCodes.NODE_VERSION_UNSUPPORTED,
+  );
+});
+
+test("error-port policy fails closed when the definition has no error port", async () => {
+  const harness = createHarness();
+  const outcome = await executeVersionedNode({
+    nodeId: "missing-error-port",
+    nodeType: "test.node",
+    nodeVersion: 1,
+    definition: {
+      type: "test.node",
+      version: 1,
+      outputPorts: [{ id: "success", label: "Success" }],
+    },
+    config: { onError: "error_port" },
+    async executor() {
+      throw new NodeExecutionError(NodeErrorCodes.ValidationFailed, "Failed.");
+    },
+  }, harness.services);
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Fail);
+  assert.equal(outcome.selectedRoute, FinalizedNodeRoutes.Fail);
+  assert.equal(outcome.handledError, false);
 });

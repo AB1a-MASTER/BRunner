@@ -20,10 +20,16 @@ commit hash to the completion ledger after the accepted slice is committed.
 | Workstream | Status | Meaning |
 |---|---|---|
 | Finalized catalog inventory | **Complete** | All 94 blueprint nodes have a stable type, phase, disposition, and provisional-code reference inventory. |
-| Base contract hardening | **Active** | Close versioning, ambiguity, routing, errors, canonical workflow, and both-Studio parity before accepting Node 1. |
-| Finalized node implementations | **Queued** | No finalized node is production-integrated and accepted yet. Provisional behavior and isolated scaffolds do not count. |
-| Phase 1 shared adapters | **Integration pending** | Adapter source/tests exist, but the ambiguity contract must be corrected and all adapters must enter the canonical runtime and both Studios. |
+| Base contract hardening | **Complete** | B01-B15 are closed. Exact versioning, fail-closed migration, stable ports/errors, canonical workflows, both-Studio schema parity, and acceptance validation are enforced. |
+| Finalized node implementations | **Ready for Node 1** | No finalized node is accepted yet. The next isolated slice is Navigate; provisional behavior and scaffolds still do not count. |
+| Phase 1 shared adapters | **Integration pending** | Shared contracts and deterministic ambiguity behavior are ready; production integration proceeds only through each applicable node slice. |
 | Provisional removals | **Queued** | `browser.search` and `http.request` are absent from the finalized catalog and must be removed during runtime integration. |
+
+Base closeout verification on 2026-07-22: Graph Studio production build passed
+from source (190 modules), all 385 JavaScript tests passed, all 176 Python tests
+passed, changed JavaScript sources passed syntax checks, and `git diff --check`
+reported no whitespace errors. This evidence closes infrastructure only; it
+does not mark any finalized node accepted or replace per-node live acceptance.
 
 ## Status and disposition legend
 
@@ -50,19 +56,19 @@ must close before their listed phase begins.
 | ID | Required work | Due | Status | Evidence / notes |
 |---|---|---|---|---|
 | B01 | Make catalog number the only node implementation order: Navigate, Scroll, Tab Control, then 4–94. | Before Node 1 | Complete | Blueprint, tracker, roadmap, and instructions use catalog order. |
-| B02 | Dispatch node definitions and execution by `(type, version)` rather than `type` alone. | Before Node 1 | Queued | Prevent finalized/provisional contract collisions. |
-| B03 | Define deterministic migration or fail-closed unsupported-version handling; never reinterpret old config silently. | Before Node 1 | Queued | Reused type IDs require special coverage. |
-| B04 | Fix text matching so fail-on-multiple observes all matches before occurrence selection. | Before Node 1 | Queued | Current `occurrence: first` can hide ambiguity. |
-| B05 | Support stable node-specific errors mapped to common routing/retry categories. | Before Node 1 | Queued | Translate adapter errors such as `MULTIPLE_MATCHES`. |
-| B06 | Define stable machine port IDs, display labels, selected-route result, and `onError` precedence. | Before Node 1 | Queued | Shared by both Studios and runtime. |
+| B02 | Dispatch node definitions and execution by `(type, version)` rather than `type` alone. | Before Node 1 | Complete | Immutable exact-contract registry, Studio definition maps, background dispatch, and finalized runtime reject missing/mismatched versions. |
+| B03 | Define deterministic migration or fail-closed unsupported-version handling; never reinterpret old config silently. | Before Node 1 | Complete | Legacy missing versions migrate only to v1; all other migrations require an explicit reviewed entry, and unsupported Graph contracts are read-only/unsavable. |
+| B04 | Fix text matching so fail-on-multiple observes all matches before occurrence selection. | Before Node 1 | Complete | Ambiguity policy evaluates the complete candidate set before occurrence selection; adapter errors translate to `AMBIGUOUS_TARGET`. |
+| B05 | Support stable node-specific errors mapped to common routing/retry categories. | Before Node 1 | Complete | Namespaced errors, common categories, normalized results, and category-aware retry policy have deterministic coverage. |
+| B06 | Define stable machine port IDs, display labels, selected-route result, and `onError` precedence. | Before Node 1 | Complete | Definitions serialize labeled typed ports; Graph handles consume them; runtime returns `selectedRoute` and fails closed when an error port is absent. |
 | B07 | Rename Resolve Element cardinality from `matchMode` to `resultCardinality`. | Before Node 1 | Complete | Blueprint terminology corrected. |
 | B08 | Define coordinate-only targets as explicit non-component targets; never fabricate a durable ComponentRef. | Before Node 1 | Complete | Blueprint target contract corrected. |
 | B09 | Align package rules with JavaScript and shared schema-driven UI. | Before Node 1 | Complete | Separate `ui.js` only for a shared editor extension. |
-| B10 | Build one finalized node registry/field renderer/validator/autocomplete source for both Studios. | Before Node 1 | Queued | No Studio-private definitions. |
-| B11 | Make one canonical workflow schema support ordered, nested, and graph routes without lossy adapters. | Before Node 1 | Queued | Sequential is a simpler view, not a separate model. |
-| B12 | Add Graph→Sequential→Graph and Sequential→Graph→Sequential semantic round-trip gates. | Before Node 1 | Queued | Preserve Studio layout metadata and unknown supported fields. |
-| B13 | Standardize field help, valid examples, expression modes, autocomplete, and identifier/matching selectors. | Before Node 1 | Queued | Applies to every finalized definition. |
-| B14 | Add schema/source validation for `Workflows/node_acceptance/NNN_<slug>_acceptance.json`. | Before Node 1 | Queued | One focused workflow per completed node. |
+| B10 | Build one finalized node registry/field renderer/validator/autocomplete source for both Studios. | Before Node 1 | Complete | Both Studios consume the serialized exact-version registry and shared `nodeAuthoring` field, target, validation, and autocomplete contract. |
+| B11 | Make one canonical workflow schema support ordered, nested, and graph routes without lossy adapters. | Before Node 1 | Complete | Canonical mapper-graph JSON is saved/run by both Studios; Sequential is a route-preserving view and fails closed on structural edits it cannot represent yet. |
+| B12 | Add Graph→Sequential→Graph and Sequential→Graph→Sequential semantic round-trip gates. | Before Node 1 | Complete | Deterministic round trips preserve versions, configuration, routes, positions, metadata, and supported unknown node data. |
+| B13 | Standardize field help, valid examples, expression modes, autocomplete, and identifier/matching selectors. | Before Node 1 | Complete | Shared metadata guarantees help, valid examples/placeholders, expression modes, autocomplete sources, checkboxes/dropdowns, and explicit target/matching controls. |
+| B14 | Add schema/source validation for `Workflows/node_acceptance/NNN_<slug>_acceptance.json`. | Before Node 1 | Complete | Directory scanner binds filename/order/type/version to the catalog, validates canonical graph and synthetic metadata, and verifies referenced fixtures exist. |
 | B15 | Establish the living end-user catalogue and require an accepted entry per node. | Before Node 1 | Complete | `docs/NODE_USER_CATALOG.md`. |
 | B16 | Define controlled file-reference schema, lifecycle, size limits, parser dependencies, and host capability matrix. | Before Phase 4 | Queued | Required for catalog 31–43 and later file outputs. |
 | B17 | Define feasible Function/Code execution environments, MV3 constraints, async/cancel limits, and available APIs. | Before Phase 5 | Queued | Required for catalog 59–60. |
@@ -100,22 +106,23 @@ For each catalog row, complete these items in one isolated slice:
 | Adapter | Status | Required result |
 |---|---|---|
 | Shared target configuration | **Integration pending** | One normalized Component-ID-first target contract with ordered fallback, ambiguity handling, map refresh, explicit coordinate targets, and structured resolution output. |
-| Shared text matching | **In progress** | Correct ambiguity-before-occurrence semantics, exact/contains/starts/ends/wildcard/regex behavior, case/whitespace control, and stable error mapping. |
+| Shared text matching | **Integration pending** | Ambiguity-before-occurrence, matching modes, case/whitespace control, and stable error mapping are complete; finalized node packages must adopt the adapter. |
 | Standard output and logging | **Integration pending** | Stable result envelope, selected route, output binding, warnings/errors, timing, execution method, and configured local log publication. |
 | Retry safety and host fallback | **Integration pending** | Central retry classification and browser-first, visible-host-last policy with verification and stable failure codes. |
 
 ## Known architecture gaps
 
-1. `BRunner/core/constants.js` and `BRunner/core/nodeRegistry.js` still expose
-   the provisional action set. This catalog does not switch runtime behavior.
+1. `BRunner/core/constants.js` and the version-aware registry still expose the
+   provisional action set. Finalized definitions replace or isolate those
+   entries only in their catalog-numbered node slices.
 2. Most execution remains centralized in `BRunner/background.js` and related
    content-script switches instead of finalized per-node definition, executor,
    validator, output, UI, and test packages.
-3. The shared adapters now have isolated packages and deterministic tests but
-   require contract corrections and production/both-Studio integration.
-4. Graph Studio and Sequential Studio still render and serialize provisional
-   definitions through different presentation paths. They must share one
-   canonical workflow and node contract without lossy adapters.
+3. Shared adapter contracts and deterministic tests are ready, but production
+   execution integration remains per-node work.
+4. Graph Studio and Sequential Studio now share canonical workflow JSON,
+   exact-version definitions, validation, authoring metadata, targets, and
+   autocomplete. Finalized node-specific editors and executors are still absent.
 5. Finalized multi-port control behavior, nested scope semantics, cancellation,
    and output schemas are not yet implemented for Phases 5-7.
 6. Existing tests protect provisional runtime behavior. Every finalized node
@@ -255,12 +262,13 @@ node-specific acceptance workflow.
 
 ## Next acceptance boundary
 
-Close base-contract items B02-B06 and B10-B14, then correct and integrate the
-four shared Phase 1 adapters. Implement nodes in catalog-number order:
-Navigate, Scroll, Tab Control, Resolve Element, Check Element State, and Wait
-for Condition. Phase 1 closes only when the blueprint gate workflow navigates,
-scrolls, selects a tab, resolves a Component-ID-first target with deterministic
-fallback, checks state, and waits reliably in both Studios.
+Base-contract items B01-B15 are complete. Implement **Node 1: Navigate** only,
+including its finalized version-2 package, applicable shared-adapter
+integration, both-Studio parity, deterministic tests, focused synthetic
+acceptance workflow, live source acceptance, user-catalogue entry, and tracker
+evidence. Do not begin Scroll until Navigate is accepted and the user has made
+the quick commit. Phase 1 still closes only after Nodes 1-6 pass their own gates
+and the combined blueprint workflow succeeds in both Studios.
 
 ## Completed-node ledger
 

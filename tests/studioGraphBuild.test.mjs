@@ -129,6 +129,17 @@ test("graph Studio wires persistence and execution controls", async () => {
   assert.match(source, /react-flow__pane/);
   assert.match(source, /selected:\s*true/);
   assert.match(source, /selectCanvasNode/);
+  assert.match(source, /definitionsByContract/);
+  assert.match(source, /collectFieldAutocompleteOptions/);
+  assert.match(source, /TargetEditor/);
+
+  const graphNodeSource = await readFile(
+    new URL("BRunner/studio-graph-src/src/GraphNode.jsx", root),
+    "utf8",
+  );
+  assert.match(graphNodeSource, /definition\.inputPorts/);
+  assert.match(graphNodeSource, /definition\.outputPorts/);
+  assert.match(graphNodeSource, /node-handle-error/);
 });
 
 test("palette and properties panels have bounded scrolling", async () => {

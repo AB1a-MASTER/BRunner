@@ -10,11 +10,22 @@ export const NodeImplementationStatuses = Object.freeze({
   Queued: "queued",
 });
 
+export const ReusedFinalizedNodeTypeIds = Object.freeze([
+  "browser.navigate",
+  "browser.scroll",
+  "element.click",
+  "element.hover",
+  "element.focus",
+]);
+
+const reusedFinalizedNodeTypeIds = new Set(ReusedFinalizedNodeTypeIds);
+
 function finalizedNode(order, name, type, phase, disposition, provisionalTypes = []) {
   return Object.freeze({
     order,
     name,
     type,
+    version: reusedFinalizedNodeTypeIds.has(type) ? 2 : 1,
     phase,
     disposition,
     provisionalTypes: Object.freeze([...provisionalTypes]),

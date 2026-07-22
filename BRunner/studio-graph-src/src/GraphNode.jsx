@@ -23,10 +23,18 @@ export function GraphNode({ id, data, selected }) {
   const targetPosition = horizontal ? Position.Left : Position.Top;
   const sourcePosition = horizontal ? Position.Right : Position.Bottom;
   const hasMapperComponent = Boolean(data.componentRef);
+  const inputPorts = routablePorts(definition.inputPorts, definition.inputs, "input");
+  const outputPorts = routablePorts(definition.outputPorts, definition.outputs, "output");
+  if (hasMapperComponent && !outputPorts.some((port) => port.id === "unresolved")) {
+    outputPorts.push({ id: "unresolved", label: "Unresolved", kind: "resolution" });
+  }
+  const portSignature = [...inputPorts, ...outputPorts]
+    .map((port) => `${port.id}:${port.kind}`)
+    .join("|");
 
   useEffect(() => {
     updateNodeInternals(id);
-  }, [collapsed, horizontal, id, updateNodeInternals]);
+  }, [collapsed, horizontal, id, portSignature, updateNodeInternals]);
 
   const toggleBypass = (event) => {
     event.stopPropagation();
@@ -57,7 +65,19 @@ export function GraphNode({ id, data, selected }) {
 
   return (
     <article className={`graph-node${selected ? " is-selected" : ""}${bypassed ? " is-bypassed" : ""}${collapsed ? " is-collapsed" : ""} runtime-${runtimeStatus}`}>
-      <Handle type="target" position={targetPosition} id="input" />
+      {inputPorts.map((port, index) => (
+        <Handle
+          key={port.id}
+          type="target"
+          position={targetPosition}
+          id={port.id}
+          className={portClassName(port)}
+          style={portHandleStyle(index, inputPorts.length, horizontal)}
+          aria-label={`${port.label} input`}
+          title={`${port.label} (${port.id})`}
+          data-port-label={port.label}
+        />
+      ))}
       <header className="graph-node-header">
         <div className="graph-node-kicker">
           <NodeGlyph />
@@ -137,18 +157,62 @@ export function GraphNode({ id, data, selected }) {
         <code>{data.type}</code>
         <span>v{definition.version || 1}</span>
       </footer>}
-      <Handle type="source" position={sourcePosition} id="success" />
-      {hasMapperComponent && (
+      {outputPorts.map((port, index) => (
         <Handle
+          key={port.id}
           type="source"
           position={sourcePosition}
-          id="unresolved"
-          className="node-handle-unresolved"
-          style={horizontal ? { top: "68%" } : { left: "68%" }}
+          id={port.id}
+          className={portClassName(port)}
+          style={portHandleStyle(index, outputPorts.length, horizontal)}
+          aria-label={`${port.label} output`}
+          title={`${port.label} (${port.id})`}
+          data-port-label={port.label}
         />
-      )}
+      ))}
     </article>
   );
+}
+
+function routablePorts(ports, legacyIds, direction) {
+  const source = Array.isArray(ports) && ports.length
+    ? ports
+    : (Array.isArray(legacyIds) && legacyIds.length ? legacyIds : [direction === "input" ? "input" : "success"]);
+  return source
+    .map((port) => typeof port === "string"
+      ? { id: port, label: humanizePort(port), kind: inferPortKind(port, direction) }
+      : port)
+    .filter((port) => port?.id && port.kind !== "data")
+    .map((port) => ({
+      id: String(port.id),
+      label: String(port.label || humanizePort(port.id)),
+      kind: String(port.kind || inferPortKind(port.id, direction)),
+    }));
+}
+
+function inferPortKind(id, direction) {
+  if (direction === "input") return id === "input" ? "flow" : "data";
+  if (id === "error") return "error";
+  if (id === "unresolved") return "resolution";
+  return id === "success" ? "flow" : "data";
+}
+
+function humanizePort(id) {
+  return String(id || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function portClassName(port) {
+  if (port.id === "error" || port.kind === "error") return "node-handle-error";
+  if (port.id === "unresolved" || port.kind === "resolution") return "node-handle-unresolved";
+  return `node-handle-${port.kind || "flow"}`;
+}
+
+function portHandleStyle(index, count, horizontal) {
+  if (count <= 1) return undefined;
+  const offset = `${Math.round(((index + 1) / (count + 1)) * 100)}%`;
+  return horizontal ? { top: offset } : { left: offset };
 }
 
 function getNativeHostPresentation(definition = {}, data = {}) {

@@ -448,11 +448,14 @@
       );
     }
 
-    const occurrenceMatches = selectOccurrence(matches, matcher.config);
-    const selected = resolveMultipleMatches(
-      occurrenceMatches,
+    // Ambiguity policy observes the complete candidate set. Applying
+    // occurrence first would let the default "first" selection hide a
+    // materially ambiguous match from fail-on-multiple behavior.
+    const policyMatches = resolveMultipleMatches(
+      matches,
       matcher.config.multipleMatchBehavior,
     );
+    const selected = selectOccurrence(policyMatches, matcher.config);
     return buildMatchResult(
       selected.length ? "matched" : "no_match",
       matcher,

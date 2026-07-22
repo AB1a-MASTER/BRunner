@@ -8,6 +8,10 @@ import {
   NativeHostRequirementModes,
   normalizeNativeHostRequirement,
 } from "./nativeHostRequirements.js";
+import {
+  createTargetEditorSchema,
+  normalizeNodeFieldSchema,
+} from "./nodeAuthoring.js";
 
 const definitions = [
   {
@@ -1113,27 +1117,247 @@ function visibleHostVerificationTextField() {
   };
 }
 
-const normalizedDefinitions = definitions.map((definition) => ({
-  nativeHost: DEFAULT_NATIVE_HOST_REQUIREMENT,
-  ...definition,
-  nativeHost: normalizeNativeHostRequirement(definition.nativeHost),
-  guidance: normalizeNodeGuidance(definition),
-}));
+export const NodeContractResolutionCodes = Object.freeze({
+  MissingType: "NODE_TYPE_REQUIRED",
+  MissingVersion: "NODE_VERSION_REQUIRED",
+  UnsupportedType: "NODE_TYPE_UNSUPPORTED",
+  UnsupportedVersion: "NODE_VERSION_UNSUPPORTED",
+  MigrationUnavailable: "NODE_MIGRATION_UNAVAILABLE",
+});
 
-const definitionsByType = new Map(
-  normalizedDefinitions.map((definition) => [definition.type, definition]),
-);
-
-export function getNodeDefinition(type) {
-  return definitionsByType.get(type) || null;
+export class NodeContractResolutionError extends Error {
+  constructor(code, message, details = {}) {
+    super(message);
+    this.name = "NodeContractResolutionError";
+    this.code = code;
+    this.details = structuredClone(details);
+  }
 }
 
-export function getNodeDefinitions() {
-  return normalizedDefinitions.map((definition) => structuredClone(definition));
+const normalizedDefinitions = definitions.map((definition) => (
+  deepFreeze(normalizeNodeDefinition(definition))
+));
+const definitionsByContract = new Map();
+const definitionVersionsByType = new Map();
+
+for (const definition of normalizedDefinitions) {
+  const key = nodeDefinitionKey(definition.type, definition.version);
+  if (definitionsByContract.has(key)) {
+    throw new Error(`Duplicate node definition contract: ${key}`);
+  }
+  definitionsByContract.set(key, definition);
+  const versions = definitionVersionsByType.get(definition.type) || [];
+  versions.push(definition);
+  versions.sort((left, right) => left.version - right.version);
+  definitionVersionsByType.set(definition.type, versions);
 }
 
-export function isSupportedNodeType(type) {
-  return definitionsByType.has(type);
+const latestDefinitions = [...definitionVersionsByType.values()]
+  .map((versions) => versions.at(-1));
+
+// Migrations are intentionally explicit. Add reviewed adjacent-version
+// migrations here; an absent migration always fails closed.
+const nodeContractMigrations = new Map();
+
+export function nodeDefinitionKey(type, version) {
+  return `${String(type || "").trim()}@${String(version ?? "").trim()}`;
+}
+
+export function getNodeDefinition(type, version) {
+  const normalizedVersion = normalizeContractVersion(version);
+  if (!String(type || "").trim() || normalizedVersion === null) return null;
+  return definitionsByContract.get(
+    nodeDefinitionKey(type, normalizedVersion),
+  ) || null;
+}
+
+export function getLatestNodeDefinition(type) {
+  return definitionVersionsByType.get(String(type || "").trim())?.at(-1) || null;
+}
+
+export function getNodeDefinitionVersions(type) {
+  return (definitionVersionsByType.get(String(type || "").trim()) || [])
+    .map((definition) => definition.version);
+}
+
+export function getNodeDefinitions(options = {}) {
+  const source = options.includeAllVersions
+    ? normalizedDefinitions
+    : latestDefinitions;
+  return source.map((definition) => structuredClone(definition));
+}
+
+export function isSupportedNodeType(type, version = undefined) {
+  if (version === undefined) {
+    return definitionVersionsByType.has(String(type || "").trim());
+  }
+  return Boolean(getNodeDefinition(type, version));
+}
+
+export function resolveNodeDefinition(node = {}) {
+  const type = String(node.type || node.action || "").trim();
+  if (!type) {
+    throw new NodeContractResolutionError(
+      NodeContractResolutionCodes.MissingType,
+      "Node contract requires a type.",
+    );
+  }
+  const version = normalizeContractVersion(node.version);
+  if (version === null) {
+    throw new NodeContractResolutionError(
+      NodeContractResolutionCodes.MissingVersion,
+      `Node contract ${type} requires an explicit positive integer version.`,
+      { type, version: node.version ?? null },
+    );
+  }
+  const definition = getNodeDefinition(type, version);
+  if (definition) return definition;
+  const supportedVersions = getNodeDefinitionVersions(type);
+  if (!supportedVersions.length) {
+    throw new NodeContractResolutionError(
+      NodeContractResolutionCodes.UnsupportedType,
+      `Unsupported node type: ${type}.`,
+      { type, version },
+    );
+  }
+  throw new NodeContractResolutionError(
+    NodeContractResolutionCodes.UnsupportedVersion,
+    `Unsupported ${type} node version ${version}.`,
+    { type, version, supportedVersions },
+  );
+}
+
+export function migrateNodeContract(node = {}, options = {}) {
+  const source = structuredClone(node);
+  const type = String(source.type || source.action || "").trim();
+  const currentVersion = normalizeContractVersion(source.version);
+  if (!type || currentVersion === null) {
+    resolveNodeDefinition(source);
+  }
+  const versions = getNodeDefinitionVersions(type);
+  if (!versions.length) resolveNodeDefinition(source);
+  const targetVersion = normalizeContractVersion(
+    options.targetVersion ?? versions.at(-1),
+  );
+  if (targetVersion === null || !versions.includes(targetVersion)) {
+    throw new NodeContractResolutionError(
+      NodeContractResolutionCodes.UnsupportedVersion,
+      `Unsupported migration target ${type} version ${String(options.targetVersion)}.`,
+      { type, version: options.targetVersion, supportedVersions: versions },
+    );
+  }
+  if (currentVersion === targetVersion) {
+    resolveNodeDefinition(source);
+    return source;
+  }
+  if (currentVersion > targetVersion) {
+    throw new NodeContractResolutionError(
+      NodeContractResolutionCodes.MigrationUnavailable,
+      `Node contract downgrade is not supported for ${type}.`,
+      { type, fromVersion: currentVersion, toVersion: targetVersion },
+    );
+  }
+
+  let migrated = source;
+  for (let version = currentVersion; version < targetVersion; version += 1) {
+    const migrationKey = `${nodeDefinitionKey(type, version)}->${version + 1}`;
+    const migration = nodeContractMigrations.get(migrationKey);
+    if (typeof migration !== "function") {
+      throw new NodeContractResolutionError(
+        NodeContractResolutionCodes.MigrationUnavailable,
+        `No reviewed migration exists for ${type} version ${version} to ${version + 1}.`,
+        { type, fromVersion: version, toVersion: version + 1 },
+      );
+    }
+    migrated = migration(structuredClone(migrated));
+    migrated.version = version + 1;
+  }
+  resolveNodeDefinition(migrated);
+  return migrated;
+}
+
+function normalizeNodeDefinition(definition) {
+  const version = normalizeContractVersion(definition.version);
+  if (!String(definition.type || "").trim() || version === null) {
+    throw new Error("Every node definition requires a type and positive integer version.");
+  }
+  const config = normalizeNodeFieldSchema(
+    definition.config || definition.configSchema || [],
+  );
+  const inputPorts = normalizePorts(
+    definition.inputPorts,
+    definition.inputs,
+    "input",
+  );
+  const outputPorts = normalizePorts(
+    definition.outputPorts,
+    definition.outputs,
+    "output",
+  );
+  const normalized = {
+    nativeHost: DEFAULT_NATIVE_HOST_REQUIREMENT,
+    ...definition,
+    version,
+    config,
+    configSchema: structuredClone(config),
+    inputPorts,
+    outputPorts,
+    targetSchema: definition.targetRequired
+      ? structuredClone(definition.targetSchema || createTargetEditorSchema(true))
+      : null,
+    inputs: inputPorts.map((port) => port.id),
+    outputs: outputPorts.map((port) => port.id),
+    nativeHost: normalizeNativeHostRequirement(definition.nativeHost),
+  };
+  normalized.guidance = normalizeNodeGuidance(normalized);
+  return normalized;
+}
+
+function normalizePorts(portDefinitions, legacyIds, direction) {
+  const source = Array.isArray(portDefinitions) && portDefinitions.length
+    ? portDefinitions
+    : Array.isArray(legacyIds) && legacyIds.length
+      ? legacyIds
+      : direction === "input"
+        ? ["input"]
+        : ["success"];
+  const seen = new Set();
+  return source.map((port) => {
+    const value = typeof port === "string" ? { id: port } : port || {};
+    const id = String(value.id || "").trim();
+    if (!/^[a-z][a-z0-9_]*$/.test(id) || seen.has(id)) {
+      throw new Error(`Invalid or duplicate ${direction} port id: ${id || "<empty>"}.`);
+    }
+    seen.add(id);
+    return {
+      id,
+      label: String(value.label || formatPortLabel(id)),
+      kind: String(value.kind || inferPortKind(id, direction)),
+      required: value.required === true,
+    };
+  });
+}
+
+function inferPortKind(id, direction) {
+  if (direction === "input") return id === "input" ? "flow" : "data";
+  if (id === "error") return "error";
+  if (id === "unresolved") return "resolution";
+  return id === "success" ? "flow" : "data";
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  Object.values(value).forEach(deepFreeze);
+  return Object.freeze(value);
+}
+
+function formatPortLabel(id) {
+  return id.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeContractVersion(value) {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 ? version : null;
 }
 
 function normalizeNodeGuidance(definition = {}) {

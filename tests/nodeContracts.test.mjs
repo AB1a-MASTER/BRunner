@@ -3,9 +3,13 @@ import { test } from "node:test";
 
 import {
   CommonNodeConfigDefaults,
+  NodeErrorCategories,
   NodeErrorCodes,
   NodeExecutionError,
+  NodePortIds,
   NodeStatuses,
+  createNodeSpecificErrorCode,
+  definitionSupportsOutputPort,
   normalizeCommonNodeConfig,
 } from "../BRunner/nodes/shared/nodeContracts.js";
 
@@ -46,6 +50,8 @@ test("node error codes exactly include the finalized baseline", () => {
     "MISSING_REQUIRED_OUTPUT",
     "CODE_EXECUTION_FAILED",
     "FUNCTION_EXECUTION_FAILED",
+    "NODE_TYPE_UNSUPPORTED",
+    "NODE_VERSION_UNSUPPORTED",
     "CANCELLED",
   ]);
 });
@@ -63,10 +69,12 @@ test("NodeExecutionError exposes a stable structured error", () => {
 
   assert.equal(error.name, "NodeExecutionError");
   assert.equal(error.code, NodeErrorCodes.TARGET_NOT_FOUND);
+  assert.equal(error.category, NodeErrorCategories.Target);
   assert.equal(error.message, "The mapped target could not be resolved.");
   assert.equal(error.details, details);
   assert.deepEqual(error.toJSON(), {
     code: NodeErrorCodes.TARGET_NOT_FOUND,
+    category: NodeErrorCategories.Target,
     message: "The mapped target could not be resolved.",
     details,
   });
@@ -74,6 +82,34 @@ test("NodeExecutionError exposes a stable structured error", () => {
     () => new NodeExecutionError("UNKNOWN", "Unknown"),
     /Unknown node error code/,
   );
+});
+
+test("node-specific errors keep stable namespaces and common categories", () => {
+  const code = createNodeSpecificErrorCode(
+    "browser.navigate",
+    "navigation_failed",
+  );
+  const error = new NodeExecutionError(
+    code,
+    "Navigation did not complete.",
+    { retryable: true },
+    { category: NodeErrorCategories.Navigation },
+  );
+
+  assert.equal(code, "browser.navigate/NAVIGATION_FAILED");
+  assert.equal(error.category, NodeErrorCategories.Navigation);
+  assert.equal(error.toJSON().category, NodeErrorCategories.Navigation);
+});
+
+test("stable output-port lookup uses machine ids rather than labels", () => {
+  const definition = {
+    outputPorts: [
+      { id: NodePortIds.Success, label: "Done" },
+      { id: NodePortIds.Error, label: "Could Not Complete" },
+    ],
+  };
+  assert.equal(definitionSupportsOutputPort(definition, "error"), true);
+  assert.equal(definitionSupportsOutputPort(definition, "Could Not Complete"), false);
 });
 
 test("common configuration receives finalized defaults and preserves node config", () => {

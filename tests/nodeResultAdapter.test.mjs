@@ -81,6 +81,7 @@ test("failed results normalize errors without removing arbitrary local details",
 
   assert.deepEqual(result.errors, [{
     code: NodeErrorCodes.VALIDATION_FAILED,
+    category: "validation",
     message: "Output validation failed.",
     details: localDetails,
   }]);

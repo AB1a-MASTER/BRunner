@@ -59,6 +59,11 @@ import {
 } from "../../core/nativeHostRequirements.js";
 import { summarizeValue } from "../../core/variableInspector.js";
 import {
+  buildTargetEditorValue,
+  collectFieldAutocompleteOptions,
+  normalizeTargetEditorValue,
+} from "../../core/nodeAuthoring.js";
+import {
   createRecoverableGraphDraft,
   createSerializedSaveQueue,
   hashWorkflowSnapshot,
@@ -106,6 +111,7 @@ export function GraphStudio() {
 
 function GraphStudioCanvas() {
   const [definitions, setDefinitions] = useState([]);
+  const [definitionVersions, setDefinitionVersions] = useState([]);
   const [definitionsError, setDefinitionsError] = useState("");
   const [nodes, setNodes, applyNodeChanges] = useNodesState([]);
   const [edges, setEdges, applyEdgeChanges] = useEdgesState([]);
@@ -177,6 +183,13 @@ function GraphStudioCanvas() {
   const definitionsByType = useMemo(
     () => new Map(definitions.map((definition) => [definition.type, definition])),
     [definitions],
+  );
+  const definitionsByContract = useMemo(
+    () => new Map(definitionVersions.map((definition) => [
+      nodeContractKey(definition.type, definition.version),
+      definition,
+    ])),
+    [definitionVersions],
   );
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
   const selectedNodeCount = nodes.filter((node) => node.selected).length;
@@ -288,6 +301,7 @@ function GraphStudioCanvas() {
           throw new Error(response?.error || "Node definitions are unavailable.");
         }
         setDefinitions(response.definitions);
+        setDefinitionVersions(response.definitionVersions || response.definitions);
       })
       .catch((error) => {
         if (active) setDefinitionsError(error.message || String(error));
@@ -450,7 +464,7 @@ function GraphStudioCanvas() {
   }, [persistRecoverableDraft]);
 
   useEffect(() => {
-    if (draftRecoveryCheckedRef.current || !definitionsByType.size) return;
+    if (draftRecoveryCheckedRef.current || !definitionsByContract.size) return;
     draftRecoveryCheckedRef.current = true;
     let active = true;
     chrome.storage.local.get(GRAPH_STUDIO_DRAFT_KEY)
@@ -472,7 +486,10 @@ function GraphStudioCanvas() {
           ...node,
           data: {
             ...node.data,
-            definition: definitionsByType.get(node.data?.definition?.type || node.type) || node.data?.definition,
+            definition: definitionsByContract.get(nodeContractKey(
+              node.data?.definition?.type || node.data?.type || node.type,
+              node.data?.definition?.version || node.data?.version,
+            )) || node.data?.definition,
             readOnly: draftReadOnly,
             onMutate: markDirty,
           },
@@ -504,7 +521,7 @@ function GraphStudioCanvas() {
         setNotice({ kind: "error", text: `Draft recovery failed: ${error.message || error}` });
       });
     return () => { active = false; };
-  }, [clearRecoverableDraft, definitionsByType, fitView, markDirty, setEdges, setNodes]);
+  }, [clearRecoverableDraft, definitionsByContract, fitView, markDirty, setEdges, setNodes]);
 
   const selectCanvasNode = useCallback((nodeId) => {
     setNodes((current) => current.every((node) => node.selected === (node.id === nodeId))
@@ -589,7 +606,7 @@ function GraphStudioCanvas() {
       if (recordedStepKeysRef.current.has(key)) return;
       const currentNodes = getNodes();
       const currentEdges = getEdges();
-      const model = workflowToCanvas({ steps: [step] }, definitionsByType);
+      const model = workflowToCanvas({ steps: [step] }, definitionsByContract);
       const sourceNode = model.nodes[0];
       if (!sourceNode) return;
       const usedIds = new Set(currentNodes.map((node) => node.id));
@@ -657,7 +674,7 @@ function GraphStudioCanvas() {
     } catch (error) {
       setNotice({ kind: "error", text: `Could not add recorded node: ${error.message || error}` });
     }
-  }, [definitionsByType, fitView, getEdges, getNodes, layoutDirection, markDirty, setEdges, setNodes]);
+  }, [definitionsByContract, definitionsByType, fitView, getEdges, getNodes, layoutDirection, markDirty, setEdges, setNodes]);
 
   useEffect(() => {
     if (!definitionsByType.size || !Array.isArray(recording.recordedSteps)) return;
@@ -754,7 +771,7 @@ function GraphStudioCanvas() {
         && !window.confirm(`Discard changes made while loading "${filename}"?`)
       ) return false;
       const content = response.content || response.workflow || response.data || response;
-      const model = workflowToCanvas(content, definitionsByType);
+      const model = workflowToCanvas(content, definitionsByContract);
       setNodes(model.nodes.map((node) => ({
         ...node,
         data: { ...node.data, onMutate: markDirty },
@@ -790,7 +807,7 @@ function GraphStudioCanvas() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [clearRecoverableDraft, confirmDiscard, definitions.length, definitionsByType, fitView, markDirty, selectedFile, setEdges, setNodes]);
+  }, [clearRecoverableDraft, confirmDiscard, definitions.length, definitionsByContract, fitView, markDirty, selectedFile, setEdges, setNodes]);
 
   useEffect(() => {
     if (
@@ -1301,6 +1318,7 @@ function GraphStudioCanvas() {
         </section>
         {inspectorVisible ? <InspectorPanel
           node={selectedNode}
+          nodes={nodes}
           onNodeChange={updateSelectedNode}
           readOnly={!canvasInteraction.canEdit}
           navigationMode={canvasInteraction.effectiveTool === CanvasTool.Hand}
@@ -1567,7 +1585,7 @@ function InspectorPanel(props) {
       <div className="panel-heading"><div><h2>Inspector</h2></div><button type="button" className="panel-collapse-button" onClick={() => props.onInspectorMode(props.inspectorMode === InspectorMode.Pinned ? InspectorMode.Auto : InspectorMode.Pinned)} aria-label={props.inspectorMode === InspectorMode.Pinned ? "Use automatic Inspector" : "Pin Inspector"} aria-pressed={props.inspectorMode === InspectorMode.Pinned} title={props.inspectorMode === InspectorMode.Pinned ? "Collapse Inspector until a node is selected" : "Keep Inspector pinned"}><PinIcon pinned={props.inspectorMode === InspectorMode.Pinned} /></button></div>
       <div className="properties-scroll">
         <div className="inspector-context"><span>Node</span><strong>{definition.label}</strong></div>
-        <div className="node-identity"><code>{node.data.type}</code><span>{navigationMode ? "Navigation mode" : node.data.readOnly ? "Legacy preview" : node.data.executionLocked ? "Execution locked" : `Node ${node.id.slice(-8)}`}</span></div>
+        <div className="node-identity"><code>{node.data.type}@{definition.version}</code><span>{navigationMode ? "Navigation mode" : node.data.readOnly ? "Legacy preview" : node.data.executionLocked ? "Execution locked" : `Node ${node.id.slice(-8)}`}</span></div>
         <NodeGuidancePanel definition={definition} />
         <NativeHostRequirementPanel definition={definition} hostConnected={props.hostConnected} hostCapabilities={props.hostCapabilities} />
         <section className="property-section" aria-labelledby="execution-heading"><h3 id="execution-heading">Execution</h3>
@@ -1576,8 +1594,8 @@ function InspectorPanel(props) {
           {node.data.executionMode === "disabled" && <p className="bypass-note">Connections remain intact; runtime passes over this node.</p>}
         </section>
         <section className="property-section" aria-labelledby="configuration-heading"><h3 id="configuration-heading">Configuration</h3>
-          {definition.targetRequired && <Field label="Target Element" required htmlFor="property-target"><input id="property-target" value={node.data.target || ""} disabled={readOnly} onChange={(event) => props.onNodeChange({ target: event.target.value, targetEdited: true })} placeholder="CSS selector or recorded target" /></Field>}
-          {(definition.config || []).map((field) => <ConfigField key={field.key} field={field} value={node.data.config[field.key] ?? field.default ?? ""} config={node.data.config} onChange={setConfig} disabled={readOnly} />)}
+          {definition.targetRequired && <TargetEditor node={node} schema={definition.targetSchema} onChange={props.onNodeChange} disabled={readOnly} autocompleteContext={createAutocompleteContext(props, node)} />}
+          {(definition.config || []).map((field) => <ConfigField key={field.key} field={field} value={node.data.config[field.key] ?? field.default ?? ""} config={node.data.config} onChange={setConfig} disabled={readOnly} autocompleteOptions={collectFieldAutocompleteOptions(field, createAutocompleteContext(props, node))} />)}
         </section>
       </div>
     </aside>
@@ -1862,18 +1880,69 @@ function WorkflowDataView({
   );
 }
 
-function ConfigField({ field, value, config, onChange, disabled }) {
+function TargetEditor({ node, schema, onChange, disabled, autocompleteContext }) {
+  if (!schema?.fields) return <p className="panel-error">Target editor contract is unavailable.</p>;
+  const source = node.data.targetSource || node.data.target ||
+    (node.data.componentRef ? { componentRef: node.data.componentRef } : "");
+  const values = normalizeTargetEditorValue(source);
+  const setTargetField = (key, value) => {
+    const next = buildTargetEditorValue({ ...values, [key]: value });
+    onChange({
+      target: next,
+      targetSource: next,
+      targetEdited: true,
+    });
+  };
+  return (
+    <fieldset className="target-editor">
+      <legend>Target Element *</legend>
+      {schema.fields.map((field) => <ConfigField
+        key={field.key}
+        idPrefix="target"
+        field={field}
+        value={values[field.key] ?? field.default ?? ""}
+        config={values}
+        onChange={setTargetField}
+        disabled={disabled}
+        autocompleteOptions={collectFieldAutocompleteOptions(field, autocompleteContext)}
+      />)}
+    </fieldset>
+  );
+}
+
+function ConfigField({ field, value, config, onChange, disabled, autocompleteOptions = [], idPrefix = "property" }) {
   if (field.visibleWhen && String(config[field.visibleWhen.field] ?? "") !== String(field.visibleWhen.equals)) return null;
-  const id = `property-${field.key}`;
+  const id = `${idPrefix}-${field.key}`;
+  const listId = autocompleteOptions.length ? `${id}-options` : undefined;
+  const help = [
+    field.help,
+    field.example ? `Example: ${field.example}` : "",
+  ].filter(Boolean).join(" ");
   let control;
-  if (field.kind === "select") control = <select id={id} value={String(value)} disabled={disabled} onChange={(event) => onChange(field.key, event.target.value)}>{(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}</select>;
-  else if (["textarea", "value"].includes(field.kind)) control = <textarea id={id} rows="5" disabled={disabled} value={typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)} onChange={(event) => onChange(field.key, event.target.value)} />;
-  else control = <input id={id} value={String(value)} disabled={disabled} inputMode={field.kind === "number" ? "numeric" : undefined} onChange={(event) => onChange(field.key, event.target.value)} />;
-  return <Field label={field.label || field.key} required={field.required} help={field.help} htmlFor={id}>{control}</Field>;
+  if (field.kind === "select") control = <select id={id} value={String(value)} disabled={disabled} onChange={(event) => onChange(field.key, event.target.value)}>{(field.options || []).map((option) => { const optionValue = typeof option === "object" ? option.value : option; const optionLabel = typeof option === "object" ? option.label : option; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select>;
+  else if (field.kind === "boolean") control = <input id={id} type="checkbox" checked={value === true} disabled={disabled} onChange={(event) => onChange(field.key, event.target.checked)} />;
+  else if (["textarea", "value"].includes(field.kind)) control = <textarea id={id} rows="5" disabled={disabled} value={typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)} placeholder={field.placeholder} onChange={(event) => onChange(field.key, event.target.value)} />;
+  else control = <><input id={id} value={String(value)} disabled={disabled} inputMode={field.kind === "number" ? "numeric" : undefined} placeholder={field.placeholder} list={listId} onChange={(event) => onChange(field.key, event.target.value)} />{listId && <datalist id={listId}>{autocompleteOptions.map((option) => <option key={option} value={option} />)}</datalist>}</>;
+  return <Field label={field.label || field.key} required={field.required} help={help} htmlFor={id}>{control}</Field>;
 }
 
 function Field({ label, required, help, htmlFor, children }) { return <div className="property-field"><label htmlFor={htmlFor}>{label}{required ? " *" : ""}</label>{children}{help && <small>{help}</small>}</div>; }
 function formatInlineList(values = []) { return values.length ? values.join(", ") : "none"; }
+function nodeContractKey(type, version) { return `${String(type || "").trim()}@${String(version ?? "").trim()}`; }
+function createAutocompleteContext(props, node) {
+  const variables = { ...(props.metadata?.variables || {}) };
+  for (const entry of Array.isArray(props.variables) ? props.variables : []) {
+    const name = typeof entry === "string" ? entry : entry?.name || entry?.id;
+    if (name) variables[name] = true;
+  }
+  const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+  return {
+    variables,
+    nodeIds: nodes.filter((item) => item.id !== node.id).map((item) => item.id),
+    tabReferences: nodes.map((item) => item.data?.config?.saveTabReferenceAs || item.data?.tabRef).filter(Boolean),
+    approvedDirectories: props.approvedDirectories || [],
+  };
+}
 function getRecordedStepKey(step = {}) {
   if (step.id) return `id:${step.id}`;
   return [
@@ -1930,6 +1999,7 @@ function getOrCreateMapperAttentionNode(nodes = [], edges = [], layoutDirection 
         collapsed: false,
         layoutDirection,
         readOnly: false,
+        systemNode: true,
       },
     },
   };

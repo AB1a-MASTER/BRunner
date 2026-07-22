@@ -3,6 +3,11 @@
 // Owns workflow editing, local workflow file actions, recording controls,
 // and execution requests.
 
+import {
+  canonicalWorkflowToSequentialView,
+  sequentialViewToCanonicalWorkflow,
+} from "../core/workflowSchema.js";
+
 const Messages = Object.freeze({
   StudioLoaded: "STUDIO_LOADED",
 
@@ -65,14 +70,9 @@ const STUDIO_DRAFT_KEY = "brunner.studio.draft.sequential.v1";
 const STUDIO_DRAFT_VERSION = 1;
 
 const StudioValidation = globalThis.BRunnerStudioValidation;
+const NodeAuthoring = globalThis.BRunnerNodeAuthoring;
 
-let workflow = {
-  description: "",
-  boundDomain: "",
-  variables: {},
-  settings: { reuseExistingTabs: false },
-  steps: [],
-};
+let workflow = createEmptySequentialWorkflowView();
 
 let isRecording = false;
 let isWorkflowRunning = false;
@@ -88,6 +88,7 @@ let lastRunVariables = {};
 let runtimeVariableEntries = [];
 let bridgeReady = null;
 const nodeDefinitionsByType = new Map();
+const nodeDefinitionsByContract = new Map();
 let autocompleteState = null;
 let initialStudioSessionApplied = false;
 
@@ -334,13 +335,7 @@ function wireLayoutControls() {
     }
     if (!confirmDiscardDirtyDraft("create a new workflow")) return;
 
-    workflow = {
-      description: "",
-      boundDomain: "",
-      variables: {},
-      settings: { reuseExistingTabs: false },
-      steps: [],
-    };
+    workflow = createEmptySequentialWorkflowView();
 
     workflowNameInput.value = "Untitled";
     workflowDomainInput.value = "";
@@ -449,8 +444,15 @@ async function loadNodeDefinitions() {
     }
 
     nodeDefinitionsByType.clear();
+    nodeDefinitionsByContract.clear();
     response.definitions.forEach((definition) => {
       nodeDefinitionsByType.set(definition.type, definition);
+    });
+    (response.definitionVersions || response.definitions).forEach((definition) => {
+      nodeDefinitionsByContract.set(
+        nodeContractKey(definition.type, definition.version),
+        definition,
+      );
     });
 
     actionPalette.innerHTML = response.definitions
@@ -576,6 +578,11 @@ function wireRuntimeMessages() {
     if (request?.type === Messages.StudioReceiveStep) {
       updateStateFromUI();
 
+      if (workflow.structureLocked) {
+        sendResponse({ ok: false, error: "Graph-routed workflow structure is locked in Sequential Studio." });
+        return true;
+      }
+
       const step = normalizeStep(request.step);
       workflow.steps.push(step);
       markWorkflowDirty("Recorded step is unsaved");
@@ -672,6 +679,10 @@ async function performWorkflowSave() {
       && submittedState.fingerprint === currentDraft.fingerprint;
 
     if (submittedStillCurrent) {
+      const savedView = canonicalWorkflowToSequentialView(content);
+      workflow.canonicalGraph = savedView.canonicalGraph;
+      workflow.structureSignature = savedView.structureSignature;
+      workflow.structureLocked = savedView.structureLocked;
       setWorkflowClean(`Saved ${savedFilename}`);
       await clearRecoverableDraft().catch(() => {});
     } else {
@@ -901,6 +912,7 @@ async function runCurrentWorkflow() {
     alert("Add at least one step.");
     return;
   }
+  if (!validateCurrentWorkflow({ focusFirst: true })) return;
 
   isWorkflowRunning = true;
   lastRunVariables = {};
@@ -930,11 +942,11 @@ async function runCurrentWorkflow() {
     setRunButtonRunning(false);
   }
 
-  if (!validateCurrentWorkflow({ focusFirst: true })) return;
 }
 
 function addStepToWorkflow(action) {
   updateStateFromUI();
+  if (!allowSequentialStructureEdit()) return;
 
   workflow.steps.push(createStep(action));
   markWorkflowDirty();
@@ -946,6 +958,7 @@ function createStep(action) {
   const step = {
     id: generateStepId(),
     action,
+    version: definition?.version || 1,
     target: "",
     targetType: "",
     targetFallbacks: [],
@@ -998,6 +1011,7 @@ function createStep(action) {
 
 function deleteStep(stepId) {
   updateStateFromUI();
+  if (!allowSequentialStructureEdit()) return;
   workflow.steps = workflow.steps.filter((step) => step.id !== stepId);
   markWorkflowDirty();
   renderCanvas();
@@ -1005,6 +1019,7 @@ function deleteStep(stepId) {
 
 function moveStep(index, direction) {
   updateStateFromUI();
+  if (!allowSequentialStructureEdit()) return;
   let moved = false;
 
   if (direction === "up" && index > 0) {
@@ -1027,6 +1042,12 @@ function moveStep(index, direction) {
   renderCanvas();
 }
 
+function allowSequentialStructureEdit() {
+  if (!workflow.structureLocked) return true;
+  alert("This workflow has explicit graph routes. Sequential Studio preserves them and can edit node settings, but route structure must be edited in Graph Studio.");
+  return false;
+}
+
 function updateStateFromUI() {
   workflow.boundDomain = workflowDomainInput.value.trim();
   workflow.description = workflowDescriptionInput?.value.trim() || "";
@@ -1036,27 +1057,7 @@ function updateStateFromUI() {
   };
 
   workflow.steps.forEach((step) => {
-    const targetInput = document.getElementById(`target-${step.id}`);
-    if (targetInput) {
-      const visibleValue = targetInput.value.trim();
-
-      if (step.friendlyName && visibleValue === step.friendlyName) {
-        // Preserve structured target from recorder.
-      } else if (visibleValue) {
-        step.target = {
-          strategy: "css_selector",
-          value: visibleValue,
-        };
-        step.targetType = "css_selector";
-        step.targetFallbacks = [];
-        step.friendlyName = "";
-      } else {
-        step.target = "";
-        step.targetType = "";
-        step.targetFallbacks = [];
-        step.friendlyName = "";
-      }
-    }
+    updateTargetFromUI(step);
 
     const payloadInput = document.getElementById(`payload1-${step.id}`);
     const openInSelect = document.getElementById(`openin-${step.id}`);
@@ -1083,7 +1084,7 @@ function updateStateFromUI() {
       }
     }
 
-    const definition = nodeDefinitionsByType.get(step.action);
+    const definition = getStepDefinition(step);
 
     for (const field of definition?.config || []) {
       const input = document.getElementById(
@@ -1092,7 +1093,9 @@ function updateStateFromUI() {
       if (!input) continue;
 
       step.config = step.config || {};
-      step.config[field.key] = field.kind === "number"
+      step.config[field.key] = field.kind === "boolean"
+        ? input.checked
+        : field.kind === "number"
         ? parseNumberOrExpression(input.value)
         : field.kind === "value"
           ? parseStructuredOrTextValue(input.value)
@@ -1140,38 +1143,31 @@ function applyPayloadValueToStep(step, value) {
 function getWorkflowFromUI() {
   updateStateFromUI();
 
-  return {
-    description: workflow.description || "",
-    boundDomain: workflow.boundDomain || "",
-    variables: workflow.variables || {},
-    settings: workflow.settings || { reuseExistingTabs: false },
+  return sequentialViewToCanonicalWorkflow({
+    ...workflow,
+    name: workflowNameInput.value || workflow.name || "Untitled",
     steps: workflow.steps.map(normalizeStep),
-  };
+  });
 }
 
 function normalizeWorkflow(input) {
-  if (Array.isArray(input)) {
-    return {
-      description: "",
-      boundDomain: "",
-      variables: {},
-      settings: { reuseExistingTabs: false },
-      steps: input.map(normalizeStep),
-    };
-  }
+  const view = canonicalWorkflowToSequentialView(input);
+  view.steps = view.steps.map(normalizeStep);
+  return view;
+}
 
-  return {
-    description: typeof input?.description === "string" ? input.description : "",
-    boundDomain: input?.boundDomain || "",
-    variables:
-      input?.variables && typeof input.variables === "object"
-        ? structuredClone(input.variables)
-        : {},
-    settings: {
-      reuseExistingTabs: input?.settings?.reuseExistingTabs === true,
-    },
-    steps: Array.isArray(input?.steps) ? input.steps.map(normalizeStep) : [],
-  };
+function createEmptySequentialWorkflowView() {
+  return canonicalWorkflowToSequentialView({
+    id: crypto.randomUUID(),
+    name: "Untitled",
+    description: "",
+    boundDomain: "",
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    settings: { reuseExistingTabs: false },
+    steps: [],
+  });
 }
 
 function normalizeStep(step) {
@@ -1183,8 +1179,13 @@ function normalizeStep(step) {
     step.target && typeof step.target === "object" ? step.target : null;
 
   const normalized = {
+    ...structuredClone(step),
     id: step.id || generateStepId(),
     action,
+    version:
+      step.version === undefined || step.version === null || step.version === ""
+        ? 1
+        : step.version,
     target: step.target || "",
     targetType:
       step.targetType || structuredTarget?.primary?.strategy || "",
@@ -1465,7 +1466,7 @@ function refreshValidationUI() {
 
   const issues = StudioValidation.validateWorkflow(
     workflow,
-    nodeDefinitionsByType,
+    nodeDefinitionsByContract,
   );
 
   canvas.querySelectorAll(".node").forEach((node) => {
@@ -1871,7 +1872,7 @@ function renderCanvas() {
       <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:8px;font-style:italic;">
         ${escapeHtml(getInstructionText(step.action))}
       </div>
-      ${getNodeGuidanceHtml(step.action)}
+      ${getNodeGuidanceHtml(step)}
       <div class="node-validation-summary" role="alert" hidden></div>
       ${fields}
     `;
@@ -1894,8 +1895,9 @@ function renderCanvas() {
   refreshContextualFieldVisibility();
 }
 
-function getNodeGuidanceHtml(action) {
-  const definition = nodeDefinitionsByType.get(action);
+function getNodeGuidanceHtml(step) {
+  const action = step.action || step.type;
+  const definition = getStepDefinition(step);
   const guidance = definition?.guidance || {};
   if (!definition) return "";
 
@@ -1928,17 +1930,8 @@ function getStepFieldsHtml(step) {
     </div>
   `;
 
-  if (needsTarget(step.action)) {
-    const targetHelp = isExtractionNode(step.action)
-      ? '<span class="field-help">Extraction selectors below run inside this target.</span>'
-      : "";
-    html += `
-      <div class="node-input-group" data-field="target">
-        <label>Target Element *</label>
-        <input type="text" id="target-${escapeAttr(step.id)}" value="${escapeAttr(getDisplayTarget(step))}" placeholder="CSS selector, recorded identifier, or text">
-        ${targetHelp}
-      </div>
-    `;
+  if (needsTarget(step)) {
+    html += getTargetEditorHtml(step);
   }
 
   if (step.action === Actions.BrowserNavigate) {
@@ -1998,7 +1991,7 @@ function getStepFieldsHtml(step) {
     `;
   }
 
-  const definition = nodeDefinitionsByType.get(step.action);
+  const definition = getStepDefinition(step);
 
   for (const field of definition?.config || []) {
     if (handledConfigKeys.has(field.key)) continue;
@@ -2012,9 +2005,10 @@ function getStepFieldsHtml(step) {
   return html;
 }
 
-function getConfigFieldHtml(step, field) {
-  const id = `config-${step.id}-${field.key}`;
-  const value = step.config?.[field.key] ?? field.default ?? "";
+function getConfigFieldHtml(step, field, options = {}) {
+  const idPrefix = options.idPrefix || "config";
+  const id = `${idPrefix}-${step.id}-${field.key}`;
+  const value = options.values?.[field.key] ?? step.config?.[field.key] ?? field.default ?? "";
   const displayValue = value && typeof value === "object"
     ? JSON.stringify(value, null, 2)
     : value;
@@ -2022,53 +2016,160 @@ function getConfigFieldHtml(step, field) {
   const help = field.help
     ? `<span class="field-help">${escapeHtml(field.help)}</span>`
     : "";
-  const visibility = field.visibleWhen
-    ? ` data-visible-field="${escapeAttr(field.visibleWhen.field)}" data-visible-value="${escapeAttr(field.visibleWhen.equals)}"`
+  const example = field.example
+    ? `<span class="field-help field-example">Example: <code>${escapeHtml(field.example)}</code></span>`
     : "";
+  const placeholder = field.placeholder
+    ? ` placeholder="${escapeAttr(field.placeholder)}"`
+    : "";
+  const autocompleteOptions = getFieldAutocompleteOptions(field, step);
+  const listId = autocompleteOptions.length ? `${id}-options` : "";
+  const listAttribute = listId ? ` list="${escapeAttr(listId)}"` : "";
+  const datalist = listId
+    ? `<datalist id="${escapeAttr(listId)}">${autocompleteOptions.map((option) => `<option value="${escapeAttr(option)}"></option>`).join("")}</datalist>`
+    : "";
+  const expressionAttribute = field.expressionMode !== "none"
+    ? ' data-expression="true" autocomplete="off"'
+    : "";
+  const visibility = field.visibleWhen
+    ? ` data-visible-field="${escapeAttr(field.visibleWhen.field)}" data-visible-value="${escapeAttr(field.visibleWhen.equals)}" data-visible-controller="${escapeAttr(`${idPrefix}-${step.id}-${field.visibleWhen.field}`)}"`
+    : "";
+  const dataField = options.dataFieldPrefix
+    ? `${options.dataFieldPrefix}.${field.key}`
+    : field.key;
 
   if (field.kind === "select") {
     const options = (field.options || [])
       .map((option) => {
-        const selected = String(option) === String(displayValue) ? "selected" : "";
-        return `<option value="${escapeAttr(option)}" ${selected}>${escapeHtml(option)}</option>`;
+        const optionValue = typeof option === "object" ? option.value : option;
+        const optionLabel = typeof option === "object" ? option.label : option;
+        const selected = String(optionValue) === String(displayValue) ? "selected" : "";
+        return `<option value="${escapeAttr(optionValue)}" ${selected}>${escapeHtml(optionLabel)}</option>`;
       })
       .join("");
 
     return `
-      <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
+      <div class="node-input-group" data-field="${escapeAttr(dataField)}"${visibility}>
         <label>${escapeHtml(field.label || field.key)}${required}</label>
         <select id="${escapeAttr(id)}">${options}</select>
         ${help}
+        ${example}
+      </div>
+    `;
+  }
+
+  if (field.kind === "boolean") {
+    return `
+      <div class="node-input-group" data-field="${escapeAttr(dataField)}"${visibility}>
+        <label class="field-checkbox"><input type="checkbox" id="${escapeAttr(id)}" ${displayValue === true ? "checked" : ""}> ${escapeHtml(field.label || field.key)}${required}</label>
+        ${help}
+        ${example}
       </div>
     `;
   }
 
   if (["textarea", "value"].includes(field.kind)) {
     return `
-      <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
+      <div class="node-input-group" data-field="${escapeAttr(dataField)}"${visibility}>
         <label>${escapeHtml(field.label || field.key)}${required}</label>
-        <textarea id="${escapeAttr(id)}" ${field.key !== "variableName" ? 'data-expression="true" autocomplete="off"' : ""} rows="4">${escapeHtml(displayValue)}</textarea>
+        <textarea id="${escapeAttr(id)}"${expressionAttribute}${placeholder}${listAttribute} rows="4">${escapeHtml(displayValue)}</textarea>
+        ${datalist}
         ${help}
+        ${example}
       </div>
     `;
   }
 
   return `
-    <div class="node-input-group" data-field="${escapeAttr(field.key)}"${visibility}>
+    <div class="node-input-group" data-field="${escapeAttr(dataField)}"${visibility}>
       <label>${escapeHtml(field.label || field.key)}${required}</label>
-      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""} ${field.key !== "variableName" ? 'data-expression="true" autocomplete="off"' : ""} id="${escapeAttr(id)}" value="${escapeAttr(displayValue)}">
+      <input type="text" ${field.kind === "number" ? 'inputmode="numeric"' : ""}${expressionAttribute}${placeholder}${listAttribute} id="${escapeAttr(id)}" value="${escapeAttr(displayValue)}">
+      ${datalist}
       ${help}
+      ${example}
     </div>
   `;
+}
+
+function getFieldAutocompleteOptions(field, step) {
+  if (!NodeAuthoring) return [];
+  const stepIndex = Math.max(0, workflow.steps.indexOf(step));
+  const variables = Object.fromEntries(
+    StudioValidation.collectAvailableVariableNames(workflow, stepIndex)
+      .map((name) => [name, true]),
+  );
+  return NodeAuthoring.collectFieldAutocompleteOptions(field, {
+    variables,
+    nodeIds: workflow.steps.slice(0, stepIndex).map((item) => item.id),
+    tabReferences: workflow.steps
+      .slice(0, stepIndex)
+      .map((item) => item.tabRef || item.config?.saveTabReferenceAs)
+      .filter(Boolean),
+  });
+}
+
+function getTargetEditorHtml(step) {
+  const definition = getStepDefinition(step);
+  const schema = definition?.targetSchema;
+  if (!NodeAuthoring || !schema?.fields) return "";
+  const source = step.target || (step.componentRef ? { componentRef: step.componentRef } : "");
+  const values = NodeAuthoring.normalizeTargetEditorValue(source);
+  const fields = schema.fields
+    .map((field) => getConfigFieldHtml(step, field, {
+      idPrefix: "target",
+      values,
+      dataFieldPrefix: "target",
+    }))
+    .join("");
+  const extractionHelp = isExtractionNode(step.action)
+    ? '<span class="field-help">Extraction selectors run inside this resolved target.</span>'
+    : "";
+  return `
+    <fieldset class="target-editor" data-field="target">
+      <legend>Target Element *</legend>
+      ${extractionHelp}
+      ${fields}
+    </fieldset>
+  `;
+}
+
+function updateTargetFromUI(step) {
+  const definition = getStepDefinition(step);
+  const fields = definition?.targetSchema?.fields;
+  if (!NodeAuthoring || !Array.isArray(fields)) return;
+  const originalSource = step.target || (step.componentRef ? { componentRef: step.componentRef } : "");
+  const original = NodeAuthoring.normalizeTargetEditorValue(originalSource);
+  const edited = { ...original };
+  let found = false;
+  for (const field of fields) {
+    const input = document.getElementById(`target-${step.id}-${field.key}`);
+    if (!input) continue;
+    found = true;
+    edited[field.key] = field.kind === "boolean" ? input.checked : input.value;
+  }
+  if (!found || JSON.stringify(edited) === JSON.stringify(original)) return;
+  const identifierValue = typeof edited.identifierValue === "string"
+    ? edited.identifierValue.trim()
+    : edited.identifierValue;
+  if (!identifierValue && edited.identifierType !== "coordinates") {
+    step.target = "";
+    step.targetType = "";
+  } else {
+    step.target = NodeAuthoring.buildTargetEditorValue(edited);
+    step.targetType = edited.identifierType;
+  }
+  step.targetFallbacks = [];
+  step.friendlyName = "";
 }
 
 function refreshContextualFieldVisibility() {
   canvas.querySelectorAll("[data-visible-field]").forEach((group) => {
     const node = group.closest(".node");
     const stepId = node?.dataset.stepId;
-    const field = group.dataset.visibleField;
     const expected = group.dataset.visibleValue;
-    const controller = document.getElementById(`config-${stepId}-${field}`);
+    const controller = document.getElementById(
+      group.dataset.visibleController || `config-${stepId}-${group.dataset.visibleField}`,
+    );
     group.hidden = String(controller?.value ?? "") !== expected;
   });
 }
@@ -2158,8 +2259,9 @@ function getInstructionText(action) {
   }
 }
 
-function needsTarget(action) {
-  const definition = nodeDefinitionsByType.get(action);
+function needsTarget(step) {
+  const action = step.action || step.type;
+  const definition = getStepDefinition(step);
   if (definition) return Boolean(definition.targetRequired);
 
   return [
@@ -2170,6 +2272,17 @@ function needsTarget(action) {
     Actions.ElementSelect,
     Actions.ElementToggle,
   ].includes(action);
+}
+
+function getStepDefinition(step = {}) {
+  const type = step.action || step.type || "";
+  return nodeDefinitionsByContract.get(
+    nodeContractKey(type, step.version),
+  ) || null;
+}
+
+function nodeContractKey(type, version) {
+  return `${String(type || "").trim()}@${String(version ?? "").trim()}`;
 }
 
 function getDisplayTarget(step) {

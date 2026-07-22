@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { getNodeDefinition } from "../BRunner/core/nodeRegistry.js";
 
 test("list extraction exposes registry-driven contextual attribute controls", () => {
-  const definition = getNodeDefinition("data.extract.list");
+  const definition = getNodeDefinition("data.extract.list", 1);
   const itemSelector = definition.config.find((field) => field.key === "itemSelector");
   const attributeName = definition.config.find((field) => field.key === "attributeName");
 
@@ -16,7 +16,7 @@ test("list extraction exposes registry-driven contextual attribute controls", ()
 });
 
 test("table extraction explains selector scope", () => {
-  const definition = getNodeDefinition("data.extract.table");
+  const definition = getNodeDefinition("data.extract.table", 1);
   const rowSelector = definition.config.find((field) => field.key === "rowSelector");
   const cellSelector = definition.config.find((field) => field.key === "cellSelector");
 

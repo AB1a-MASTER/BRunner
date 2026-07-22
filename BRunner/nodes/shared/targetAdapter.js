@@ -7,6 +7,7 @@ import { normalizeTextMatchConfig } from "./textMatching.js";
 
 export const TargetIdentifierTypes = Object.freeze({
   Auto: "auto",
+  ComponentId: "component_id",
   Css: "css",
   XPath: "xpath",
   Id: "id",
@@ -74,6 +75,7 @@ const IDENTIFIER_ALIASES = Object.freeze({
   placeholder: TargetIdentifierTypes.Placeholder,
   attribute: TargetIdentifierTypes.Attribute,
   component: TargetIdentifierTypes.ComponentRef,
+  component_id: TargetIdentifierTypes.ComponentId,
   component_ref: TargetIdentifierTypes.ComponentRef,
   coordinates: TargetIdentifierTypes.Coordinates,
 });

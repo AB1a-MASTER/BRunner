@@ -261,15 +261,17 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
    [`NODE_IMPLEMENTATION_STATUS.md`](NODE_IMPLEMENTATION_STATUS.md) from the
    finalized 94-node blueprint and inventory every provisional type with an
    upgrade, rewrite/change, add, or remove disposition.
-2. **Active:** close tracker base items B02-B06 and B10-B14: versioned dispatch
-   and migrations, deterministic ambiguity behavior, extensible errors, stable
-   ports/routes, a shared registry/schema/editor contract, one workflow format,
-   cross-Studio round trips, user help/autocomplete/identifier controls, and
-   node-acceptance workflow validation.
-3. Correct and integrate the Phase 1 shared target, text-matching,
-   output/logging/routing, and retry/host-fallback adapters.
-4. Implement Navigate, Scroll, Tab Control, Resolve Element, Check Element
-   State, and Wait for Condition in catalog order and close the Phase 1 gate.
+2. **Complete:** tracker base items B02-B06 and B10-B14 now enforce versioned
+   dispatch and fail-closed migration, deterministic ambiguity behavior,
+   extensible errors, typed ports/routes, shared authoring metadata, one
+   canonical workflow, cross-Studio round trips, and acceptance-workflow
+   validation.
+3. **Active:** implement Node 1, Navigate, as a finalized version-2 package and
+   integrate only the shared adapters required by that node. Complete its tests,
+   focused acceptance workflow, live evidence, end-user catalogue entry, and
+   tracker row before starting Node 2.
+4. Continue Scroll, Tab Control, Resolve Element, Check Element State, and Wait
+   for Condition strictly one at a time, then close the Phase 1 gate.
 5. Continue node Phases 2-7 one node at a time. For each node: add automated
    tests, its focused acceptance workflow and live evidence, update the end-user
    catalog and tracker, then hand off for a quick user-controlled commit.

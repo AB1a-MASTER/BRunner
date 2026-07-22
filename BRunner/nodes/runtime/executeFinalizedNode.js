@@ -1,7 +1,10 @@
 import {
   NodeErrorCodes,
   NodeExecutionError,
+  NodeOutcomeRoutes,
   NodeStatuses,
+  definitionSupportsOutputPort,
+  isNodeErrorCode,
   normalizeCommonNodeConfig,
 } from "../shared/nodeContracts.js";
 import {
@@ -18,11 +21,7 @@ import {
   normalizeRetryPolicy,
 } from "../shared/executionPolicy.js";
 
-export const FinalizedNodeRoutes = Object.freeze({
-  Success: "success",
-  Error: "error",
-  Fail: "fail",
-});
+export const FinalizedNodeRoutes = NodeOutcomeRoutes;
 
 export async function executeFinalizedNode(request = {}, services = {}) {
   const definition = request.definition || {};
@@ -30,13 +29,38 @@ export async function executeFinalizedNode(request = {}, services = {}) {
   const nodeType = String(
     request.nodeType ||
       request.node?.type ||
-      definition.type ||
       "",
   ).trim();
+  const definitionType = String(definition.type || "").trim();
+  const definitionVersion = Number(definition.version);
+  const requestedVersion = Number(
+    request.nodeVersion ?? request.node?.version,
+  );
   if (!nodeId) {
     throw new NodeExecutionError(
       NodeErrorCodes.ConfigInvalid,
       "Finalized node execution requires nodeId.",
+    );
+  }
+  if (!definitionType || !Number.isInteger(definitionVersion) || definitionVersion <= 0) {
+    throw new NodeExecutionError(
+      NodeErrorCodes.NodeVersionUnsupported,
+      "Finalized node execution requires an exact versioned definition.",
+      { nodeId, nodeType, nodeVersion: request.nodeVersion ?? request.node?.version ?? null },
+    );
+  }
+  if (nodeType !== definitionType) {
+    throw new NodeExecutionError(
+      NodeErrorCodes.NodeTypeUnsupported,
+      `Node type ${nodeType || "<missing>"} does not match definition ${definitionType}.`,
+      { nodeId, nodeType, definitionType },
+    );
+  }
+  if (!Number.isInteger(requestedVersion) || requestedVersion !== definitionVersion) {
+    throw new NodeExecutionError(
+      NodeErrorCodes.NodeVersionUnsupported,
+      `Node ${nodeType} version ${String(requestedVersion)} does not match definition version ${definitionVersion}.`,
+      { nodeId, nodeType, nodeVersion: requestedVersion, definitionVersion },
     );
   }
   const config = normalizeCommonNodeConfig(
@@ -79,6 +103,7 @@ export async function executeFinalizedNode(request = {}, services = {}) {
     return {
       result,
       route: FinalizedNodeRoutes.Success,
+      selectedRoute: FinalizedNodeRoutes.Success,
       handledError: false,
     };
   }
@@ -166,6 +191,7 @@ export async function executeFinalizedNode(request = {}, services = {}) {
     return {
       result,
       route: FinalizedNodeRoutes.Success,
+      selectedRoute: FinalizedNodeRoutes.Success,
       handledError: false,
     };
   } catch (rawError) {
@@ -191,7 +217,7 @@ export async function executeFinalizedNode(request = {}, services = {}) {
           baseExecution.executionMethod,
       },
     });
-    const handled = applyOnErrorPolicy(failureResult, config, error);
+    const handled = applyOnErrorPolicy(failureResult, config, error, definition);
     await publishAndLog({
       request,
       services,
@@ -284,7 +310,7 @@ function normalizeExecutorValue(value, executionDefaults, clock) {
         : normalized.status === NodeStatuses.Cancelled
           ? NodeErrorCodes.Cancelled
           : NodeErrorCodes.ValidationFailed;
-    const code = Object.values(NodeErrorCodes).includes(returnedError.code)
+    const code = isNodeErrorCode(returnedError.code)
       ? returnedError.code
       : defaultCode;
     throw new NodeExecutionError(
@@ -292,9 +318,11 @@ function normalizeExecutorValue(value, executionDefaults, clock) {
       returnedError.message || `Node executor returned ${normalized.status}.`,
       {
         ...(isPlainObject(returnedError.details) ? returnedError.details : {}),
+        ...(returnedError.category ? { category: returnedError.category } : {}),
         returnedStatus: normalized.status,
         executionMethod: normalized.execution?.executionMethod || "runtime",
       },
+      { category: returnedError.category },
     );
   }
 
@@ -318,7 +346,7 @@ function normalizeExecutorValue(value, executionDefaults, clock) {
   });
 }
 
-function applyOnErrorPolicy(failureResult, config, error) {
+function applyOnErrorPolicy(failureResult, config, error, definition) {
   if (config.onError === "continue_with_warning" || config.onError === "skip") {
     const warning = {
       code: error.code,
@@ -337,19 +365,30 @@ function applyOnErrorPolicy(failureResult, config, error) {
         execution: failureResult.execution,
       }),
       route: FinalizedNodeRoutes.Success,
+      selectedRoute: FinalizedNodeRoutes.Success,
       handledError: true,
     };
   }
   if (config.onError === "error_port") {
+    if (!definitionSupportsOutputPort(definition, FinalizedNodeRoutes.Error)) {
+      return {
+        result: failureResult,
+        route: FinalizedNodeRoutes.Fail,
+        selectedRoute: FinalizedNodeRoutes.Fail,
+        handledError: false,
+      };
+    }
     return {
       result: failureResult,
       route: FinalizedNodeRoutes.Error,
+      selectedRoute: FinalizedNodeRoutes.Error,
       handledError: true,
     };
   }
   return {
     result: failureResult,
     route: FinalizedNodeRoutes.Fail,
+    selectedRoute: FinalizedNodeRoutes.Fail,
     handledError: false,
   };
 }
@@ -416,6 +455,7 @@ function normalizeRuntimeError(error) {
     normalized.code,
     normalized.message,
     normalized.details,
+    { category: normalized.category },
   );
 }
 

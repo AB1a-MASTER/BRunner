@@ -18,11 +18,11 @@ test("every node definition exposes Inspector guidance", () => {
 
 test("guidance includes useful examples and safety notes", () => {
   assert.match(
-    getNodeDefinition("element.select").guidance.example,
+    getNodeDefinition("element.select", 1).guidance.example,
     /visible option text/i,
   );
   assert.match(
-    getNodeDefinition("file.local.upload").guidance.safety,
+    getNodeDefinition("file.local.upload", 1).guidance.safety,
     /native host/i,
   );
 });

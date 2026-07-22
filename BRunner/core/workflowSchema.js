@@ -14,6 +14,7 @@ export const CurrentGraphWorkflowSchemaVersion = WorkflowSchemaVersion.MapperGra
 export const GraphEdgeHandles = Object.freeze({
   Input: "input",
   Success: "success",
+  Error: "error",
   Unresolved: "unresolved",
 });
 
@@ -75,7 +76,7 @@ export function upgradeWorkflowToV2(input = {}, options = {}) {
     return {
       id,
       type: step?.action || step?.type || "element.click",
-      version: Number(step?.version) || 1,
+      version: legacyNodeContractVersion(step?.version),
       position: { x: 80, y: 80 + index * 180 },
       config: cloneObject(step?.config),
       data,
@@ -89,7 +90,7 @@ export function upgradeWorkflowToV2(input = {}, options = {}) {
     targetHandle: GraphEdgeHandles.Input,
   }));
 
-  return {
+  const graph = {
     schemaVersion: WorkflowSchemaVersion.Graph,
     id: String(options.id || input?.id || "workflow-v2"),
     name: String(options.name || input?.name || "Untitled"),
@@ -103,16 +104,135 @@ export function upgradeWorkflowToV2(input = {}, options = {}) {
     nodes,
     edges,
   };
+  assertValidGraphWorkflow(graph);
+  return graph;
+}
+
+export function upgradeWorkflowToCanonical(input = {}, options = {}) {
+  let graph;
+  const schema = detectWorkflowSchema(input);
+  if (isGraphWorkflowSchemaVersion(schema)) {
+    assertValidGraphWorkflow(input);
+    graph = structuredClone(input);
+  } else {
+    graph = upgradeWorkflowToV2(input, options);
+  }
+  graph.schemaVersion = WorkflowSchemaVersion.MapperGraph;
+  graph.settings = cloneObject(graph.settings);
+  graph.variables = cloneObject(graph.variables);
+  graph.datasets = cloneObject(graph.datasets);
+  graph.dataSources = cloneArray(graph.dataSources);
+  return ensureCanonicalMapperRoutes(graph);
+}
+
+export function canonicalWorkflowToSequentialView(input = {}, options = {}) {
+  const graph = upgradeWorkflowToCanonical(input, options);
+  const userNodes = orderedSequentialUserNodes(graph);
+  return {
+    id: graph.id,
+    name: graph.name,
+    description: graph.description,
+    boundDomain: graph.boundDomain,
+    variables: cloneObject(graph.variables),
+    datasets: cloneObject(graph.datasets),
+    dataSources: cloneArray(graph.dataSources),
+    settings: cloneObject(graph.settings),
+    steps: userNodes.map(graphNodeToSequentialStep),
+    canonicalGraph: structuredClone(graph),
+    structureSignature: userNodes.map((node) => node.id).join("|"),
+    structureLocked: hasUserManagedRoutes(graph),
+  };
+}
+
+export function sequentialViewToCanonicalWorkflow(view = {}, options = {}) {
+  const steps = Array.isArray(view.steps) ? view.steps : [];
+  const base = view.canonicalGraph
+    ? upgradeWorkflowToCanonical(view.canonicalGraph, options)
+    : upgradeWorkflowToCanonical({
+        id: view.id,
+        name: view.name,
+        description: view.description,
+        boundDomain: view.boundDomain,
+        variables: view.variables,
+        datasets: view.datasets,
+        dataSources: view.dataSources,
+        settings: view.settings,
+        steps,
+      }, options);
+  const baseUserNodes = orderedSequentialUserNodes(base);
+  const originalSignature = view.structureSignature ||
+    baseUserNodes.map((node) => node.id).join("|");
+  const nextSignature = steps.map((step) => String(step.id || "")).join("|");
+  const structureChanged = originalSignature !== nextSignature;
+  if (structureChanged && hasUserManagedRoutes(base)) {
+    throw new Error(
+      "This workflow contains explicit graph routes. Sequential Studio can edit node configuration without loss, but route structure must remain unchanged until nested route editing is available.",
+    );
+  }
+
+  const baseById = new Map(base.nodes.map((node) => [node.id, node]));
+  const userNodes = steps.map((step, index) => sequentialStepToGraphNode(
+    step,
+    baseById.get(step.id),
+    index,
+  ));
+  const systemNodes = base.nodes.filter((node) => node.type === MapperAttentionNodeType);
+  let edges;
+  if (structureChanged) {
+    edges = userNodes.slice(0, -1).map((node, index) => ({
+      id: `edge-${node.id}-${userNodes[index + 1].id}`,
+      source: node.id,
+      sourceHandle: GraphEdgeHandles.Success,
+      target: userNodes[index + 1].id,
+      targetHandle: GraphEdgeHandles.Input,
+    }));
+  } else {
+    const retained = new Set([...userNodes, ...systemNodes].map((node) => node.id));
+    edges = base.edges.filter((edge) => retained.has(edge.source) && retained.has(edge.target));
+  }
+
+  const graph = {
+    ...base,
+    schemaVersion: CurrentGraphWorkflowSchemaVersion,
+    id: String(view.id || base.id || options.id || "workflow-v3"),
+    name: String(view.name || base.name || options.name || "Untitled"),
+    description: String(view.description ?? base.description ?? ""),
+    boundDomain: String(view.boundDomain ?? base.boundDomain ?? ""),
+    variables: cloneObject(view.variables ?? base.variables),
+    datasets: cloneObject(view.datasets ?? base.datasets),
+    dataSources: cloneArray(view.dataSources ?? base.dataSources),
+    settings: cloneObject(view.settings ?? base.settings),
+    entryNodeId: userNodes[0]?.id || "",
+    nodes: [...userNodes, ...systemNodes],
+    edges,
+  };
+  return ensureCanonicalMapperRoutes(graph);
+}
+
+/**
+ * Schema-v1 workflows predate required node contract versions. This is the
+ * only implicit version migration: a missing legacy version becomes 1.
+ * Explicit invalid values are preserved so validation fails closed.
+ */
+export function addLegacyNodeContractVersions(input = {}) {
+  if (Array.isArray(input)) {
+    return input.map((step) => addLegacyStepContractVersion(step));
+  }
+  const source = input && typeof input === "object" ? structuredClone(input) : {};
+  source.steps = Array.isArray(source.steps)
+    ? source.steps.map((step) => addLegacyStepContractVersion(step))
+    : [];
+  return source;
 }
 
 export function graphWorkflowToSequential(input = {}) {
   assertValidGraphWorkflow(input);
   if (
     isMapperGraphWorkflow(input) &&
-    input.edges.some((edge) => edgeSourceHandle(edge) === GraphEdgeHandles.Unresolved)
+    input.edges.some((edge) => edgeSourceHandle(edge) !== GraphEdgeHandles.Success)
   ) {
     throw new Error(
-      "Mapper v3 workflows with unresolved routing require graph traversal and cannot run in the linear executor.",
+      "Mapper v3 workflows with non-success routing require graph traversal and cannot run in the linear executor.",
     );
   }
   const nodesById = new Map(input.nodes.map((node) => [node.id, node]));
@@ -178,6 +298,9 @@ function validateLinearGraphWorkflow(input = {}) {
   if (new Set(edgeIds).size !== edgeIds.length) errors.push("Graph edge ids must be unique.");
   if (input.nodes.some((node) => !String(node?.type || "").trim())) {
     errors.push("Every graph node requires a type.");
+  }
+  if (input.nodes.some((node) => !isPositiveContractVersion(node?.version))) {
+    errors.push("Every graph node requires a positive integer contract version.");
   }
 
   if (input.nodes.length === 0) {
@@ -247,6 +370,9 @@ function validateMapperGraphWorkflow(input = {}) {
   if (input.nodes.some((node) => !String(node?.type || "").trim())) {
     errors.push("Every graph node requires a type.");
   }
+  if (input.nodes.some((node) => !isPositiveContractVersion(node?.version))) {
+    errors.push("Every graph node requires a positive integer contract version.");
+  }
 
   if (input.nodes.length === 0) {
     if (input.entryNodeId) errors.push("An empty graph cannot have an entry node.");
@@ -258,6 +384,7 @@ function validateMapperGraphWorkflow(input = {}) {
   const incomingSuccessCounts = new Map(nodeIds.map((id) => [id, 0]));
   const incomingAnyCounts = new Map(nodeIds.map((id) => [id, 0]));
   const outgoingSuccessCounts = new Map(nodeIds.map((id) => [id, 0]));
+  const outgoingErrorCounts = new Map(nodeIds.map((id) => [id, 0]));
   const outgoingUnresolvedCounts = new Map(nodeIds.map((id) => [id, 0]));
   const successOutgoing = new Map();
   const allOutgoing = new Map(nodeIds.map((id) => [id, []]));
@@ -271,9 +398,10 @@ function validateMapperGraphWorkflow(input = {}) {
     const sourceHandle = edgeSourceHandle(edge);
     if (
       sourceHandle !== GraphEdgeHandles.Success &&
+      sourceHandle !== GraphEdgeHandles.Error &&
       sourceHandle !== GraphEdgeHandles.Unresolved
     ) {
-      errors.push("Mapper v3 edges support success and unresolved handles only.");
+      errors.push("Mapper v3 edges support success, error, and unresolved handles only.");
       continue;
     }
     if (edge.targetHandle && edge.targetHandle !== GraphEdgeHandles.Input) {
@@ -287,6 +415,8 @@ function validateMapperGraphWorkflow(input = {}) {
       incomingSuccessCounts.set(edge.target, incomingSuccessCounts.get(edge.target) + 1);
       outgoingSuccessCounts.set(edge.source, outgoingSuccessCounts.get(edge.source) + 1);
       successOutgoing.set(edge.source, edge.target);
+    } else if (sourceHandle === GraphEdgeHandles.Error) {
+      outgoingErrorCounts.set(edge.source, outgoingErrorCounts.get(edge.source) + 1);
     } else {
       outgoingUnresolvedCounts.set(edge.source, outgoingUnresolvedCounts.get(edge.source) + 1);
     }
@@ -304,6 +434,10 @@ function validateMapperGraphWorkflow(input = {}) {
     }
     if ((outgoingUnresolvedCounts.get(nodeId) || 0) > 1) {
       errors.push("Mapper v3 nodes can have at most one unresolved edge.");
+      break;
+    }
+    if ((outgoingErrorCounts.get(nodeId) || 0) > 1) {
+      errors.push("Mapper v3 nodes can have at most one error edge.");
       break;
     }
     if (
@@ -378,4 +512,147 @@ function cloneArray(value) {
 
 function edgeSourceHandle(edge = {}) {
   return edge.sourceHandle || GraphEdgeHandles.Success;
+}
+
+function ensureCanonicalMapperRoutes(input) {
+  const graph = structuredClone(input);
+  graph.schemaVersion = WorkflowSchemaVersion.MapperGraph;
+  const domNodes = graph.nodes.filter((node) => isDomDependentNode(node));
+  if (!domNodes.length) {
+    const orphanIds = new Set(graph.nodes
+      .filter((node) => (
+        node.type === MapperAttentionNodeType && node.data?.systemNode === true
+      ))
+      .map((node) => node.id));
+    if (orphanIds.size) {
+      graph.nodes = graph.nodes.filter((node) => !orphanIds.has(node.id));
+      graph.edges = graph.edges.filter((edge) => (
+        !orphanIds.has(edge.source) && !orphanIds.has(edge.target)
+      ));
+      if (orphanIds.has(graph.entryNodeId)) graph.entryNodeId = graph.nodes[0]?.id || "";
+    }
+  }
+  let attention = graph.nodes.find((node) => node.type === MapperAttentionNodeType);
+  if (domNodes.length && !attention) {
+    const usedIds = new Set(graph.nodes.map((node) => node.id));
+    const id = uniqueNodeId("workflow-needs-attention", usedIds);
+    attention = {
+      id,
+      type: MapperAttentionNodeType,
+      version: 1,
+      position: { x: 420, y: 80 + graph.nodes.length * 180 },
+      config: {},
+      data: { systemNode: true },
+    };
+    graph.nodes.push(attention);
+  }
+  if (attention) {
+    for (const node of domNodes) {
+      const existing = graph.edges.some((edge) =>
+        edge.source === node.id &&
+        edgeSourceHandle(edge) === GraphEdgeHandles.Unresolved
+      );
+      if (!existing) {
+        graph.edges.push({
+          id: uniqueEdgeId(`edge-${node.id}-unresolved-${attention.id}`, graph.edges),
+          source: node.id,
+          sourceHandle: GraphEdgeHandles.Unresolved,
+          target: attention.id,
+          targetHandle: GraphEdgeHandles.Input,
+        });
+      }
+    }
+  }
+  assertValidGraphWorkflow(graph);
+  return graph;
+}
+
+function orderedSequentialUserNodes(graph) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const success = new Map(graph.edges
+    .filter((edge) => edgeSourceHandle(edge) === GraphEdgeHandles.Success)
+    .map((edge) => [edge.source, edge.target]));
+  const ordered = [];
+  const visited = new Set();
+  let current = graph.entryNodeId;
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    const node = byId.get(current);
+    if (node && node.type !== MapperAttentionNodeType) ordered.push(node);
+    current = success.get(current) || "";
+  }
+  for (const node of graph.nodes) {
+    if (node.type !== MapperAttentionNodeType && !visited.has(node.id)) {
+      ordered.push(node);
+    }
+  }
+  return ordered;
+}
+
+function graphNodeToSequentialStep(node) {
+  return {
+    ...cloneObject(node.data),
+    id: node.id,
+    action: node.type,
+    type: node.type,
+    version: node.version,
+    config: cloneObject(node.config),
+  };
+}
+
+function sequentialStepToGraphNode(step, existing, index) {
+  const type = String(step.action || step.type || "").trim();
+  const data = omitKeys(step || {}, [
+    "id",
+    "action",
+    "type",
+    "version",
+    "config",
+  ]);
+  return {
+    ...(existing ? structuredClone(existing) : {}),
+    id: String(step.id || `node-${index + 1}`),
+    type,
+    version: step.version,
+    position: existing?.position || { x: 80, y: 80 + index * 180 },
+    config: cloneObject(step.config),
+    data,
+  };
+}
+
+function hasUserManagedRoutes(graph) {
+  const attentionIds = new Set(graph.nodes
+    .filter((node) => node.type === MapperAttentionNodeType)
+    .map((node) => node.id));
+  return graph.edges.some((edge) => {
+    const handle = edgeSourceHandle(edge);
+    return handle !== GraphEdgeHandles.Success && !(
+      handle === GraphEdgeHandles.Unresolved && attentionIds.has(edge.target)
+    );
+  });
+}
+
+function uniqueEdgeId(candidate, edges) {
+  const used = new Set(edges.map((edge) => edge.id));
+  let id = candidate;
+  let suffix = 2;
+  while (used.has(id)) id = `${candidate}-${suffix++}`;
+  return id;
+}
+
+function addLegacyStepContractVersion(step = {}) {
+  const source = step && typeof step === "object" ? structuredClone(step) : {};
+  if (source.version === undefined || source.version === null || source.version === "") {
+    source.version = 1;
+  }
+  return source;
+}
+
+function legacyNodeContractVersion(value) {
+  if (value === undefined || value === null || value === "") return 1;
+  return Number(value);
+}
+
+function isPositiveContractVersion(value) {
+  return Number.isInteger(value) && value > 0;
 }

@@ -1,4 +1,8 @@
 import "../../shared/textMatching.js";
+import {
+  NodeErrorCodes,
+  NodeExecutionError,
+} from "./nodeContracts.js";
 
 const textMatching = globalThis.BRunnerTextMatching;
 
@@ -24,5 +28,25 @@ export const {
   matchText,
   selectTextMatches,
 } = textMatching;
+
+export function translateTextMatchError(error, details = {}) {
+  if (error instanceof NodeExecutionError) return error;
+  if (!(error instanceof textMatching.TextMatchError)) return error;
+  const code = error.code === "MULTIPLE_MATCHES"
+    ? NodeErrorCodes.AmbiguousTarget
+    : error.code === "CONFIG_INVALID"
+      ? NodeErrorCodes.ConfigInvalid
+      : NodeErrorCodes.ValidationFailed;
+  return new NodeExecutionError(
+    code,
+    error.message,
+    {
+      ...error.details,
+      ...details,
+      adapterCode: error.code,
+    },
+    { cause: error },
+  );
+}
 
 export default textMatching;

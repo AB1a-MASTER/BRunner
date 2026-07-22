@@ -3,6 +3,7 @@
 
   const EXPRESSION_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
   const VARIABLE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+  const NodeAuthoring = root.BRunnerNodeAuthoring;
 
   function extractExpressionNames(value) {
     const names = new Set();
@@ -28,35 +29,43 @@
   }
 
   function validateWorkflow(workflow, definitions) {
-    const definitionsByType = definitions instanceof Map
+    const definitionsByContract = definitions instanceof Map
       ? definitions
-      : new Map((definitions || []).map((definition) => [definition.type, definition]));
+      : new Map((definitions || []).map((definition) => [
+          nodeContractKey(definition.type, definition.version ?? 1),
+          definition,
+        ]));
     const issues = [];
     const steps = Array.isArray(workflow?.steps) ? workflow.steps : [];
 
     steps.forEach((step, stepIndex) => {
-      const definition = definitionsByType.get(step.action || step.type);
+      const type = step.action || step.type;
+      const version = step.version ?? 1;
+      const definition = definitionsByContract.get(nodeContractKey(type, version));
       if (!definition) {
-        issues.push(issue(step, stepIndex, "action", "Unsupported node type."));
+        issues.push(issue(
+          step,
+          stepIndex,
+          "action",
+          `Unsupported node contract ${String(type || "<missing>")} version ${String(version)}.`,
+        ));
         return;
       }
 
-      if (definition.targetRequired && !hasTarget(step.target)) {
-        issues.push(issue(step, stepIndex, "target", "Target element is required."));
-      }
+      const contractIssues = NodeAuthoring?.validateNodeConfiguration
+        ? NodeAuthoring.validateNodeConfiguration(step, definition)
+        : [];
+      contractIssues.forEach((contractIssue) => {
+        issues.push(issue(
+          step,
+          stepIndex,
+          contractIssue.fieldKey,
+          contractIssue.message,
+        ));
+      });
 
       for (const field of definition.config || []) {
         const value = getFieldValue(step, field.key);
-        if (field.required && isEmpty(value)) {
-          issues.push(issue(
-            step,
-            stepIndex,
-            field.key,
-            `${field.label || field.key} is required.`,
-          ));
-          continue;
-        }
-
         if (field.key === "variableName" && !isEmpty(value) && !VARIABLE_NAME_PATTERN.test(String(value).trim())) {
           issues.push(issue(
             step,
@@ -157,6 +166,10 @@
 
   function rootVariableName(path) {
     return String(path || "").trim().split(".")[0];
+  }
+
+  function nodeContractKey(type, version) {
+    return `${String(type || "").trim()}@${String(version ?? "").trim()}`;
   }
 
   function visitStrings(value, visitor) {

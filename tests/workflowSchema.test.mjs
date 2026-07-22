@@ -3,10 +3,13 @@ import { test } from "node:test";
 
 import {
   GraphEdgeHandles,
+  canonicalWorkflowToSequentialView,
   graphWorkflowToSequential,
   MapperAttentionNodeType,
   upgradeWorkflowToV2,
+  upgradeWorkflowToCanonical,
   validateGraphWorkflow,
+  sequentialViewToCanonicalWorkflow,
   WorkflowSchemaVersion,
 } from "../BRunner/core/workflowSchema.js";
 import { getWorkflowSteps, isWorkflowLike, normalizeWorkflow } from "../BRunner/core/workflowUtils.js";
@@ -153,4 +156,144 @@ test("v3 mapper DOM nodes require unresolved routing", () => {
     () => graphWorkflowToSequential(graph),
     /require graph traversal/,
   );
+});
+
+test("v3 preserves one stable error route and keeps it out of the linear adapter", () => {
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "error-route",
+    name: "Error Route",
+    entryNodeId: "source",
+    nodes: [
+      { id: "source", type: "data.set", version: 1, config: {}, data: {} },
+      { id: "handler", type: "data.set", version: 1, config: {}, data: {} },
+    ],
+    edges: [{
+      id: "edge-source-error-handler",
+      source: "source",
+      sourceHandle: GraphEdgeHandles.Error,
+      target: "handler",
+      targetHandle: GraphEdgeHandles.Input,
+    }],
+  };
+
+  assert.equal(validateGraphWorkflow(graph).valid, true);
+  assert.throws(
+    () => graphWorkflowToSequential(graph),
+    /non-success routing require graph traversal/,
+  );
+  graph.edges.push({
+    id: "edge-source-error-handler-2",
+    source: "source",
+    sourceHandle: GraphEdgeHandles.Error,
+    target: "handler",
+    targetHandle: GraphEdgeHandles.Input,
+  });
+  assert.match(
+    validateGraphWorkflow(graph).errors.join(" "),
+    /at most one error edge/,
+  );
+});
+
+test("graph validation rejects missing or invalid node contract versions", () => {
+  const graph = upgradeWorkflowToV2(legacy);
+  delete graph.nodes[0].version;
+  assert.match(
+    validateGraphWorkflow(graph).errors.join(" "),
+    /positive integer contract version/,
+  );
+});
+
+test("Graph to Sequential to Graph preserves canonical routes and node data", () => {
+  const canonical = upgradeWorkflowToCanonical({
+    ...legacy,
+    steps: [{
+      id: "click",
+      action: "element.click",
+      version: 1,
+      target: "#save",
+      config: { allowVisibleHostFallback: false },
+      customData: { keep: true },
+    }],
+  });
+  const view = canonicalWorkflowToSequentialView(canonical);
+  view.steps[0].config.allowVisibleHostFallback = true;
+  const saved = sequentialViewToCanonicalWorkflow(view);
+
+  assert.equal(saved.schemaVersion, WorkflowSchemaVersion.MapperGraph);
+  assert.equal(saved.nodes.find((node) => node.id === "click").version, 1);
+  assert.deepEqual(saved.nodes.find((node) => node.id === "click").data.customData, { keep: true });
+  assert.equal(saved.nodes.find((node) => node.id === "click").config.allowVisibleHostFallback, true);
+  assert.equal(saved.edges.some((edge) => edge.sourceHandle === GraphEdgeHandles.Unresolved), true);
+  assert.equal(validateGraphWorkflow(saved).valid, true);
+});
+
+test("Sequential to Graph to Sequential keeps versions and ordered semantics", () => {
+  const firstView = canonicalWorkflowToSequentialView({
+    name: "Sequential",
+    steps: [
+      { id: "set", action: "data.set", version: 1, config: { variableName: "x", value: 1 } },
+      { id: "wait", action: "logic.wait", version: 1, config: { ms: 10 } },
+    ],
+  });
+  const graph = sequentialViewToCanonicalWorkflow(firstView);
+  const secondView = canonicalWorkflowToSequentialView(graph);
+
+  assert.deepEqual(secondView.steps.map((step) => [step.id, step.action, step.version]), [
+    ["set", "data.set", 1],
+    ["wait", "logic.wait", 1],
+  ]);
+  assert.deepEqual(secondView.steps.map((step) => step.config), firstView.steps.map((step) => step.config));
+});
+
+test("Sequential configuration edits preserve explicit error routes and structural edits fail closed", () => {
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "routed",
+    name: "Routed",
+    entryNodeId: "source",
+    nodes: [
+      { id: "source", type: "data.set", version: 1, position: { x: 0, y: 0 }, config: { value: 1 }, data: {} },
+      { id: "handler", type: "data.set", version: 1, position: { x: 200, y: 0 }, config: { value: 2 }, data: {} },
+    ],
+    edges: [{
+      id: "error-route",
+      source: "source",
+      sourceHandle: GraphEdgeHandles.Error,
+      target: "handler",
+      targetHandle: GraphEdgeHandles.Input,
+    }],
+  };
+  const view = canonicalWorkflowToSequentialView(graph);
+  assert.equal(view.structureLocked, true);
+  view.steps[0].config.value = 3;
+  const saved = sequentialViewToCanonicalWorkflow(view);
+  assert.equal(saved.edges[0].sourceHandle, GraphEdgeHandles.Error);
+  assert.equal(saved.nodes.find((node) => node.id === "source").config.value, 3);
+
+  view.steps.reverse();
+  assert.throws(
+    () => sequentialViewToCanonicalWorkflow(view),
+    /route structure must remain unchanged/,
+  );
+});
+
+test("removing the last DOM node also removes its generated attention node", () => {
+  const view = canonicalWorkflowToSequentialView({
+    id: "remove-dom",
+    name: "Remove DOM",
+    steps: [{
+      id: "click",
+      action: "element.click",
+      version: 1,
+      target: "#save",
+      config: {},
+    }],
+  });
+  view.steps = [];
+
+  const graph = sequentialViewToCanonicalWorkflow(view);
+  assert.deepEqual(graph.nodes, []);
+  assert.deepEqual(graph.edges, []);
+  assert.equal(graph.entryNodeId, "");
 });

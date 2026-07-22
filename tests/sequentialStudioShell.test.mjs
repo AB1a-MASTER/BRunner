@@ -58,5 +58,16 @@ test("Sequential Studio preserves description and dirty save state", async () =>
   assert.match(source, /isWorkflowDirty/);
   assert.match(source, /No unsaved workflow changes/);
   assert.doesNotMatch(source, /workflowNameInput\.value\s*=\s*savedFilename/);
+  const runStart = source.indexOf("async function runCurrentWorkflow");
+  const runEnd = source.indexOf("function addStepToWorkflow", runStart);
+  const runSource = source.slice(runStart, runEnd);
+  assert.ok(runStart >= 0 && runEnd > runStart);
+  assert.ok(
+    runSource.indexOf("validateCurrentWorkflow") < runSource.indexOf("Messages.StartWorkflow"),
+    "Sequential Studio must validate before dispatching a workflow",
+  );
+  assert.match(source, /sequentialViewToCanonicalWorkflow/);
+  assert.match(source, /nodeDefinitionsByContract/);
+  assert.match(source, /BRunnerNodeAuthoring/);
   assert.equal(/[🔴▶⏹⏳📂📋🗑]/u.test(source), false);
 });

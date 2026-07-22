@@ -384,6 +384,7 @@ test("finalized runtime disables Navigate without resolving browser services", a
   const outcome = await executeFinalizedNode({
     nodeId: "navigate-disabled",
     nodeType: "browser.navigate",
+    nodeVersion: navigateNodeDefinition.version,
     definition: navigateNodeDefinition,
     config: { enabled: false },
     executor: executeNavigate,
@@ -413,6 +414,7 @@ test("finalized runtime retries one verified navigation failure and publishes ou
   const outcome = await executeFinalizedNode({
     nodeId: "navigate-retry",
     nodeType: "browser.navigate",
+    nodeVersion: navigateNodeDefinition.version,
     definition: navigateNodeDefinition,
     config,
     executor: executeNavigate,

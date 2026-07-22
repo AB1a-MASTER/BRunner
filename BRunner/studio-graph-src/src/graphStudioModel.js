@@ -7,6 +7,7 @@ import {
   WorkflowSchemaVersion,
 } from "../../core/workflowSchema.js";
 import { createDefaultMapperSettings } from "../../mapper/core.js";
+import { validateNodeConfiguration } from "../../core/nodeAuthoring.js";
 
 export function workflowToCanvas(input, definitions) {
   const sourceSchema = detectWorkflowSchema(input);
@@ -18,9 +19,12 @@ export function workflowToCanvas(input, definitions) {
     throw new Error(`Cannot open graph: ${validation.errors.join(" ")}`);
   }
 
-  const definitionsByType = definitions instanceof Map
+  const definitionsByContract = definitions instanceof Map
     ? definitions
-    : new Map((definitions || []).map((definition) => [definition.type, definition]));
+    : new Map((definitions || []).map((definition) => [
+        nodeContractKey(definition.type, definition.version),
+        definition,
+      ]));
   const readOnly = sourceSchema === WorkflowSchemaVersion.Sequential;
   const layoutDirection = normalizeLayoutDirection(
     graph.settings?.graphLayoutDirection,
@@ -28,6 +32,11 @@ export function workflowToCanvas(input, definitions) {
   let nodes = graph.nodes.map((node) => {
     const persistedData = cloneObject(node.data);
     const originalTarget = persistedData.target ?? "";
+    const contractDefinition = definitionsByContract.get(
+      nodeContractKey(node.type, node.version),
+    );
+    const systemNode = node.type === "workflow.needs_attention";
+    const definition = contractDefinition || fallbackDefinition(node, systemNode);
     return {
       id: node.id,
       type: "brunner",
@@ -35,7 +44,7 @@ export function workflowToCanvas(input, definitions) {
       data: {
         ...persistedData,
         type: node.type,
-        definition: definitionsByType.get(node.type) || fallbackDefinition(node),
+        definition,
         config: cloneObject(node.config),
         target: displayTarget(originalTarget),
         targetSource: structuredClone(originalTarget),
@@ -44,7 +53,7 @@ export function workflowToCanvas(input, definitions) {
         skipWhen: persistedData.skipWhen || "",
         collapsed: persistedData.collapsed === true,
         layoutDirection,
-        readOnly,
+        readOnly: readOnly || !contractDefinition && !systemNode,
       },
     };
   });
@@ -114,6 +123,23 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
     nodes: graphNodes,
     edges: graphEdges,
   };
+  for (let index = 0; index < graphNodes.length; index += 1) {
+    const definition = nodes[index]?.data?.definition || {};
+    if (definition.contractAvailable === false) {
+      throw new Error(
+        `Cannot save graph: node ${graphNodes[index].id} uses unsupported contract ${graphNodes[index].type}@${graphNodes[index].version}.`,
+      );
+    }
+    const contractIssues = validateNodeConfiguration({
+      ...graphNodes[index],
+      ...graphNodes[index].data,
+    }, definition);
+    if (contractIssues.length) {
+      throw new Error(
+        `Cannot save graph: node ${graphNodes[index].id} has invalid configuration: ${contractIssues.map((issue) => issue.message).join(" ")}`,
+      );
+    }
+  }
   const validation = validateGraphWorkflow(graph);
   if (!validation.valid) {
     throw new Error(`Cannot save graph: ${validation.errors.join(" ")}`);
@@ -226,7 +252,7 @@ function clonePosition(position) {
   };
 }
 
-function fallbackDefinition(node) {
+function fallbackDefinition(node, systemNode = false) {
   return {
     type: node.type,
     version: Number(node.version) || 1,
@@ -235,5 +261,10 @@ function fallbackDefinition(node) {
     description: "Definition unavailable in this extension version.",
     targetRequired: false,
     config: [],
+    contractAvailable: systemNode,
   };
+}
+
+function nodeContractKey(type, version) {
+  return `${String(type || "").trim()}@${String(version ?? "").trim()}`;
 }

@@ -2,6 +2,7 @@ import {
   NodeErrorCodes,
   NodeExecutionError,
   NodeStatuses,
+  getNodeErrorCategory,
   isNodeErrorCode,
   isNodeStatus,
   normalizeCommonNodeConfig,
@@ -45,6 +46,7 @@ export function normalizeNodeError(error, fallbackCode = NodeErrorCodes.CONFIG_I
 
   return {
     code,
+    category: getNodeErrorCategory(code, source.category || source.details?.category),
     message: String(source.message || error || code),
     details: source.details ?? null,
   };

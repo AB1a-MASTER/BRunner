@@ -25,4 +25,28 @@ Each workflow must:
 - be recorded in `docs/NODE_IMPLEMENTATION_STATUS.md` before the node is marked
   complete.
 
+Each workflow is canonical graph JSON and must also include:
+
+```json
+{
+  "acceptance": {
+    "schemaVersion": 1,
+    "catalogOrder": 1,
+    "nodeType": "browser.navigate",
+    "nodeVersion": 2,
+    "synthetic": true,
+    "primaryBehavior": "Navigate to the repository acceptance fixture.",
+    "expectedOutputKeys": ["url", "title"],
+    "safeFailureOrAlternate": "Reject an invalid or disallowed URL safely.",
+    "fixturePaths": ["tests/fixtures/native-acceptance.html"]
+  }
+}
+```
+
+`fixturePaths` must contain only repository-relative paths and may be empty
+when the workflow does not require a fixture. The automated test suite scans
+every `*_acceptance.json` file, validates its canonical workflow structure,
+and binds its filename, catalog number, type, and version to
+`BRunner/nodes/catalog.js`.
+
 These workflows are source acceptance assets, not release-package evidence.

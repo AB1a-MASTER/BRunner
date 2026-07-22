@@ -11,7 +11,13 @@ import {
   normalizeText,
   normalizeTextMatchConfig,
   normalizeWhitespace,
+  translateTextMatchError,
 } from "../BRunner/nodes/shared/textMatching.js";
+import {
+  NodeErrorCategories,
+  NodeErrorCodes,
+  NodeExecutionError,
+} from "../BRunner/nodes/shared/nodeContracts.js";
 
 test("user-facing defaults are exact, case-insensitive, normalized whitespace", () => {
   assert.deepEqual(TEXT_MATCH_DEFAULTS, {
@@ -164,6 +170,31 @@ test("multiple-match behavior supports fail, first, confidence, and return all",
     }).values,
     candidates,
   );
+});
+
+test("fail-on-multiple checks all matches before occurrence selection", () => {
+  assert.throws(
+    () => matchTextCandidates(["Save", "Save"], "Save"),
+    (error) =>
+      error instanceof TextMatchError &&
+      error.code === "MULTIPLE_MATCHES" &&
+      error.details.matchCount === 2,
+  );
+});
+
+test("text-match adapter errors translate to stable node categories", () => {
+  let rawError;
+  try {
+    matchTextCandidates(["Save", "Save"], "Save");
+  } catch (error) {
+    rawError = error;
+  }
+  const translated = translateTextMatchError(rawError, { field: "targetName" });
+  assert.ok(translated instanceof NodeExecutionError);
+  assert.equal(translated.code, NodeErrorCodes.AmbiguousTarget);
+  assert.equal(translated.category, NodeErrorCategories.Target);
+  assert.equal(translated.details.adapterCode, "MULTIPLE_MATCHES");
+  assert.equal(translated.details.field, "targetName");
 });
 
 test("empty matching values implement fail, skip, no filter, and no match", () => {

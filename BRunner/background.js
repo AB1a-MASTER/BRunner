@@ -20,7 +20,10 @@ import { createRuntimeStateStore } from "./core/runtimeState.js";
 import { createRuntimeSessionCoordinator } from "./core/runtimeSession.js";
 import { createBridgeStatusTransitionTracker } from "./core/bridgeStatus.js";
 import { safeExecutionFailure } from "./core/executionLog.js";
-import { getNodeDefinition, getNodeDefinitions } from "./core/nodeRegistry.js";
+import {
+  getNodeDefinitions,
+  resolveNodeDefinition,
+} from "./core/nodeRegistry.js";
 import {
   evaluateNativeHostRequirement,
   formatNativeCapabilities,
@@ -322,6 +325,7 @@ async function handleMessage(request, sender) {
       return {
         ok: true,
         definitions: getNodeDefinitions(),
+        definitionVersions: getNodeDefinitions({ includeAllVersions: true }),
       };
 
     case Messages.ListWorkflowMapperStates:
@@ -2351,7 +2355,8 @@ async function executeWorkflowNode({
       resolvedStep?.action || resolvedStep?.type || "unknown",
   });
 
-  assertNativeHostRequirement(resolvedStep, index);
+  const nodeDefinition = assertNodeContract(resolvedStep, index);
+  assertNativeHostRequirement(resolvedStep, index, nodeDefinition);
 
   runtimeState.appendExecutionLog({
     runId,
@@ -3018,13 +3023,32 @@ async function executeStep(
   return contextReadyTab;
 }
 
-function assertNativeHostRequirement(step, stepIndex = -1) {
+function assertNodeContract(step, stepIndex = -1) {
   const action = step?.action || step?.type || "unknown";
-  const definition = getNodeDefinition(action);
-  if (!definition?.nativeHost) return;
+  if (action === MapperAttentionNodeType) return null;
+  try {
+    return resolveNodeDefinition(step);
+  } catch (contractError) {
+    const error = new Error(contractError.message || "Node contract is unsupported.");
+    error.diagnostics = {
+      action,
+      nodeId: step?.id || "",
+      stepIndex,
+      contractCode: contractError.code || "NODE_CONTRACT_INVALID",
+      contractDetails: contractError.details || null,
+      finalReason: "node_contract_unsupported",
+    };
+    throw error;
+  }
+}
+
+function assertNativeHostRequirement(step, stepIndex = -1, definition = null) {
+  const action = step?.action || step?.type || "unknown";
+  const resolvedDefinition = definition || resolveNodeDefinition(step);
+  if (!resolvedDefinition?.nativeHost) return;
 
   const result = evaluateNativeHostRequirement(
-    definition.nativeHost,
+    resolvedDefinition.nativeHost,
     NativeBridge.getStatus(),
   );
   if (result.ok) return;

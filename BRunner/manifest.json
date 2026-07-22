@@ -73,6 +73,7 @@
         "studio/app.js",
         "studio/preferences.js",
         "studio/studioValidation.js",
+        "shared/nodeAuthoring.js",
         "core/studioPreferences.js",
         "core/studioPreferencesBootstrap.js",
         "shared/studio-tokens.css",

@@ -54,6 +54,8 @@ const nodeErrorCodes = {
   MISSING_REQUIRED_OUTPUT: "MISSING_REQUIRED_OUTPUT",
   CODE_EXECUTION_FAILED: "CODE_EXECUTION_FAILED",
   FUNCTION_EXECUTION_FAILED: "FUNCTION_EXECUTION_FAILED",
+  NODE_TYPE_UNSUPPORTED: "NODE_TYPE_UNSUPPORTED",
+  NODE_VERSION_UNSUPPORTED: "NODE_VERSION_UNSUPPORTED",
   CANCELLED: "CANCELLED",
 };
 
@@ -79,6 +81,8 @@ defineAliases(nodeErrorCodes, {
   MissingRequiredOutput: "MISSING_REQUIRED_OUTPUT",
   CodeExecutionFailed: "CODE_EXECUTION_FAILED",
   FunctionExecutionFailed: "FUNCTION_EXECUTION_FAILED",
+  NodeTypeUnsupported: "NODE_TYPE_UNSUPPORTED",
+  NodeVersionUnsupported: "NODE_VERSION_UNSUPPORTED",
   Cancelled: "CANCELLED",
 });
 
@@ -86,6 +90,68 @@ export const NodeErrorCodes = Object.freeze(nodeErrorCodes);
 
 export const NODE_STATUS_VALUES = Object.freeze(Object.values(NodeStatuses));
 export const NODE_ERROR_CODE_VALUES = Object.freeze(Object.values(NodeErrorCodes));
+
+export const NodeErrorCategories = Object.freeze({
+  Configuration: "configuration",
+  Dependency: "dependency",
+  Target: "target",
+  Navigation: "navigation",
+  ProtectedPage: "protected_page",
+  Tab: "tab",
+  Host: "host",
+  Timeout: "timeout",
+  Validation: "validation",
+  File: "file",
+  Download: "download",
+  Dialog: "dialog",
+  Output: "output",
+  Code: "code",
+  Cancelled: "cancelled",
+  NodeSpecific: "node_specific",
+});
+
+export const NodePortIds = Object.freeze({
+  Input: "input",
+  Success: "success",
+  Error: "error",
+  Unresolved: "unresolved",
+});
+
+export const NodeOutcomeRoutes = Object.freeze({
+  Success: NodePortIds.Success,
+  Error: NodePortIds.Error,
+  Unresolved: NodePortIds.Unresolved,
+  Fail: "fail",
+});
+
+const NODE_SPECIFIC_ERROR_PATTERN = /^[a-z][a-z0-9_.-]*\/[A-Z][A-Z0-9_]*$/;
+const NODE_ERROR_CATEGORY_VALUES = new Set(Object.values(NodeErrorCategories));
+const NODE_ERROR_CATEGORIES_BY_CODE = new Map([
+  [NodeErrorCodes.ConfigInvalid, NodeErrorCategories.Configuration],
+  [NodeErrorCodes.DependencyNotReady, NodeErrorCategories.Dependency],
+  [NodeErrorCodes.TargetNotFound, NodeErrorCategories.Target],
+  [NodeErrorCodes.AmbiguousTarget, NodeErrorCategories.Target],
+  [NodeErrorCodes.TargetNotInteractable, NodeErrorCategories.Target],
+  [NodeErrorCodes.TargetNotVisible, NodeErrorCategories.Target],
+  [NodeErrorCodes.ProtectedPage, NodeErrorCategories.ProtectedPage],
+  [NodeErrorCodes.TabNotFound, NodeErrorCategories.Tab],
+  [NodeErrorCodes.HostUnavailable, NodeErrorCategories.Host],
+  [NodeErrorCodes.HostForegroundRequired, NodeErrorCategories.Host],
+  [NodeErrorCodes.HostCoordinateLowConfidence, NodeErrorCategories.Host],
+  [NodeErrorCodes.Timeout, NodeErrorCategories.Timeout],
+  [NodeErrorCodes.ValidationFailed, NodeErrorCategories.Validation],
+  [NodeErrorCodes.FileNotFound, NodeErrorCategories.File],
+  [NodeErrorCodes.FileAccessDenied, NodeErrorCategories.File],
+  [NodeErrorCodes.FileParseFailed, NodeErrorCategories.File],
+  [NodeErrorCodes.DownloadNotFound, NodeErrorCategories.Download],
+  [NodeErrorCodes.DialogNotFound, NodeErrorCategories.Dialog],
+  [NodeErrorCodes.MissingRequiredOutput, NodeErrorCategories.Output],
+  [NodeErrorCodes.CodeExecutionFailed, NodeErrorCategories.Code],
+  [NodeErrorCodes.FunctionExecutionFailed, NodeErrorCategories.Code],
+  [NodeErrorCodes.NodeTypeUnsupported, NodeErrorCategories.Configuration],
+  [NodeErrorCodes.NodeVersionUnsupported, NodeErrorCategories.Configuration],
+  [NodeErrorCodes.Cancelled, NodeErrorCategories.Cancelled],
+]);
 
 export const CommonNodeConfigDefaults = Object.freeze({
   enabled: true,
@@ -127,19 +193,24 @@ const WORKFLOW_CLIPBOARD_ALIASES = Object.freeze({
 
 export class NodeExecutionError extends Error {
   constructor(code, message, details = null, options = undefined) {
-    if (!NODE_ERROR_CODE_VALUES.includes(code)) {
+    if (!isNodeErrorCode(code)) {
       throw new TypeError(`Unknown node error code: ${String(code)}`);
     }
 
     super(String(message || code), options);
     this.name = "NodeExecutionError";
     this.code = code;
+    this.category = getNodeErrorCategory(
+      code,
+      options?.category || details?.category,
+    );
     this.details = details ?? null;
   }
 
   toJSON() {
     return {
       code: this.code,
+      category: this.category,
       message: this.message,
       details: this.details,
     };
@@ -151,7 +222,35 @@ export function isNodeStatus(value) {
 }
 
 export function isNodeErrorCode(value) {
-  return NODE_ERROR_CODE_VALUES.includes(value);
+  return NODE_ERROR_CODE_VALUES.includes(value) || isNodeSpecificErrorCode(value);
+}
+
+export function isNodeSpecificErrorCode(value) {
+  return NODE_SPECIFIC_ERROR_PATTERN.test(String(value || ""));
+}
+
+export function createNodeSpecificErrorCode(nodeType, code) {
+  const namespace = String(nodeType || "").trim().toLowerCase();
+  const suffix = String(code || "").trim().toUpperCase();
+  const value = `${namespace}/${suffix}`;
+  if (!isNodeSpecificErrorCode(value)) {
+    throw new TypeError(`Invalid node-specific error code: ${value}.`);
+  }
+  return value;
+}
+
+export function getNodeErrorCategory(code, explicitCategory = undefined) {
+  if (NODE_ERROR_CATEGORY_VALUES.has(explicitCategory)) return explicitCategory;
+  return NODE_ERROR_CATEGORIES_BY_CODE.get(code) || NodeErrorCategories.NodeSpecific;
+}
+
+export function definitionSupportsOutputPort(definition = {}, portId) {
+  const ports = Array.isArray(definition.outputPorts) && definition.outputPorts.length
+    ? definition.outputPorts.map((port) => typeof port === "string" ? port : port?.id)
+    : Array.isArray(definition.outputs)
+      ? definition.outputs
+      : [];
+  return ports.includes(portId);
 }
 
 /**

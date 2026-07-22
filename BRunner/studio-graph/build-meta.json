@@ -1,10 +1,11 @@
 {
   "version": 2,
   "algorithm": "sha256",
-  "inputHash": "bfa33caaf7dc19e77e2bad74c0068f04433ae9e4bf1a80be4f2f8278a1d47437",
+  "inputHash": "bc6f0f2446a8341907738ab94c545acbd4f17c08cbd9db8472d965194da607c3",
   "inputs": [
     "BRunner/core/constants.js",
     "BRunner/core/nativeHostRequirements.js",
+    "BRunner/core/nodeAuthoring.js",
     "BRunner/core/studioPreferences.js",
     "BRunner/core/studioPreferencesBootstrap.js",
     "BRunner/core/studioSession.js",
@@ -12,6 +13,7 @@
     "BRunner/core/workflowSchema.js",
     "BRunner/icons/icon2.png",
     "BRunner/mapper/core.js",
+    "BRunner/shared/nodeAuthoring.js",
     "BRunner/shared/studio-tokens.css",
     "BRunner/studio-graph-src/index.html",
     "BRunner/studio-graph-src/src/canvasInteraction.js",

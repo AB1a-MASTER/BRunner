@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+await import("../BRunner/shared/nodeAuthoring.js");
 await import("../BRunner/studio/studioValidation.js");
 
 const {

@@ -3,6 +3,7 @@
 
 import { Defaults } from "./constants.js";
 import {
+  addLegacyNodeContractVersions,
   detectWorkflowSchema,
   graphWorkflowToSequential,
   isGraphWorkflowSchemaVersion,
@@ -12,6 +13,8 @@ import { createDefaultMapperSettings, normalizeMapperSettings } from "../mapper/
 export function normalizeWorkflow(input = {}) {
   if (isGraphWorkflowSchemaVersion(detectWorkflowSchema(input))) {
     input = graphWorkflowToSequential(input);
+  } else {
+    input = addLegacyNodeContractVersions(input);
   }
   if (Array.isArray(input)) {
     return {
@@ -21,7 +24,7 @@ export function normalizeWorkflow(input = {}) {
       datasets: {},
       dataSources: [],
       settings: createDefaultWorkflowSettings(),
-      steps: input,
+      steps: input.map((step) => structuredClone(step)),
     };
   }
 
@@ -40,7 +43,9 @@ export function normalizeWorkflow(input = {}) {
       ? structuredClone(input.dataSources)
       : [],
     settings: normalizeWorkflowSettings(input.settings),
-    steps: Array.isArray(input.steps) ? input.steps : [],
+    steps: Array.isArray(input.steps)
+      ? input.steps.map((step) => structuredClone(step))
+      : [],
   };
 }
 

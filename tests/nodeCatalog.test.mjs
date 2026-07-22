@@ -6,6 +6,7 @@ import {
   FinalizedNodeCatalog,
   NodeImplementationDispositions,
   NodeImplementationStatuses,
+  ReusedFinalizedNodeTypeIds,
   RemovedProvisionalNodeTypes,
   getFinalizedNodeByType,
 } from "../BRunner/nodes/catalog.js";
@@ -133,6 +134,13 @@ test("finalized stable type IDs are unique and every inventory record is frozen"
   }
 
   assert.equal(getFinalizedNodeByType("not.a.finalized.node"), null);
+});
+
+test("finalized catalog assigns version 2 only to reused stable type IDs", () => {
+  const reused = new Set(ReusedFinalizedNodeTypeIds);
+  for (const node of FinalizedNodeCatalog) {
+    assert.equal(node.version, reused.has(node.type) ? 2 : 1, node.type);
+  }
 });
 
 test("phase assignments follow the blueprint implementation order", () => {

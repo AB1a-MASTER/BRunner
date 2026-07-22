@@ -17,8 +17,10 @@ import {
   shouldRetry,
 } from "../BRunner/nodes/shared/executionPolicy.js";
 import {
+  NodeErrorCategories,
   NodeErrorCodes,
   NodeExecutionError,
+  createNodeSpecificErrorCode,
 } from "../BRunner/nodes/shared/nodeContracts.js";
 
 test("retry policy supports fixed and increasing delays", () => {
@@ -119,6 +121,22 @@ test("executeWithRetry reports attempts and retry reason", async () => {
   assert.deepEqual(result, { value: "ready", attempts: 2 });
   assert.deepEqual(delays, [10]);
   assert.equal(retryEvents[0].retryReason, "timeout");
+});
+
+test("namespaced node errors retry through their common category", () => {
+  const error = new NodeExecutionError(
+    createNodeSpecificErrorCode("browser.navigate", "navigation_failed"),
+    "Navigation failed.",
+    {},
+    { category: NodeErrorCategories.Navigation },
+  );
+  const policy = normalizeRetryPolicy({
+    retryCount: 1,
+    retryOnlyFor: ["navigation_failure"],
+  }, {
+    retrySafety: RetrySafety.Safe,
+  });
+  assert.equal(shouldRetry({ attempt: 1, error, policy }), true);
 });
 
 test("host status projection uses the exact blueprint tags", () => {

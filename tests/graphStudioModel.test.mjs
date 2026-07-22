@@ -109,7 +109,9 @@ test("horizontal layout changes positions and handle direction metadata", () => 
 });
 
 test("collapsed state persists but layout direction remains UI metadata", () => {
-  const graph = upgradeWorkflowToV2({ steps: [{ id: "one", action: "element.click" }] });
+  const graph = upgradeWorkflowToV2({
+    steps: [{ id: "one", action: "element.click", target: "#one" }],
+  });
   const model = workflowToCanvas(graph, definitions);
   model.nodes[0].data.collapsed = true;
   model.nodes[0].data.layoutDirection = "horizontal";
@@ -204,4 +206,18 @@ test("v3 mapper component refs and unresolved edges survive round trip", () => {
   assert.deepEqual(saved.nodes[0].data.componentRef, componentRef);
   assert.equal(saved.edges[0].sourceHandle, GraphEdgeHandles.Unresolved);
   assert.deepEqual(saved.settings.mapper, graph.settings.mapper);
+});
+
+test("unsupported graph node contract stays read-only and cannot be saved", () => {
+  const graph = upgradeWorkflowToV2({
+    steps: [{ id: "click", action: "element.click", target: "#save" }],
+  });
+  graph.nodes[0].version = 99;
+
+  const model = workflowToCanvas(graph, definitions);
+  assert.equal(model.nodes[0].data.readOnly, true);
+  assert.throws(
+    () => canvasToGraphWorkflow(model.nodes, model.edges, model.metadata),
+    /unsupported contract element\.click@99/,
+  );
 });
