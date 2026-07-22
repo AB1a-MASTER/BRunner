@@ -4,9 +4,13 @@
 
 **Authority:** This is the sole source of truth for which nodes BRunner will implement. Existing registry entries, executors, workflows, and older node catalogs are provisional development scaffolding and do not override this document.
 
-**Scope:** Node implementation only. The mapper engine, node-neutral ComponentRef/resolver API, base runtime services, Windows companion, persistence, and approved-directory service must pass their foundation gates before this phase begins.
+**Scope:** Node implementation only. The mapper engine, node-neutral ComponentRef/resolver API, base runtime services, Windows companion, persistence, and approved-directory service passed their source foundation gates before this phase began.
 
 **Purpose:** Implement the finalized node set in a consistent, testable order by upgrading, rewriting, adding, or removing provisional code.
+
+**Operational companions:** Follow root `AGENTS.md` for repeatable work rules,
+`docs/NODE_IMPLEMENTATION_STATUS.md` for TODO/evidence status, and
+`docs/NODE_USER_CATALOG.md` for behavior accepted for end users.
 
 ---
 
@@ -24,10 +28,13 @@ For every finalized node:
    tags.
 3. Implement its executor using the shared contracts in Sections 3–7.
 4. Implement structured outputs, warnings, errors, and run-log entries.
-5. Add the unit, browser, host, and acceptance tests listed in the node card.
+5. Add the unit, browser, host, cross-Studio, and acceptance tests listed in the
+   node card, including its focused workflow under
+   `BRunner_Host/Workflows/node_acceptance/`.
 6. Remove provisional node types and handlers absent from this catalog.
 7. Mark the node complete only when it meets the shared done criteria in
-   Section 2.
+   Section 2, its user-catalog entry is current, and its tracker evidence is
+   recorded.
 
 This document intentionally does **not** require compatibility with provisional
 workflows or node types. If workflow migration is later required, implement it
@@ -40,8 +47,13 @@ nodes before this phase unless a provisional handler blocks foundation testing.
 
 A node is complete only when it has all of the following:
 
-- Node metadata: stable `type`, display name, category, icon, description, version.
+- Node metadata: stable `type`, display name, category, icon, description, and
+  explicit contract `version`.
 - Config schema with validation, defaults, help text, and advanced settings.
+- One shared editor contract rendered by both Graph Studio and Sequential
+  Studio without changing node type, version, ports, configuration, or output.
+- A valid example for every user-entered field and shared autocomplete for
+  applicable variables, prior outputs, references, and expressions.
 - Input/output ports and a documented output object.
 - `enabled` / bypass behavior.
 - Retry behavior where retrying is safe or explicitly configured.
@@ -53,6 +65,13 @@ A node is complete only when it has all of the following:
 - Correct use of companion-host fallback when the node supports it.
 - Safe handling of protected browser pages.
 - Automated tests for success, expected failure, timeout, disabled node, retry behavior, and output availability.
+- Cross-Studio save/open/round-trip coverage using one canonical workflow
+  schema.
+- A synthetic focused acceptance workflow under
+  `BRunner_Host/Workflows/node_acceptance/` and live source acceptance where
+  browser or host behavior applies.
+- An end-user entry in `docs/NODE_USER_CATALOG.md` with requirements, fields,
+  examples, outputs, failure guidance, and instructions for both Studios.
 
 ### Standard node lifecycle
 
@@ -106,6 +125,35 @@ Every node receives these baseline properties.
 | `saveOutputAs` | Optional | Friendly alias for downstream data access. |
 | `saveToWorkflowClipboard` | Optional | Off, replace entry, append entry, or create version. |
 | `logLevel` | Optional | Normal or verbose. Logs may contain the node's local input and output data. |
+
+#### Contract versioning
+
+- Runtime and editor lookup use `(type, version)`, never `type` alone.
+- A new finalized type ID starts at version `1`.
+- A finalized contract that reuses a provisional type ID starts at version `2`
+  unless a reviewed migration proves the version-1 contract is identical.
+- In this catalog the reused IDs are `browser.navigate`, `browser.scroll`,
+  `element.click`, `element.hover`, and `element.focus`; their finalized
+  contracts begin at version `2`. Every other finalized type begins at version
+  `1`.
+- Changes to configuration meaning, port IDs, output shape, retry/side-effect
+  semantics, required services, or execution behavior require a version bump.
+- Each changed version requires a deterministic migration or a clear
+  unsupported-version result. Old configuration must never be silently
+  interpreted as the latest contract.
+
+#### One workflow model for both Studios
+
+Graph Studio and Sequential Studio are two presentations of the same canonical
+workflow. Both consume the same finalized node registry, contract versions,
+field schema, validators, autocomplete providers, ports, runtime, and output
+contracts. Graph Studio uses a canvas. Sequential Studio uses a simpler ordered
+or nested presentation, including control-flow scopes where needed. Neither
+Studio may serialize a private node type or lossy workflow representation.
+
+Saving in either Studio must preserve workflow semantics and the other
+Studio's layout metadata. A deterministic round-trip test is required for each
+node before completion.
 
 ### 3.2 Disabled / bypass behavior
 
@@ -204,6 +252,13 @@ Wildcard rules:
 
 Default for user-facing text: **exact + case-insensitive + normalized whitespace**.
 
+Matching always collects all compatible candidates before applying ambiguity
+policy. `multipleMatchBehavior: fail` must observe the complete match set and
+must not be bypassed by `occurrence: first`, `last`, or `index`. Occurrence is
+an explicit selection step used only after the configured multiple-match policy
+permits selection. Target resolution remains stricter: materially ambiguous DOM
+targets fail regardless of ordinary text-list selection settings.
+
 ### 3.7 Target configuration and element resolution
 
 All DOM-targeting nodes use the shared target configuration.
@@ -242,6 +297,14 @@ Resolution order:
 Manual CSS, XPath, text, role, label, attribute, and coordinate inputs are
 authoring inputs, not a second independent resolver. The mapper records and
 revalidates the resulting component identity.
+
+The editor exposes identifier kind, value mode, matching, scope, state,
+freshness, fallback, ambiguity, confidence, and tab source as labelled controls.
+Identifier kind uses a dropdown or checkbox group; it is never inferred from an
+unlabelled string. Expression-capable values provide shared autocomplete and a
+valid example. Coordinate-only targets are permitted only on node cards that
+explicitly allow them and are recorded as non-component targets rather than a
+fabricated durable ComponentRef.
 
 #### Shared target settings
 
@@ -341,19 +404,21 @@ Physical-system input requires the correct tab active, browser window visible, f
 
 ## 4. Node package implementation template
 
-Use the following structure for each node implementation package.
+Use the following structure for each node implementation package. The current
+repository uses JavaScript modules; TypeScript may be adopted only through a
+separate repository-wide build decision.
 
 ```text
 nodes/
   <category>/
     <node-name>/
-      definition.ts        # metadata, ports, config schema
-      executor.ts          # implementation
-      validators.ts        # config and output validation
-      outputs.ts           # output builder and serialization rules
-      ui.ts                # editor form/help/advanced settings
-      tests.unit.ts
-      tests.integration.ts
+      definition.js        # metadata, ports, config/editor schema
+      executor.js          # implementation
+      validators.js        # config and output validation
+      outputs.js           # output builder and serialization rules
+      ui.js                # only when shared schema rendering is insufficient
+      tests.unit.mjs
+      tests.integration.mjs
       fixtures/
 ```
 
@@ -375,6 +440,10 @@ Every node definition should contain:
 - output schema
 - examples
 ```
+
+Graph and Sequential Studio render the same definition. A separate `ui.js` is
+optional only when the shared schema renderer cannot express the control; it
+must export one shared editor extension used by both Studios.
 
 ---
 
@@ -425,6 +494,13 @@ CODE_EXECUTION_FAILED
 FUNCTION_EXECUTION_FAILED
 CANCELLED
 ```
+
+These codes are common categories, not a closed list of every node-specific
+failure. A node may register stable namespaced codes, but every such code must
+map to one common category for routing, retry classification, logs, and UI.
+Shared adapters must translate their internal errors into this contract; for
+example, a text matcher `MULTIPLE_MATCHES` result maps to an ambiguity or
+validation category instead of escaping as an unknown error.
 
 ---
 
@@ -570,8 +646,8 @@ The base runtime exists. Implement only the node-layer dependencies shown here.
 3. Standard output/logging adapter.
 4. Retry-safety and host-fallback policy adapter.
 5. Navigate.
-6. Tab Control.
-7. Scroll.
+6. Scroll.
+7. Tab Control.
 8. Resolve Element.
 9. Check Element State.
 10. Wait for Condition.
@@ -818,7 +894,7 @@ The following cards define the required node-level behavior. All cards inherit S
 - shared target configuration
 - `mode`
 - `expectedElementType`
-- `matchMode`: one, first, all
+- `resultCardinality`: one, first, all
 - `searchScope`
 - `visibilityRequirement`
 - `mapFreshness`
@@ -2253,6 +2329,8 @@ Every browser node should have these test classes where relevant:
 13. Host fallback available and successful.
 14. Host unavailable behavior.
 15. Foreground/visible-window enforcement for system input.
+16. Graph Studio and Sequential Studio load/save the same node contract.
+17. The focused node acceptance workflow validates and runs from source.
 
 Every data node should have these test classes where relevant:
 
@@ -2273,6 +2351,7 @@ Every control node should have:
 3. Async dependency wait.
 4. Cancellation.
 5. Nested-loop/scope correctness where applicable.
+6. Cross-Studio route/scope round-trip without semantic loss.
 
 ---
 

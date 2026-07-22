@@ -1,7 +1,7 @@
 # BRunner Master Roadmap
 
 **Status:** Current product scope and implementation sequence
-**Updated:** 2026-07-16
+**Updated:** 2026-07-22
 
 ## Authority
 
@@ -15,6 +15,10 @@ The sole catalog and implementation contract for workflow nodes is the
 root-level `workflow_nodes_implementation_blueprint.md`. Earlier node lists in
 the roadmap or `docs/specs/04_NODE_CATALOG.md` are historical descriptions of
 the provisional runtime, not parallel catalogs.
+
+`NODE_IMPLEMENTATION_STATUS.md` is the authoritative living TODO and evidence
+ledger for that program. Root `AGENTS.md` keeps the implementation, testing,
+documentation, versioning, and Git handoff rules consistent across sessions.
 
 Detailed specifications remain useful for implementation behavior when they do
 not conflict with the decisions recorded here. The current handoff should point
@@ -76,10 +80,10 @@ The repository already contains a substantial working foundation:
   resolver diagnostics, open-shadow and frame-related source support, test
   fixtures, and an engineering-oriented Mapper Inspector.
 
-This baseline is not a declaration that the mapper engine, node catalog, saved-map
-experience, or product release is finished. Existing workflow nodes are
-provisional development scaffolding. They remain untouched until the dedicated node
-phase begins.
+This baseline is not a declaration that the node catalog, saved-map experience,
+or product release is finished. Existing workflow nodes are provisional
+development scaffolding and may be upgraded, rewritten, migrated, or removed by
+the active node program.
 
 ## Current implementation sequence
 
@@ -154,23 +158,36 @@ graph-route integration is not part of this gate.
 
 ### Milestone 2 - Final workflow-node program (next active phase)
 
-The mapper engine gate is accepted; begin this phase next.
+The mapper engine gate is accepted. The node program is active, beginning with
+the shared base-contract and Studio-unification gate before Node 1.
 
 `workflow_nodes_implementation_blueprint.md` is the only node catalog. At the
 start of this phase:
 
-1. Process every blueprint node in its documented order and identify any
+1. Establish one canonical versioned node/workflow model used by both Graph
+   Studio and Sequential Studio. Their difference is editing UX, not available
+   nodes, node schemas, ports, validation, runtime behavior, or saved format.
+2. Dispatch node behavior by `(type, version)`, migrate only through explicit
+   migrations, and fail closed on unknown versions. Final contracts that reuse
+   provisional type IDs begin at version 2.
+3. Close shared target, ambiguity, output/routing, retry, stable-port,
+   validation, help/example, autocomplete, and identifier-selector contracts.
+4. Process every blueprint node in catalog-number order and identify any
    provisional equivalent only as implementation reference.
-2. Mark the work as upgrade, rewrite/change, or add; remove every provisional
+5. Mark the work as upgrade, rewrite/change, or add; remove every provisional
    node absent from the finalized blueprint.
-3. Do not preserve an existing node merely because it already exists. The
+6. Do not preserve an existing node merely because it already exists. The
    blueprint is authoritative.
-4. Implement the blueprint using shared resolver,
+7. Implement the blueprint using shared resolver,
    text-matching, output, logging, retry, and companion adapters.
-5. Keep graph control flow in graph traversal; never emulate branching or loops
+8. Keep graph control flow in graph traversal; never emulate branching or loops
    inside the linear executor.
-6. Add deterministic tests and focused live acceptance for each completed slice.
-7. Update the living user guide as node contracts become real.
+9. For every node, add its focused workflow under
+   `BRunner_Host/Workflows/node_acceptance/`, deterministic tests, focused live
+   evidence, and a complete entry in `NODE_USER_CATALOG.md`.
+10. Mark the tracker row complete only after the entire node gate passes. The
+    user then creates the quick Git commit and its hash is recorded in the
+    completed-node ledger.
 
 The milestone has started. The complete 94-node disposition inventory and
 living implementation status are recorded in
@@ -178,9 +195,11 @@ living implementation status are recorded in
 runtime nodes remain provisional until their tracker rows meet the blueprint
 definition of done.
 
-**Gate:** every finalized blueprint node meets the blueprint definition of done,
-every provisional action absent from the blueprint is removed, and the
-cross-node acceptance workflows pass.
+**Gate:** base-contract and two-Studio parity items are complete; every finalized
+blueprint node meets the blueprint definition of done; every provisional action
+absent from the blueprint is removed; each node-specific acceptance workflow
+passes; the end-user catalog matches the implementation; and the cross-node
+acceptance workflows pass.
 
 ### Milestone 3 - Integrated V1 acceptance
 
@@ -242,16 +261,22 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
    [`NODE_IMPLEMENTATION_STATUS.md`](NODE_IMPLEMENTATION_STATUS.md) from the
    finalized 94-node blueprint and inventory every provisional type with an
    upgrade, rewrite/change, add, or remove disposition.
-2. **Active:** implement the Phase 1 shared target, text-matching,
-   output/logging, and retry/host-fallback adapters.
-3. Implement Navigate, Tab Control, Scroll, Resolve Element, Check Element
-   State, and Wait for Condition in blueprint order and close the Phase 1 gate.
-4. Continue node Phases 2-7 with deterministic and focused live acceptance per
-   slice, removing provisional types absent from the finalized catalog.
-5. Complete the six cross-node acceptance workflows and integrated V1 source
+2. **Active:** close tracker base items B02-B06 and B10-B14: versioned dispatch
+   and migrations, deterministic ambiguity behavior, extensible errors, stable
+   ports/routes, a shared registry/schema/editor contract, one workflow format,
+   cross-Studio round trips, user help/autocomplete/identifier controls, and
+   node-acceptance workflow validation.
+3. Correct and integrate the Phase 1 shared target, text-matching,
+   output/logging/routing, and retry/host-fallback adapters.
+4. Implement Navigate, Scroll, Tab Control, Resolve Element, Check Element
+   State, and Wait for Condition in catalog order and close the Phase 1 gate.
+5. Continue node Phases 2-7 one node at a time. For each node: add automated
+   tests, its focused acceptance workflow and live evidence, update the end-user
+   catalog and tracker, then hand off for a quick user-controlled commit.
+6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
-6. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
-7. Ask the user before beginning any V2 viewer, product-boundary change, or
+7. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
+8. Ask the user before beginning any V2 viewer, product-boundary change, or
    release work.
 
 ## Development rules
@@ -270,3 +295,8 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
 9. Do not perform release work during the current mapper or node milestones.
 10. When scope or status changes, update this roadmap and the current handoff in
     the same change.
+11. Both Studios must load and save the same canonical workflow and node
+    contracts. Sequential Studio simplifies presentation only.
+12. Never mark a node complete without its versioned contract, both-Studio
+    round trip, focused acceptance workflow, automated/live evidence, end-user
+    documentation, and tracker entry.

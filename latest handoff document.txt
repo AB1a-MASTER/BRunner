@@ -1,5 +1,5 @@
 BRunner - Current Development Handoff
-Updated: 2026-07-20
+Updated: 2026-07-22
 
 PURPOSE
 
@@ -43,17 +43,21 @@ loaded-window, body-ancestry, and verification issues were fixed and rerun. The
 extension/host round trip passed with `extension-host-roundtrip.txt |
 extension-host-roundtrip.txt | 1`.
 
-The latest automated source gate passes 285 JavaScript tests and 176 Python
-tests. The active milestone is now the finalized node program.
+The latest automated source gate passes 357 JavaScript tests and 176 Python
+tests. The active milestone is the finalized node program, beginning with its
+base-contract and Studio-unification gate before Node 1.
 
 Focus on:
 
-1. using `docs/NODE_IMPLEMENTATION_STATUS.md` as the completed 94-node
-   disposition inventory and living node-phase status;
-2. implementing the four Phase 1 shared node adapters before individual nodes;
-3. then implementing Navigate, Tab Control, Scroll, Resolve Element, Check
-   Element State, and Wait for Condition in that order, with their required
-   deterministic and focused live tests.
+1. using `docs/NODE_IMPLEMENTATION_STATUS.md` as the canonical work tracker,
+   evidence ledger, and completed 94-node disposition inventory;
+2. closing base items B02-B06 and B10-B14 so versions, ports/routes, errors,
+   ambiguity handling, registry/schema rendering, workflow files, validation,
+   help, autocomplete, identifier selectors, and acceptance workflows have one
+   shared contract;
+3. correcting and integrating the four Phase 1 shared node adapters; and
+4. implementing Navigate, Scroll, Tab Control, Resolve Element, Check Element
+   State, and Wait for Condition in catalog order.
 
 The existing Mapper Inspector is an engineering diagnostic surface for this
 work. Do not spend the current milestone polishing it into a final saved-map
@@ -65,15 +69,19 @@ CURRENT TODO SEQUENCE
 1. COMPLETE: `docs/NODE_IMPLEMENTATION_STATUS.md` and
    `BRunner/nodes/catalog.js` inventory all 94 finalized nodes and account for
    every provisional action type.
-2. ACTIVE: implement Phase 1 shared target, text-matching, output/logging, and
-   retry/host-fallback adapters.
-3. Implement the six Phase 1 nodes in blueprint order and close the Phase 1
-   navigate/tab/resolve/check/wait workflow gate.
-4. Continue node Phases 2-7, removing provisional types absent from the catalog.
-5. Complete the six cross-node acceptance workflows and integrated V1 source
+2. ACTIVE: close tracker base-contract and Studio-unification items B02-B06 and
+   B10-B14.
+3. Correct and integrate Phase 1 target, text-matching,
+   output/logging/routing, and retry/host-fallback adapters.
+4. Implement the six Phase 1 nodes in catalog order and close the Phase 1 gate.
+5. Continue node Phases 2-7 one node at a time, removing provisional types
+   absent from the catalog. Every node gets automated tests, a focused workflow
+   under `BRunner_Host/Workflows/node_acceptance/`, focused live evidence, an
+   end-user catalog entry, a tracker update, and a quick user-controlled commit.
+6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
-6. Keep nonessential Inspector/saved-map visual work deferred to V2.
-7. Ask the user before any V2 viewer, product-boundary change, packaging,
+7. Keep nonessential Inspector/saved-map visual work deferred to V2.
+8. Ask the user before any V2 viewer, product-boundary change, packaging,
    installer, or release milestone.
 
 NODE CATALOG RULE
@@ -87,6 +95,12 @@ node milestone. Mapper-unblocking correctness fixes are the only exception.
 During the node milestone, follow the blueprint definition of done and track
 upgrade, rewrite/change, add, and removal status. Current actions are reference
 code, not a compatibility contract.
+
+Graph Studio and Sequential Studio must use the same versioned node definitions,
+workflow schema, ports, validation, and runtime. Sequential Studio is only a
+simpler editing presentation. Runtime dispatch uses `(type, version)`; reused
+provisional type IDs start their finalized contract at version 2, and unknown
+versions fail closed.
 
 Do not implement graph branching, loops, joins, or error paths in the linear
 executor. They require graph traversal, explicit ports, validation, limits, and
@@ -153,6 +167,10 @@ IMPORTANT REFERENCES
 - Product scope and sequence: `docs/BRUNNER_MASTER_ROADMAP.md`
 - Shared extension/Studio work: `docs/FOUNDATION_TODO_STATUS.md`
 - Sole node catalog: `workflow_nodes_implementation_blueprint.md`
+- Persistent node-program instructions: `AGENTS.md`
+- Living node tracker/evidence ledger: `docs/NODE_IMPLEMENTATION_STATUS.md`
+- End-user node catalog: `docs/NODE_USER_CATALOG.md`
+- Per-node acceptance workflows: `BRunner_Host/Workflows/node_acceptance/`
 - Mapper behavior details: `docs/specs/08_MAPPER_RELIABILITY_TRANSITION.md`
 - Mapper source checklist/fixtures: `docs/MAPPER_TODO_STATUS.md` and
   `docs/MAPPER_MANUAL_ACCEPTANCE.md` where they agree with the master roadmap
@@ -178,6 +196,10 @@ DEVELOPMENT RULES
 - Treat pairing as a cooperative profile lock.
 - Treat provisional nodes only as implementation reference; the finalized
   blueprint now controls upgrades, rewrites, additions, and removals.
+- Use one canonical workflow/node model in both Studios; only their UI/UX may
+  differ.
+- Complete one node at a time, including its acceptance workflow and end-user
+  documentation, then hand it to the user for the quick Git commit.
 - Defer polished saved-map viewing to V2.
 - Perform no release work now.
 - Update this handoff and the master roadmap together whenever priority, scope,

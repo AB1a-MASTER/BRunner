@@ -8,8 +8,8 @@ foreground input.
 
 The companion is under active source development. Current ZIP and EXE outputs
 are test artifacts, not supported user releases. Release packaging and
-distribution are deferred until the open items in
-`docs/COMPANION_TODO_STATUS.md` are complete.
+distribution are deferred until node implementation and integrated source
+acceptance are complete and the user explicitly starts the release milestone.
 
 ## Development Setup
 

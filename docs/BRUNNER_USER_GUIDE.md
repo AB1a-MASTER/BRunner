@@ -10,8 +10,9 @@ BRunner is a local browser-automation system for Windows and Chrome/Chromium.
 
 - The extension owns page mapping, workflow authoring, browser context, and
   browser execution.
-- Graph Studio is the primary authoring shell. Sequential Studio may support
-  compatible linear workflows.
+- Graph Studio and Sequential Studio are two authoring views of the same
+  workflow and versioned node contracts. Graph Studio uses a visual canvas;
+  Sequential Studio presents the same capabilities in a simpler ordered UI.
 - The Windows companion owns local workflow storage, approved-folder services,
   companion status, and opt-in visible operating-system fallback.
 - The mapper engine is a primary reliability foundation. Its job is to discover
@@ -47,10 +48,9 @@ boundary against the local user.
 
 ## Current development phases
 
-### Foundation phase
+### Accepted foundation
 
-The current phase completes the reusable systems that the final nodes will
-consume:
+The accepted reusable systems that the final nodes consume include:
 
 - mapper discovery, identity, tracking, persistence, and reconciliation;
 - node-neutral ComponentRef scan/resolve/revalidate/refresh APIs;
@@ -60,9 +60,8 @@ consume:
 - Studio shell/build/save behavior; and
 - MV3 service-worker lifecycle and session-state foundations.
 
-Do not repair a provisional node solely to preserve its current behavior. It may
-be changed or removed during the node phase. Work on a provisional handler
-early only when it blocks testing of a shared foundation.
+These accepted systems must be preserved while the active node program replaces
+or upgrades provisional node behavior.
 
 ### Node phase
 
@@ -72,21 +71,31 @@ executors are development scaffolding.
 
 During the node phase, every finalized node is handled one by one:
 
-1. Find any provisional equivalent.
-2. Upgrade, rewrite, add, or remove it according to the final node card.
-3. Implement its schema, ports, editor controls, runtime, mapper/host adapters,
-   outputs, failures, retries, tests, and documentation.
-4. Delete provisional nodes absent from the finalized catalog.
-5. Mark the node complete only after its entire definition-of-done passes.
+1. Close the shared base-contract and two-Studio parity requirements before the
+   first node.
+2. Find any provisional equivalent and explicitly upgrade, rewrite, add, or
+   remove it according to the final node card.
+3. Implement its versioned schema, stable ports, editor controls, runtime,
+   mapper/host adapters, outputs, failures, retries, and tests.
+4. Add a focused workflow under `BRunner_Host/Workflows/node_acceptance/` and
+   pass it with synthetic data.
+5. Document purpose, requirements, every field, practical examples,
+   autocomplete, identifier choices, outputs, errors, and both-Studio usage in
+   [`NODE_USER_CATALOG.md`](NODE_USER_CATALOG.md).
+6. Mark the tracker complete only after the entire gate passes; the user then
+   creates the quick Git commit.
 
 No compatibility guarantee exists for provisional workflows or node types.
 Workflow migration, if later required, will be a separate feature.
 
 ## Studios and workflow files
 
-Graph Studio is the primary visual editor. Sequential Studio is available for
-compatible linear workflows. Until the node phase finishes, node palettes,
-properties, validation, recording output, and workflow schemas may change.
+Graph Studio and Sequential Studio load and save the same canonical workflow
+format. They use the same node definitions, versions, fields, validation,
+outputs, ports/routes, autocomplete providers, and runtime behavior. Graph
+Studio exposes graph routing on a canvas; Sequential Studio simplifies the
+authoring experience without creating a separate node type or incompatible
+workflow. Until the node phase finishes, provisional node contracts may change.
 
 Studio source and the runtime bundle are separate:
 
@@ -99,6 +108,11 @@ the built assets are current before loading the extension.
 Workflow files are local JSON documents. The companion workflow directory is
 configurable. Moving that directory must complete atomically and update the
 running host before the new location is reported as active.
+
+For the currently accepted node list and detailed usage, consult
+[`NODE_USER_CATALOG.md`](NODE_USER_CATALOG.md). It describes only nodes whose
+full implementation and acceptance gate has passed; planned entries are clearly
+identified as unavailable.
 
 ## Mapper engine
 
@@ -253,6 +267,8 @@ validation are deferred until the actual release phase.
 
 - Final nodes have not yet been implemented from the finalized blueprint.
 - Provisional workflows may stop working during the node phase.
+- Node palettes and workflow compatibility remain provisional until the shared
+  two-Studio contract and node migrations are complete.
 - The polished map viewer is deferred to V2.
 - Cross-platform, headless, cloud, and multi-user operation are out of scope.
 - Live companion and mapper acceptance remains required before a release can be

@@ -31,12 +31,16 @@ node implementations are not release contracts.
 
 ## Current phase order
 
-1. Stabilize the shared foundation: mapper engine, storage, extension/host
-   transport, cooperative profile lock, Studio shell, and MV3 lifecycle.
-2. Complete deterministic and live acceptance for those foundations.
-3. Enter the node phase. Implement every node in the finalized blueprint one by
-   one by upgrading, rewriting, adding, or removing provisional code.
-4. Build release packages only after the product acceptance gates pass.
+1. Preserve the accepted mapper, extension, companion, storage, Studio-shell,
+   and MV3 foundations.
+2. Close the node base-contract and Studio-unification gate: one versioned node
+   model, one workflow schema, shared validation/runtime behavior, and two
+   editor presentations.
+3. Implement every node in finalized catalog order, one at a time, with a
+   node-specific acceptance workflow, automated and live evidence, end-user
+   documentation, tracker update, and user-controlled Git commit.
+4. Complete integrated source acceptance, then build release packages only
+   after the product acceptance gates pass and the user starts release work.
 
 Do not spend time repairing a provisional node merely to preserve its current
 behavior. Fix it early only when it blocks testing of a shared foundation.
@@ -48,18 +52,22 @@ When documents disagree, use this order:
 1. This README for confirmed product boundaries and phase rules.
 2. [`docs/BRUNNER_MASTER_ROADMAP.md`](docs/BRUNNER_MASTER_ROADMAP.md) for the
    current sequence and milestone gates.
-3. [`docs/FOUNDATION_TODO_STATUS.md`](docs/FOUNDATION_TODO_STATUS.md),
+3. [`AGENTS.md`](AGENTS.md) for persistent implementation and evidence rules.
+4. [`workflow_nodes_implementation_blueprint.md`](workflow_nodes_implementation_blueprint.md)
+   for the finalized node catalog and contract.
+5. [`docs/NODE_IMPLEMENTATION_STATUS.md`](docs/NODE_IMPLEMENTATION_STATUS.md)
+   for the living node-program TODO, status, evidence, and commit ledger.
+6. [`docs/FOUNDATION_TODO_STATUS.md`](docs/FOUNDATION_TODO_STATUS.md),
    [`docs/COMPANION_TODO_STATUS.md`](docs/COMPANION_TODO_STATUS.md), and
-   [`docs/MAPPER_TODO_STATUS.md`](docs/MAPPER_TODO_STATUS.md) for operational
-   work remaining in the current foundation phase.
-4. [`latest handoff document.txt`](latest%20handoff%20document.txt) for the last
+   [`docs/MAPPER_TODO_STATUS.md`](docs/MAPPER_TODO_STATUS.md) as accepted
+   foundation records.
+7. [`latest handoff document.txt`](latest%20handoff%20document.txt) for the last
    completed work and immediate next slice.
-5. `docs/specs/07_*` through `docs/specs/11_*` for companion and mapper
+8. `docs/specs/07_*` through `docs/specs/11_*` for companion and mapper
    behavioral contracts, subject to the scope above.
-6. [`workflow_nodes_implementation_blueprint.md`](workflow_nodes_implementation_blueprint.md)
-   for the finalized node phase and node list.
-7. [`docs/BRUNNER_USER_GUIDE.md`](docs/BRUNNER_USER_GUIDE.md) for currently
-   supported usage.
+9. [`docs/BRUNNER_USER_GUIDE.md`](docs/BRUNNER_USER_GUIDE.md) and
+   [`docs/NODE_USER_CATALOG.md`](docs/NODE_USER_CATALOG.md) for currently
+   supported end-user behavior.
 
 `Design Doc.txt`, the two root transition plans, the companion DOCX, and Specs
 01-06 describe design history or provisional development. They are useful
@@ -71,6 +79,8 @@ context but cannot override the sources above.
 - `BRunner/studio-graph-src/` — Graph Studio React/Vite source.
 - `BRunner/studio-graph/` — built Graph Studio assets loaded by the extension.
 - `BRunner_Host/` — Windows companion source.
+- `BRunner_Host/Workflows/node_acceptance/` — focused acceptance workflow for
+  each finalized node.
 - `docs/` — roadmap, current status, specifications, and acceptance material.
 - `tests/` — JavaScript and Python tests.
 

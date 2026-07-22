@@ -271,7 +271,7 @@ Pass: the bounded Chrome-storage map state survives a real extension restart.
 
 - [x] Every section above passed in live Chrome/Chromium.
 - [x] Every failure was fixed and its affected section rerun.
-- [x] The current automated suites pass: 285 JavaScript tests and 176 Python
+- [x] The current automated suites pass: 357 JavaScript tests and 176 Python
   tests on 2026-07-20.
 
 The operator completed the live sequence and reported the corrected final
