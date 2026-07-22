@@ -47,6 +47,7 @@ export const Messages = Object.freeze({
   DeleteWorkflowMapperState: "DELETE_WORKFLOW_MAPPER_STATE",
   MapCurrentPage: "MAP_CURRENT_PAGE",
   InspectCurrentPageMap: "INSPECT_CURRENT_PAGE_MAP",
+  VerifyMapperAcceptance: "VERIFY_MAPPER_ACCEPTANCE",
   ResolveMapperComponent: "RESOLVE_MAPPER_COMPONENT",
   HighlightMapperComponent: "HIGHLIGHT_MAPPER_COMPONENT",
 

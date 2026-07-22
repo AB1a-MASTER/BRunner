@@ -71,6 +71,10 @@ import {
   pageMapMatchesUrl,
 } from "./mapper/core.js";
 import {
+  MapperAcceptanceExportVersion,
+  verifyMapperAcceptanceSnapshot,
+} from "./mapper/acceptanceVerifier.js";
+import {
   createTab,
   getActiveTab,
   getBestAutomationTab,
@@ -352,6 +356,9 @@ async function handleMessage(request, sender) {
 
     case Messages.InspectCurrentPageMap:
       return await inspectCurrentPageMapForInspector(request, sender);
+
+    case Messages.VerifyMapperAcceptance:
+      return await verifyCurrentPageMapperAcceptance(request, sender);
 
     case Messages.HighlightMapperComponent:
       return await highlightMapperComponentForInspector(request, sender);
@@ -695,6 +702,383 @@ async function inspectCurrentPageMapForInspector(request = {}, sender = null) {
       pageProfileKey: savedMap.pageProfileKey || "",
     },
   };
+}
+
+async function verifyCurrentPageMapperAcceptance(request = {}, sender = null) {
+  const settings = await resolveInspectorMapperSettings(request);
+  let snapshot;
+  try {
+    snapshot = await getInspectorLiveMapperSnapshot({
+      ...request,
+      snapshotMode: "settled_current_dom",
+    }, sender, settings);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
+  }
+
+  const capturedAt = normalizeInspectorSnapshotCapturedAt(
+    snapshot.page?.capturedAt,
+  );
+  const pageMap = buildStaticPageMap({
+    page: {
+      url: snapshot.page.url || snapshot.tab.url || "",
+      title: snapshot.page.title || snapshot.tab.title || "",
+      platformProfile: snapshot.page.platformProfile || null,
+      materialMutationCount: 0,
+      frameSummary: snapshot.page.frameSummary || null,
+      scanDiagnostics: snapshot.page.scanDiagnostics || null,
+    },
+    componentFacts: snapshot.mapperFacts,
+    settings,
+    now: capturedAt,
+  });
+  const domManifest = await collectMapperAcceptanceDomManifest(
+    snapshot.tab,
+    Math.max(settings.maxComponents * 2, settings.maxComponents + 100),
+  );
+  const verification = verifyMapperAcceptanceSnapshot({
+    pageMap,
+    domManifest,
+  });
+  const exported = {
+    schemaVersion: MapperAcceptanceExportVersion,
+    exportedAt: new Date().toISOString(),
+    tab: {
+      id: snapshot.tab.id,
+      url: snapshot.tab.url || "",
+      title: snapshot.tab.title || "",
+    },
+    settings,
+    pageMap,
+    domManifest,
+    verification,
+  };
+
+  return {
+    ok: true,
+    tabId: snapshot.tab.id,
+    pageMap,
+    domManifest,
+    verification,
+    export: exported,
+  };
+}
+
+async function collectMapperAcceptanceDomManifest(tab, maxEntries = 1100) {
+  if (!tab?.id) {
+    throw new Error("Mapper acceptance verification requires an active website tab.");
+  }
+  const results = await chrome.scripting.executeScript({
+    target: {
+      tabId: tab.id,
+      allFrames: true,
+    },
+    func: collectMapperAcceptanceFrameManifest,
+    args: [maxEntries],
+  });
+  const entries = [];
+  const frames = [];
+  let truncated = false;
+  for (const result of results || []) {
+    const frame = result?.result || {};
+    const frameEntries = Array.isArray(frame.entries) ? frame.entries : [];
+    const normalizedFrameEntries = frameEntries.map((entry) => ({
+      ...entry,
+      expectedMapped:
+        entry.eligible !== false &&
+        (entry.hasStableIdentity === true || Number(result.frameId) === 0),
+    }));
+    frames.push({
+      frameId: Number(result.frameId) || 0,
+      documentId: String(result.documentId || ""),
+      url: String(frame.url || ""),
+      title: String(frame.title || ""),
+      expectedMappedCount: normalizedFrameEntries.filter(
+        (entry) => entry.expectedMapped,
+      ).length,
+      excludedCandidateCount: normalizedFrameEntries.filter(
+        (entry) => entry.eligible === false,
+      ).length,
+      truncated: frame.truncated === true,
+    });
+    truncated = truncated || frame.truncated === true;
+    for (const entry of normalizedFrameEntries) {
+      entries.push({
+        ...entry,
+        frameId: Number(result.frameId) || 0,
+        documentId: String(result.documentId || ""),
+        frameUrl: String(frame.url || ""),
+      });
+    }
+  }
+  return {
+    schemaVersion: "mapper.dom_manifest.v1",
+    capturedAt: new Date().toISOString(),
+    tabId: tab.id,
+    url: tab.url || "",
+    title: tab.title || "",
+    frameCount: frames.length,
+    frames,
+    expectedMappedCount: entries.filter((entry) => entry.expectedMapped).length,
+    excludedCandidateCount: entries.filter(
+      (entry) => entry.eligible === false,
+    ).length,
+    truncated,
+    entries,
+  };
+}
+
+function collectMapperAcceptanceFrameManifest(maxEntries = 1100) {
+  const selector = [
+    "button",
+    "a",
+    "input",
+    "textarea",
+    "select",
+    "img",
+    "picture",
+    "svg",
+    "canvas",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "label",
+    "li",
+    "td",
+    "th",
+    "span",
+    "pre",
+    "output",
+    "[role='button']",
+    "[role='link']",
+    "[role='textbox']",
+    "[role='img']",
+    "[role='heading']",
+    "[role='status']",
+    "[role='log']",
+    "[contenteditable='true']",
+  ].join(",");
+  const limit = Math.max(1, Math.min(5000, Number(maxEntries) || 1100));
+  const entries = [];
+  const pendingRoots = [document];
+  const seenRoots = new Set(pendingRoots);
+  let rootIndex = 0;
+  let truncated = false;
+
+  while (rootIndex < pendingRoots.length && !truncated) {
+    const root = pendingRoots[rootIndex++];
+    const ownerDocument = root.ownerDocument || document;
+    const walker = ownerDocument.createTreeWalker(
+      root,
+      NodeFilter.SHOW_ELEMENT,
+    );
+    let element = walker.nextNode();
+    while (element) {
+      if (element.shadowRoot && !seenRoots.has(element.shadowRoot)) {
+        seenRoots.add(element.shadowRoot);
+        pendingRoots.push(element.shadowRoot);
+      }
+      const identity = [
+        "data-testid",
+        "data-test",
+        "data-qa",
+      ].map((attribute) => ({
+        attribute,
+        value: String(element.getAttribute?.(attribute) || "").trim(),
+      })).find((item) => item.value) || null;
+      const id = String(element.id || "").trim();
+      if (
+        element.matches?.(selector) &&
+        mapperAcceptanceElementIsVisible(element)
+      ) {
+        const expectation = mapperAcceptanceElementExpectation(element);
+        entries.push({
+          expectedMapped: expectation.eligible,
+          eligible: expectation.eligible,
+          exclusionReason: expectation.reason,
+          hasStableIdentity: Boolean(identity || id),
+          tag: String(element.tagName || "").toLowerCase(),
+          id,
+          identity,
+          domPath: mapperAcceptanceDomPath(element),
+        });
+        if (entries.length >= limit) {
+          truncated = true;
+          break;
+        }
+      }
+      element = walker.nextNode();
+    }
+  }
+
+  return {
+    url: window.location.href,
+    title: document.title || "",
+    rootCount: seenRoots.size,
+    truncated,
+    entries,
+  };
+
+  function mapperAcceptanceElementIsVisible(element) {
+    const rect = element.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+    const style = window.getComputedStyle?.(element);
+    return style?.display !== "none" && style?.visibility !== "hidden";
+  }
+
+  function mapperAcceptanceElementExpectation(element) {
+    if (element.disabled) {
+      return { eligible: false, reason: "disabled" };
+    }
+    if (element.getAttribute?.("aria-hidden") === "true") {
+      return { eligible: false, reason: "aria_hidden" };
+    }
+    if (mapperAcceptanceIsPassiveText(element)) {
+      if (mapperAcceptanceHasInteractiveAncestor(element)) {
+        return { eligible: false, reason: "interactive_ancestor" };
+      }
+      const text = mapperAcceptanceText(element);
+      if (text.length < 2 || text.length > 180) {
+        return {
+          eligible: false,
+          reason: text.length > 180
+            ? "passive_text_over_180_chars"
+            : "passive_text_too_short",
+        };
+      }
+      if (mapperAcceptanceHasNestedMappableText(element)) {
+        return { eligible: false, reason: "nested_mappable_text" };
+      }
+    }
+    if (mapperAcceptanceIsVisualMedia(element)) {
+      const tag = String(element.tagName || "").toLowerCase();
+      const hasSignal = tag === "canvas" ||
+        Boolean(
+          element.getAttribute?.("alt") ||
+          element.getAttribute?.("aria-label") ||
+          element.getAttribute?.("title") ||
+          element.getAttribute?.("src") ||
+          mapperAcceptanceText(element),
+        );
+      if (!hasSignal) {
+        return { eligible: false, reason: "media_without_signal" };
+      }
+    }
+    return { eligible: true, reason: "" };
+  }
+
+  function mapperAcceptanceIsPassiveText(element) {
+    const tag = String(element?.tagName || "").toLowerCase();
+    const role = String(element?.getAttribute?.("role") || "").toLowerCase();
+    return [
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "p",
+      "label",
+      "li",
+      "td",
+      "th",
+      "span",
+      "pre",
+      "output",
+    ].includes(tag) || ["heading", "status", "log"].includes(role);
+  }
+
+  function mapperAcceptanceIsVisualMedia(element) {
+    const tag = String(element?.tagName || "").toLowerCase();
+    const role = String(element?.getAttribute?.("role") || "").toLowerCase();
+    return ["img", "picture", "svg", "canvas"].includes(tag) || role === "img";
+  }
+
+  function mapperAcceptanceHasInteractiveAncestor(element) {
+    const interactiveSelector = [
+      "button",
+      "a",
+      "input",
+      "textarea",
+      "select",
+      "[role='button']",
+      "[role='link']",
+      "[role='textbox']",
+      "[contenteditable='true']",
+    ].join(",");
+    let current = element?.parentElement || null;
+    while (current) {
+      if (current.matches?.(interactiveSelector)) return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function mapperAcceptanceHasNestedMappableText(element) {
+    const passiveSelector = [
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "p",
+      "label",
+      "li",
+      "td",
+      "th",
+      "span",
+      "pre",
+      "output",
+      "[role='heading']",
+      "[role='status']",
+      "[role='log']",
+    ].join(",");
+    for (const child of element.querySelectorAll?.(passiveSelector) || []) {
+      if (!mapperAcceptanceElementIsVisible(child)) continue;
+      if (mapperAcceptanceHasInteractiveAncestor(child)) continue;
+      const text = mapperAcceptanceText(child);
+      if (text.length >= 2 && text.length <= 180) return true;
+    }
+    return false;
+  }
+
+  function mapperAcceptanceText(element) {
+    return String(element?.innerText || element?.textContent || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function mapperAcceptanceDomPath(element) {
+    const segments = [];
+    let current = element;
+    while (current?.nodeType === Node.ELEMENT_NODE) {
+      const root = current.getRootNode();
+      const parts = [];
+      let nested = current;
+      while (nested?.nodeType === Node.ELEMENT_NODE) {
+        const parent = nested.parentElement;
+        const tag = String(nested.tagName || "").toLowerCase();
+        if (!parent) {
+          parts.unshift(`${tag}:0`);
+          break;
+        }
+        parts.unshift(`${tag}:${Array.prototype.indexOf.call(parent.children, nested)}`);
+        nested = parent;
+      }
+      segments.unshift(parts.join("/"));
+      if (!(root instanceof ShadowRoot) || !root.host) break;
+      current = root.host;
+    }
+    return segments.filter(Boolean).join("::shadow::");
+  }
 }
 
 async function getInspectorLiveMapperSnapshot(request = {}, sender = null, settings = {}) {
@@ -3281,7 +3665,7 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
   await delay(150);
   throwIfRunCancelled(runId);
 
-  const prepared = await sendContentRequest(tab, {
+  let prepared = await sendContentRequest(tab, {
     type: Messages.PrepareHostFallback,
     step,
     runId,
@@ -3319,8 +3703,41 @@ async function executeVisibleHostFallback(tab, step, runId, browserError) {
     });
   } catch (error) {
     hostActionError = error;
-    if (!shouldAllowVisualMatchFallback(step)) {
-      throw error;
+    if (shouldRetryVisibleHostGeometry(error)) {
+      await delay(160);
+      throwIfRunCancelled(runId);
+      const refreshed = await sendContentRequest(tab, {
+        type: Messages.PrepareHostFallback,
+        step,
+        runId,
+      });
+      if (refreshed?.ok) {
+        prepared = refreshed;
+        await NativeBridge.hostWindow({
+          expectedWindowTitle: prepared.window?.title || tab.title || "",
+        });
+        try {
+          hostResult = await NativeBridge.hostAction({
+            action: prepared.action,
+            text: prepared.text || "",
+            coordinateSpace: prepared.coordinateSpace,
+            clientPoint: prepared.clientPoint,
+            clientBounds: prepared.clientBounds,
+            devicePixelRatio: prepared.devicePixelRatio,
+            coordinateConfidence: prepared.confidence,
+            expectedWindowTitle: prepared.window?.title || tab.title || "",
+            browserFailure: browserError?.diagnostics || null,
+            nodeId: step?.id || "",
+            workflowRunId: runId || "",
+          });
+          hostActionError = null;
+        } catch (retryError) {
+          hostActionError = retryError;
+        }
+      }
+    }
+    if (!hostResult && !shouldAllowVisualMatchFallback(step)) {
+      throw hostActionError || error;
     }
   }
   throwIfRunCancelled(runId);
@@ -3526,20 +3943,37 @@ async function capturePreparedComponentImage(tab, prepared) {
     format: "png",
   });
   const imageBitmap = await dataUrlToImageBitmap(screenshot);
-  const scale = positiveNumber(
-    prepared?.devicePixelRatio ?? bounds.devicePixelRatio,
-    1,
+  const viewportWidth = positiveNumber(
+    bounds.viewportWidth,
+    imageBitmap.width,
   );
-  const padding = Math.max(4, Math.ceil(4 * scale));
-  const sourceLeft = Math.max(0, Math.floor(Number(bounds.left) * scale) - padding);
-  const sourceTop = Math.max(0, Math.floor(Number(bounds.top) * scale) - padding);
+  const viewportHeight = positiveNumber(
+    bounds.viewportHeight,
+    imageBitmap.height,
+  );
+  const scaleX = imageBitmap.width / viewportWidth;
+  const scaleY = imageBitmap.height / viewportHeight;
+  const paddingX = Math.max(4, Math.ceil(4 * scaleX));
+  const paddingY = Math.max(4, Math.ceil(4 * scaleY));
+  const sourceLeft = Math.max(
+    0,
+    Math.floor(Number(bounds.left) * scaleX) - paddingX,
+  );
+  const sourceTop = Math.max(
+    0,
+    Math.floor(Number(bounds.top) * scaleY) - paddingY,
+  );
   const sourceRight = Math.min(
     imageBitmap.width,
-    Math.ceil(Number(bounds.right ?? bounds.left + bounds.width) * scale) + padding,
+    Math.ceil(
+      Number(bounds.right ?? bounds.left + bounds.width) * scaleX,
+    ) + paddingX,
   );
   const sourceBottom = Math.min(
     imageBitmap.height,
-    Math.ceil(Number(bounds.bottom ?? bounds.top + bounds.height) * scale) + padding,
+    Math.ceil(
+      Number(bounds.bottom ?? bounds.top + bounds.height) * scaleY,
+    ) + paddingY,
   );
   const sourceWidth = Math.max(1, sourceRight - sourceLeft);
   const sourceHeight = Math.max(1, sourceBottom - sourceTop);
@@ -3599,6 +4033,11 @@ function normalizeVisualMatchConfidence(value, fallback) {
 function positiveNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function shouldRetryVisibleHostGeometry(error) {
+  return /(?:coordinate mapping|renderer viewport|client point|viewport dimensions|window changed)/i
+    .test(String(error?.message || error || ""));
 }
 
 async function sendContentRequest(tab, payload) {

@@ -3,8 +3,8 @@
 This checklist is the consolidated status for the Windows companion app. It is
 an implementation checklist, not a shipping claim. The July 2026 audit reopened
 items that existed in source but were not verified or did not match the product
-contract. Automated source closure is recorded below; manual and packaged
-acceptance remain separate gates.
+contract. Automated source closure and source-checkout acceptance are recorded
+below; packaged acceptance remains a separate deferred gate.
 
 ## Confirmed Product Boundary
 
@@ -90,12 +90,20 @@ correctness and acceptance work below.
   recreated repository at each returned active path.
 - [x] Cover unavailable-folder rendering, final-alias persistence, simulated
   close-to-tray/tray-exit behavior, and a Chrome side-panel renderer inset.
+- [x] Stabilize off-screen target geometry across browser paints before visible
+  fallback, retry only verified renderer-geometry refusals with a fresh
+  preparation, derive visual crops from actual captured-image scale, and cover
+  fractional renderer rounding at high Chrome zoom.
+- [x] Flush successful fallback log records before replying, remove the obsolete
+  tracked root log snapshot, show the active `Logs\brunner_host.log` path in
+  Diagnostics, and refresh that panel automatically.
 
 ## Manual Source Acceptance
 
-The automated source work above is complete. Every unchecked item below needs
-the real Companion, unpacked extension, Windows shell behavior, Chrome window
-state, or physical monitor hardware.
+The automated source work above is complete. The operator completed the checks
+below with the real Companion, unpacked extension, Windows shell behavior,
+Chrome window state, and physical monitor configuration. The initially failing
+fallback cases were fixed and rerun before acceptance.
 
 ### Extension/Host Round Trip
 
@@ -105,81 +113,91 @@ state, or physical monitor hardware.
 
 ### Managed Process and Tray
 
-- [ ] Enable **Start host with companion**, save, exit by tray **Exit**, and
+- [x] Enable **Start host with companion**, save, exit by tray **Exit**, and
   relaunch the Companion.
-- [ ] Confirm the UI shows one running host on port `8999` and the paired
+- [x] Confirm the UI shows one running host on port `8999` and the paired
   extension connected.
-- [ ] Verify exactly one owning PID with `Get-NetTCPConnection -LocalPort 8999 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique` and record it.
-- [ ] Click **Start Host** again and confirm no second process/listener appears.
-- [ ] Click **Stop Host** and confirm the extension disconnects; start again and
+- [x] Verify exactly one owning PID with `Get-NetTCPConnection -LocalPort 8999 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique` and record it.
+- [x] Click **Start Host** again and confirm no second process/listener appears.
+- [x] Click **Stop Host** and confirm the extension disconnects; start again and
   confirm one listener plus automatic reconnection.
-- [ ] Close the window with X and confirm it hides to the tray without stopping
+- [x] Close the window with X and confirm it hides to the tray without stopping
   the host.
-- [ ] Use tray **Exit** and confirm the managed listener stops with no orphan.
+- [x] Use tray **Exit** and confirm the managed listener stops with no orphan.
 
 ### Two Real Browser Profiles
 
-- [ ] With the unpacked extension in profiles A and B, pair A by its displayed
+- [x] With the unpacked extension in profiles A and B, pair A by its displayed
   instance ID and confirm A reports `Host: ready (paired and connected)`.
-- [ ] Attempt to pair B while A is active and confirm B reports
+- [x] Attempt to pair B while A is active and confirm B reports
   `Host: paired to another Chrome profile; unpair it first` while A remains
   usable.
-- [ ] Unpair A, pair B, confirm the ownership switches, then restore the
+- [x] Unpair A, pair B, confirm the ownership switches, then restore the
   preferred profile.
 
 ### Visible Workflow Storage
 
-- [ ] With the host running, exercise **Use new folder only**, **Use Default**,
+- [x] With the host running, exercise **Use new folder only**, **Use Default**,
   **Copy existing workflows**, **Move existing workflows**, and **Use Default**
   using disposable folders.
-- [ ] At every transition confirm Companion and extension display the same
+- [x] At every transition confirm Companion and extension display the same
   workflow library, the host reconnects, copied sources remain, moved sources
   are removed, and the final default library is restored.
 
 ### Approved Folders Through the Real Extension
 
-- [ ] In Companion configure disposable alias `allowedfiles` with
+- [x] In Companion configure disposable alias `allowedfiles` with
   Read/Write/Recursive enabled and run **Approved Directory Acceptance**.
-- [ ] Confirm the visible value is
+- [x] Confirm the visible value is
   `generated-write.txt exported-data.json 1` and both output files exist.
-- [ ] Change the UI permissions one at a time and confirm the real workflow
+- [x] Change the UI permissions one at a time and confirm the real workflow
   reports the exact read, write, and recursive refusal instead of succeeding.
-- [ ] Run **Approved Directory Escape Refusal Acceptance** and confirm the
+- [x] Run **Approved Directory Escape Refusal Acceptance** and confirm the
   expected `Output file is outside approved directory.` failure with no parent
   file created.
-- [ ] Point the alias at a nonexistent folder and confirm `(Unavailable)` plus
+- [x] Point the alias at a nonexistent folder and confirm `(Unavailable)` plus
   the unavailable-directory failure.
-- [ ] Remove the final alias, refresh/restart, and confirm the UI stays empty and
+- [x] Remove the final alias, refresh/restart, and confirm the UI stays empty and
   execution reports the missing-alias failure; then restore the normal alias.
 
 ### Foreground Visible Fallback
 
-- [ ] With fallback enabled at `0.90`, run **Visible Host Fallback Acceptance**
-  at 100% and 125% zoom, with Chrome side UI closed and open, on each physical
-  monitor.
-- [ ] Confirm success text is
+- [x] With fallback enabled at `0.90`, run **Visible Host Fallback Acceptance**
+  at 100%, 125%, 175%, and 200% zoom, with Chrome side UI closed and open, on
+  each physical monitor. At 175%/200%, scroll the target out of view before
+  starting and confirm preparation brings it into view and clicks it.
+- [x] Confirm success text is
   `Trusted Submit accepted via visible host fallback.`, diagnostics show
-  `[Fallback] host.action performed`, and the pointer remains inside Chrome.
-- [ ] Set threshold `1.00` to force visual recovery and confirm coordinate
+  `[Fallback] host.action performed`, the displayed active log path ends in
+  `BRunner_Host\Logs\brunner_host.log`, and the pointer remains inside Chrome.
+- [x] Set threshold `1.00` to force visual recovery and confirm coordinate
   refusal followed by `[Fallback] host.visual_match performed` inside the
   foreground Chrome search region.
-- [ ] Disable fallback and confirm the workflow fails without an untrusted page
+- [x] Disable fallback and confirm the workflow fails without an untrusted page
   click, then restore enabled/`0.90`.
 
 Two physical monitors are required to close the documented multi-monitor gate;
 without them record this item as blocked, not passed.
 
+The initial 2026-07-20 run exposed the off-screen high-zoom failure and stale
+Diagnostics display. After the source fixes, the operator reported the affected
+real-Chrome fallback and logging reruns passing.
+
 ### Visible Unwritable-Path Recovery
 
-- [ ] Select a disposable workflow folder, exit, deny the current Windows user
+- [x] Select a disposable workflow folder, exit, deny the current Windows user
   write access, and relaunch Companion.
-- [ ] Confirm **Workflow Storage Unavailable** names the path/reason and lets you
+- [x] Confirm **Workflow Storage Unavailable** names the path/reason and lets you
   select a writable replacement that becomes active.
-- [ ] Run a disposable copied Companion directory whose config path is
+- [x] Run a disposable copied Companion directory whose config path is
   unwritable and confirm a visible **BRunner Startup** error names the config
   problem instead of silently exiting.
-- [ ] Restore default storage, permissions, preferred pairing, approved-folder
+- [x] Restore default storage, permissions, preferred pairing, approved-folder
   permissions, and fallback `0.90`; remove all disposable artifacts.
+
+The complete source-checkout Companion acceptance sequence passed on 2026-07-20
+after the reported fallback defects were fixed and rerun. Packaged release
+acceptance remains intentionally deferred.
 
 ## Deferred Packaging and Release
 

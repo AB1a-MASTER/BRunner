@@ -215,6 +215,7 @@ test("DOM paths retain ancestry deeper than ten levels until the work budget end
   const completeContext = createPathContext(methods, completeBudget);
   const path = completeContext.getMapperDomPath(target);
   assert.ok(path.split("/").length > 10);
+  assert.match(path, /^html:0\/body:0\//);
   assert.equal(completeBudget.overflow, false);
 
   const exhaustedBudget = createBudget(5);

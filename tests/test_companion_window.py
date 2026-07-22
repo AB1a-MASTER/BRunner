@@ -149,11 +149,13 @@ class CompanionWindowTests(unittest.TestCase):
             window = BRunnerCompanionWindow(QAction)
             try:
                 window.connection_timer.stop()
+                window.diagnostics_timer.stop()
                 window.log_file = Path(temp) / "brunner_host.log"
                 window.write_companion_log("Host start requested.")
                 window.refresh_logs()
 
                 self.assertIn("[Companion] Host start requested.", window.logs.toPlainText())
+                self.assertIn(str(window.log_file), window.log_path_state.text())
                 self.assertIn("Host start requested.", window.log_file.read_text(encoding="utf-8"))
 
                 window.clear_logs()

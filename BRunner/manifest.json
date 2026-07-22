@@ -54,6 +54,7 @@
         "https://*/*"
       ],
       "js": [
+        "shared/textMatching.js",
         "content/targetResolver.js",
         "content/filePayload.js",
         "content/mapper.js"

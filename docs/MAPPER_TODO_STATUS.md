@@ -85,33 +85,61 @@ authoring UI.
 - [x] Normalize every host-served workflow and iframe URL to the canonical
   repository-root fixture server and protect the contract with file-existence
   and inline-script parse tests.
+- [x] Add a read-only **Verify & Export** acceptance probe that exports the live
+  PageMap, independently enumerates the current DOM, compares every visible
+  top-document candidate plus stable accessible-frame candidates, and reports
+  missing, duplicate, tag-mismatched, outside-body, truncated, and overflow
+  evidence in one JSON artifact.
+- [x] Persist explicit `html/body` ancestry for ordinary and composed Shadow DOM
+  paths, and increase per-component fact work for realistic loaded windows while
+  retaining the existing deterministic global cap.
+- [x] Make the engineering Inspector distinguish the top document from embedded
+  frame documents: the top document is always first, frame documents are grouped
+  and labelled by access/path, and iframe-local coordinates never order page
+  document roots.
 
 ## Manual Mapper Acceptance
 
-- [ ] Run the complete live engine checklist in
+The 2026-07-20 live run initially exposed loaded-window deferral, incomplete
+`html/body` ancestry, off-screen fallback failure, and a verifier false positive
+for `pre#event-log` after it exceeded the mapper's bounded passive-text policy.
+The source fixes and deterministic regressions were completed. The operator then
+reported the affected live reruns and corrected **Verify & Export** report
+passing. The exported frame controls retained their own
+`html:0/body:1/...` ancestry and the report contained zero outside-body records.
+
+The later screenshot review found a presentation-only ambiguity: the Inspector
+listed a synthetic iframe document root before the top document because it
+compared coordinates local to different documents. The diagnostic tree now
+shows **Top document** first and groups clearly labelled embedded frame
+documents beneath **Embedded frame documents**. This does not change mapper
+facts, frame isolation, or runtime resolution. Platform/chat highlighting and
+full Tree/Graph product polish remain deferred V2 work.
+
+- [x] Run the complete live engine checklist in
   `MAPPER_MANUAL_ACCEPTANCE.md` after reloading the unpacked extension.
-- [ ] Confirm actionable and semantic fixture elements are discoverable with
+- [x] Confirm actionable and semantic fixture elements are discoverable with
   their actual contextual hierarchy, not a flattened component list.
-- [ ] Confirm stable Component IDs across controlled attribute, text, position,
+- [x] Confirm stable Component IDs across controlled attribute, text, position,
   and container drift when independent evidence remains sufficient.
-- [ ] Confirm duplicates and close-score candidates return ambiguity and never
+- [x] Confirm duplicates and close-score candidates return ambiguity and never
   silently select the first document-order match.
-- [ ] Confirm revalidation and explicit refresh update the selected page only,
+- [x] Confirm revalidation and explicit refresh update the selected page only,
   preserve bounded history, and retain unrelated site/page maps.
-- [ ] Confirm bounded dynamic regions update without erasing stable static
+- [x] Confirm bounded dynamic regions update without erasing stable static
   components, while over-limit or mutation-heavy pages decline honestly without
   freezing the tab or accepting a truncated map.
-- [ ] Confirm open-shadow, same-origin-frame, and accessible cross-origin-frame
+- [x] Confirm open-shadow, same-origin-frame, and accessible cross-origin-frame
   components scan and resolve after an extension reload.
-- [ ] Confirm repeated chat/social fixture records remain container-scoped and
+- [x] Confirm repeated chat/social fixture records remain container-scoped and
   cannot resolve into another thread or card.
-- [ ] Confirm a saved component cannot resolve or highlight on another SPA route
+- [x] Confirm a saved component cannot resolve or highlight on another SPA route
   and returns `map_stale` / `page_profile_mismatch` instead.
-- [ ] Confirm persisted representative maps and Component IDs survive a real
+- [x] Confirm persisted representative maps and Component IDs survive a real
   unpacked-extension reload.
 
-After the operator reports the live result, record it here before declaring the
-mapper engine ready for final-node integration.
+Mapper engine acceptance is complete for final-node integration. Future
+regressions may reopen this gate, but deferred Inspector polish does not.
 
 ## Data Ownership Decision
 

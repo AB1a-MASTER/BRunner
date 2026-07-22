@@ -376,22 +376,23 @@ async def handle_host_action(websocket, request_id, payload, protocol_version=No
     result = execute_host_action(current_config(), payload)
     if protocol_version == 2:
         result["requestId"] = request_id
-    await send_json(websocket, success(request_id, **result))
-    logging.info(
+    log_and_flush(
+        logging.INFO,
         "[Fallback] host.action performed: %s x=%s y=%s confidence=%s",
         result["action"],
         result.get("x"),
         result.get("y"),
         result.get("coordinateConfidence"),
     )
+    await send_json(websocket, success(request_id, **result))
 
 
 async def handle_host_visual_match(websocket, request_id, payload, protocol_version=None):
     result = execute_visual_match_action(current_config(), payload)
     if protocol_version == 2:
         result["requestId"] = request_id
-    await send_json(websocket, success(request_id, **result))
-    logging.info(
+    log_and_flush(
+        logging.INFO,
         "[Fallback] host.visual_match performed: %s x=%s y=%s confidence=%s search_ms=%s region=%s",
         result["action"],
         result.get("x"),
@@ -400,6 +401,16 @@ async def handle_host_visual_match(websocket, request_id, payload, protocol_vers
         result.get("searchDurationMs"),
         result.get("searchRegion"),
     )
+    await send_json(websocket, success(request_id, **result))
+
+
+def log_and_flush(level, message, *args):
+    logging.log(level, message, *args)
+    for handler in logging.getLogger().handlers:
+        try:
+            handler.flush()
+        except (AttributeError, OSError, ValueError):
+            continue
 
 
 async def handle_read_file(websocket, request_id, payload):

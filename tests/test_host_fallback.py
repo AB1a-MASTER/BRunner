@@ -488,6 +488,29 @@ class HostFallbackTests(unittest.TestCase):
                 ),
             )
 
+    def test_css_mapping_accepts_fractional_high_zoom_renderer_rounding(self):
+        request = {
+            **NEGATIVE_DPI_REQUEST,
+            "clientPoint": {"x": 80, "y": 40},
+            "clientBounds": {
+                **NEGATIVE_DPI_REQUEST["clientBounds"],
+                "viewportWidth": 451,
+                "viewportHeight": 285,
+                "devicePixelRatio": 2.625,
+            },
+            "devicePixelRatio": 2.625,
+        }
+        adapter = FakeAdapter(
+            screens=[NEGATIVE_DPI_SCREEN],
+            windows=[NEGATIVE_DPI_WINDOW],
+        )
+
+        result = execute_host_action(self.config, request, adapter)
+
+        self.assertEqual(result["coordinateMapping"]["method"], "verified_renderer_viewport")
+        self.assertEqual(result["coordinateMapping"]["devicePixelRatio"], 2.625)
+        self.assertEqual(len(adapter.calls), 1)
+
     def test_css_mapping_fails_closed_when_client_geometry_or_dpi_goes_stale(self):
         changed_client = {
             **NEGATIVE_DPI_WINDOW,

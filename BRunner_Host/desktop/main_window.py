@@ -199,6 +199,9 @@ class BRunnerCompanionWindow:
                 self.connection_timer = QTimer(self)
                 self.connection_timer.timeout.connect(self.refresh_connection_status)
                 self.connection_timer.start(1000)
+                self.diagnostics_timer = QTimer(self)
+                self.diagnostics_timer.timeout.connect(self.refresh_logs)
+                self.diagnostics_timer.start(1000)
 
             def _build_status_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox):
                 tab = QWidget()
@@ -355,6 +358,9 @@ class BRunnerCompanionWindow:
                 tab = QWidget()
                 layout = QVBoxLayout(tab)
                 layout.addWidget(QLabel("Recent host log"))
+                self.log_path_state = QLabel()
+                self.log_path_state.setWordWrap(True)
+                layout.addWidget(self.log_path_state)
                 self.logs = QTextEdit()
                 self.logs.setReadOnly(True)
                 layout.addWidget(self.logs)
@@ -590,6 +596,7 @@ class BRunnerCompanionWindow:
                 return descriptions.get(str(action), "Visible fallback action.")
 
             def refresh_logs(self):
+                self.log_path_state.setText(f"Active log file: {self.log_file}")
                 if self.log_file.exists():
                     content = self.log_file.read_text(encoding="utf-8", errors="replace")[-20000:]
                 else:

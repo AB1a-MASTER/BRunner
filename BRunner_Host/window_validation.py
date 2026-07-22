@@ -448,7 +448,11 @@ def css_viewport_point_to_physical(request, context):
             continue
         width_error = abs(float(viewport["width"]) - inner_width * dpr)
         height_error = abs(float(viewport["height"]) - inner_height * dpr)
-        if width_error < 1.0 and height_error < 1.0:
+        rounding_tolerance = max(2.0, dpr + 0.5)
+        if (
+            width_error <= rounding_tolerance
+            and height_error <= rounding_tolerance
+        ):
             matching_viewports.append(viewport)
 
     if not matching_viewports:

@@ -1,33 +1,112 @@
 {
-  "name": "[NEW 2026-07-02] Visible Host Fallback Acceptance",
-  "description": "Fresh host-served acceptance workflow. Forces a trusted native click fallback and verifies the page status.",
-  "tags": ["new-2026-07-02", "host-served-8765", "acceptance"],
-  "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
-  "variables": {},
-  "settings": {
-    "reuseExistingTabs": false
-  },
-  "steps": [
-    {
-      "id": "fallback_acceptance_open",
-      "action": "browser.navigate",
-      "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
-      "friendlyName": "Open host-served acceptance page"
+    "schemaVersion": 2,
+    "id": "workflow-v2",
+    "name": "visible_host_fallback_acceptance",
+    "description": "Fresh host-served acceptance workflow. Forces a trusted native click fallback and verifies the page status.",
+    "boundDomain": "http://127.0.0.1:8765/BRunner_Host/test.html",
+    "settings": {
+        "reuseExistingTabs": false
     },
-    {
-      "id": "fallback_acceptance_trusted_click",
-      "action": "element.click",
-      "target": {
-        "strategy": "id",
-        "value": "trusted-submit"
-      },
-      "config": {
-        "allowVisibleHostFallback": true,
-        "allowVisualMatchFallback": true,
-        "verificationSelector": "#status",
-        "verificationText": "Trusted Submit accepted via visible host fallback."
-      },
-      "friendlyName": "Trusted Submit visible host fallback"
-    }
-  ]
+    "variables": {},
+    "datasets": {},
+    "dataSources": [],
+    "entryNodeId": "fallback_acceptance_open",
+    "nodes": [
+        {
+            "id": "fallback_acceptance_open",
+            "type": "browser.navigate",
+            "version": 1,
+            "position": {
+                "x": 120,
+                "y": 70
+            },
+            "config": {},
+            "data": {
+                "url": "http://127.0.0.1:8765/BRunner_Host/test.html",
+                "friendlyName": "Open host-served acceptance page",
+                "target": "",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "host.hello",
+                    "workflow.list",
+                    "workflow.load",
+                    "workflow.save",
+                    "workflow.delete",
+                    "workflow.duplicate",
+                    "workflow.rename",
+                    "workflow.upgrade",
+                    "host.window",
+                    "host.action",
+                    "host.visual_match",
+                    "os.keystroke",
+                    "local_file.read",
+                    "approved_directory.list",
+                    "approved_file.find",
+                    "approved_file.write",
+                    "data_file.export",
+                    "data_source.read",
+                    "execution_log.save"
+                ]
+            }
+        },
+        {
+            "id": "fallback_acceptance_trusted_click",
+            "type": "element.click",
+            "version": 1,
+            "position": {
+                "x": 120,
+                "y": 370
+            },
+            "config": {
+                "allowVisibleHostFallback": true,
+                "allowVisualMatchFallback": true,
+                "verificationSelector": "#status",
+                "verificationText": "Trusted Submit accepted via visible host fallback."
+            },
+            "data": {
+                "target": {
+                    "strategy": "id",
+                    "value": "trusted-submit"
+                },
+                "friendlyName": "Trusted Submit visible host fallback",
+                "executionMode": "enabled",
+                "skipWhen": "",
+                "collapsed": false,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "host.hello",
+                    "workflow.list",
+                    "workflow.load",
+                    "workflow.save",
+                    "workflow.delete",
+                    "workflow.duplicate",
+                    "workflow.rename",
+                    "workflow.upgrade",
+                    "host.window",
+                    "host.action",
+                    "host.visual_match",
+                    "os.keystroke",
+                    "local_file.read",
+                    "approved_directory.list",
+                    "approved_file.find",
+                    "approved_file.write",
+                    "data_file.export",
+                    "data_source.read",
+                    "execution_log.save"
+                ]
+            }
+        }
+    ],
+    "edges": [
+        {
+            "id": "edge-fallback_acceptance_open-fallback_acceptance_trusted_click",
+            "source": "fallback_acceptance_open",
+            "sourceHandle": "success",
+            "target": "fallback_acceptance_trusted_click",
+            "targetHandle": "input"
+        }
+    ]
 }

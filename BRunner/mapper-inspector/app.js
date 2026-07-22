@@ -1,8 +1,16 @@
+import {
+  compareInspectorDocumentNodes,
+  inspectorStructureContextLabel,
+  inspectorStructureRoleForPart,
+  mapperDocumentContextSegments,
+} from "./structureModel.js";
+
 const Messages = Object.freeze({
   ListWorkflowMapperStates: "LIST_WORKFLOW_MAPPER_STATES",
   SaveWorkflowMapperState: "SAVE_WORKFLOW_MAPPER_STATE",
   MapCurrentPage: "MAP_CURRENT_PAGE",
   InspectCurrentPageMap: "INSPECT_CURRENT_PAGE_MAP",
+  VerifyMapperAcceptance: "VERIFY_MAPPER_ACCEPTANCE",
   HighlightMapperComponent: "HIGHLIGHT_MAPPER_COMPONENT",
 });
 
@@ -36,6 +44,7 @@ const state = {
   highlightRequestId: 0,
   activeResolutionKey: "",
   resolutionAction: "",
+  lastAcceptanceExport: null,
   graphView: {
     orientation: "vertical",
     scale: 0.86,
@@ -51,6 +60,7 @@ const els = {
   workflowId: document.getElementById("map-workflow-id"),
   mapActive: document.getElementById("btn-map-active"),
   refresh: document.getElementById("btn-refresh"),
+  verifyExport: document.getElementById("btn-verify-export"),
   highlightEnabled: document.getElementById("highlight-enabled"),
   highlightHoverEnabled: document.getElementById("highlight-hover-enabled"),
   sitePanel: document.querySelector(".site-panel"),
@@ -86,6 +96,7 @@ function init() {
   decorateStaticControls();
   els.refresh.addEventListener("click", refreshSelectedPageMap);
   els.mapActive.addEventListener("click", mapActivePage);
+  els.verifyExport.addEventListener("click", verifyAndExportActivePage);
   els.checkLiveMap.addEventListener("click", () => checkSelectedPageLiveStatus({ manual: true }));
   els.siteSearch.addEventListener("input", renderSites);
   els.componentSearch.addEventListener("input", () => {
@@ -124,6 +135,7 @@ function init() {
 function decorateStaticControls() {
   decorateActionButton(els.mapActive, "map", "Map active page", "Map");
   decorateActionButton(els.refresh, "refresh", "Refresh selected page map", "Refresh");
+  decorateActionButton(els.verifyExport, "pulse", "Verify active page mapper export against its live DOM", "Verify & Export");
   decorateActionButton(els.checkLiveMap, "pulse", "Check live page state", "");
   decorateActionButton(els.clearComponentFilter, "x", "Clear component filters", "");
   els.tabs.forEach((tab) => {
@@ -272,6 +284,58 @@ async function checkSelectedPageLiveStatus(options = {}) {
       setStatus(`Live map check failed: ${error.message || error}`, true);
     }
   }
+}
+
+async function verifyAndExportActivePage() {
+  const entry = selectedEntry();
+  setStatus("Scanning the active page, comparing its mapper export to the live DOM...");
+  els.verifyExport.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: Messages.VerifyMapperAcceptance,
+      workflowId: entry?.workflowId || els.workflowId.value.trim(),
+      settings: entry?.settings || {},
+      pageMap: entry?.pageMap || null,
+    });
+    if (response?.ok === false) {
+      throw new Error(response.error || "Mapper acceptance verification failed.");
+    }
+    state.lastAcceptanceExport = response.export || null;
+    downloadMapperAcceptanceExport(state.lastAcceptanceExport);
+    const summary = response.verification?.summary || {};
+    if (response.verification?.ok !== true) {
+      throw new Error(
+        `DOM comparison failed: ${summary.missingCount || 0} missing, ` +
+        `${summary.duplicateMatchCount || 0} duplicate, ` +
+        `${summary.outsideDocumentBodyCount || 0} outside body.`,
+      );
+    }
+    setStatus(
+      `Mapper verification passed: ${summary.matchedDomElementCount || 0} ` +
+      `stable DOM element(s) matched; JSON report exported.`,
+    );
+  } catch (error) {
+    setStatus(`Mapper verification failed: ${error.message || error}`, true);
+  } finally {
+    els.verifyExport.disabled = false;
+  }
+}
+
+function downloadMapperAcceptanceExport(exported) {
+  if (!exported) return;
+  const blob = new Blob([JSON.stringify(exported, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  anchor.href = url;
+  anchor.download = `brunner-mapper-verification-${stamp}.json`;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function liveStatusFromResponse(response = {}) {
@@ -1295,12 +1359,8 @@ function buildInspectorStructureRoot(components = []) {
   const root = createStructureNode("document", "document", 1);
   uniqueInspectorComponents(sortComponentsByVisualOrder(components))
     .forEach((component) => insertComponentIntoStructure(root, component));
+  root.children.sort(compareStructureNodesByVisualOrder);
   return root;
-}
-
-function frameStructurePart(frameScope = {}) {
-  if (!frameScope.path || frameScope.path === "top") return "";
-  return `frame:${frameScope.access || "same_origin"}:${frameScope.path}`;
 }
 
 function renderGraph(entry, filteredComponents = filterComponents(entry)) {
@@ -1518,6 +1578,7 @@ function componentToGraphTree(component = {}) {
 }
 
 function graphKindForStructureNode(node = {}) {
+  if (node.structureRole) return "page";
   const title = normalizeIdentifier(node.title || "");
   if (["body", "main", "header", "footer", "nav", "section", "article", "aside"].includes(title)) {
     return "region";
@@ -1766,11 +1827,12 @@ function componentTreeRowHtml(component, level = 0) {
   });
 }
 
-function createStructureNode(key, title, depth = 0) {
+function createStructureNode(key, title, depth = 0, structureRole = "") {
   return {
     key,
     title,
     depth,
+    structureRole,
     children: [],
     childByKey: new Map(),
     components: [],
@@ -1788,12 +1850,23 @@ function insertComponentIntoStructure(root, component = {}) {
   parts.forEach((part, index) => {
     const key = parts.slice(0, index + 1).join("/");
     if (!current.childByKey.has(key)) {
-      const node = createStructureNode(key, structurePartLabel(part), index + 1);
+      const structureRole = domSegments[index]?.structureRole ||
+        inspectorStructureRoleForPart(part);
+      const node = createStructureNode(
+        key,
+        structurePartLabel(part),
+        index + 1,
+        structureRole,
+      );
       current.childByKey.set(key, node);
       current.children.push(node);
     }
     current = current.childByKey.get(key);
-    if (domSegments[index] && !domSegments[index].frameOnly && !current.containerTarget) {
+    if (
+      domSegments[index] &&
+      !domSegments[index].documentContext &&
+      !current.containerTarget
+    ) {
       current.containerTarget = createContainerTarget(
         domSegments[index].path,
         component,
@@ -1808,13 +1881,8 @@ function frameAwareDomPathSegments(component = {}, domPath = "") {
   const frameScope = component.fingerprint?.structural?.frameScope || {};
   const domSegments = mapperDomPathSegments(domPath);
   if (!domSegments.length) return [];
-  if (!frameScope.path || frameScope.path === "top") return domSegments;
   return [
-    {
-      part: `frame:${frameScope.access || "same_origin"}:${frameScope.path}`,
-      path: "",
-      frameOnly: true,
-    },
+    ...mapperDocumentContextSegments(frameScope),
     ...domSegments,
   ];
 }
@@ -1848,16 +1916,20 @@ function componentStructurePath(component = {}) {
   const parts = frameAwareDomPathSegments(component, domPath).map((segment) => segment.part);
   if (parts.length) return parts;
 
+  const contextParts = mapperDocumentContextSegments(
+    component.fingerprint?.structural?.frameScope || {},
+  ).map((segment) => segment.part);
   const scopePath = componentPlatformScopePath(component);
-  if (scopePath.length) return scopePath;
+  if (scopePath.length) return [...contextParts, ...scopePath];
   const repeatPath = componentRepeatScopePath(component);
-  if (repeatPath.length) return repeatPath;
+  if (repeatPath.length) return [...contextParts, ...repeatPath];
 
   const structural = component.fingerprint?.structural || {};
   const ancestors = Array.isArray(structural.ancestorTokens)
     ? structural.ancestorTokens
     : [];
   return [
+    ...contextParts,
     ...ancestors.slice().reverse().map((item) => `section:${normalizeIdentifier(item) || "ancestor"}`),
     `${component.fingerprint?.technical?.tag || "element"}:${structural.relativeIndex ?? 0}`,
   ];
@@ -1911,21 +1983,13 @@ function componentPlatformScopePath(component = {}) {
 }
 
 function structurePartLabel(part = "") {
-  if (String(part).startsWith("frame:")) return frameStructureLabel(part);
+  const contextLabel = inspectorStructureContextLabel(part);
+  if (contextLabel) return contextLabel;
   const [tag, index] = String(part).split(":");
   const cleanTag = normalizeIdentifier(tag || "element") || "element";
   return index === undefined || index === ""
     ? cleanTag
     : `${cleanTag}[${index}]`;
-}
-
-function frameStructureLabel(part = "") {
-  const [, access = "same_origin", path = "frame"] = String(part).split(":");
-  const leaf = String(path || "")
-    .split("/")
-    .filter(Boolean)
-    .at(-1) || "frame";
-  return `${access === "cross_origin" ? "isolated frame" : "frame"} ${leaf}`;
 }
 
 function structureNodeHtml(node, level = 0, parentKey = "") {
@@ -1952,6 +2016,8 @@ function structureNodeHtml(node, level = 0, parentKey = "") {
 }
 
 function compareStructureNodesByVisualOrder(a = {}, b = {}) {
+  const documentOrder = compareInspectorDocumentNodes(a, b);
+  if (documentOrder !== null) return documentOrder;
   const aComponent = firstStructureComponent(a);
   const bComponent = firstStructureComponent(b);
   if (aComponent && bComponent) return compareComponentsByVisualOrder(aComponent, bComponent);
@@ -2671,6 +2737,7 @@ function componentTreeIconType(component = {}) {
 
 function structureIconType(title = "") {
   const value = normalizeIdentifier(String(title).replace(/\[\d+\]$/, ""));
+  if (value.includes("document")) return "page";
   if (["form", "section", "main", "nav", "header", "footer", "article", "aside"].includes(value)) return "region";
   if (["button"].includes(value)) return "button";
   if (["input", "textarea", "select"].includes(value)) return "input";

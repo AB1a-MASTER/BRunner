@@ -290,10 +290,11 @@ test("mapper inspector extension surface is wired", async () => {
   assert.match(inspectorJs, /componentStructurePath/);
   assert.match(inspectorJs, /mapperDomPathSegments/);
   assert.match(inspectorJs, /frameAwareDomPathSegments/);
-  assert.match(inspectorJs, /frameStructurePart/);
-  assert.match(inspectorJs, /frameStructureLabel/);
-  assert.match(inspectorJs, /frameOnly/);
-  assert.match(inspectorJs, /frameScope\.path === "top"/);
+  assert.match(inspectorJs, /mapperDocumentContextSegments/);
+  assert.match(inspectorJs, /compareInspectorDocumentNodes/);
+  assert.match(inspectorJs, /inspectorStructureContextLabel/);
+  assert.match(inspectorJs, /documentContext/);
+  assert.match(inspectorJs, /root\.children\.sort\(compareStructureNodesByVisualOrder\)/);
   assert.match(inspectorJs, /::shadow::/);
   assert.match(inspectorJs, /mapper\.container_target\.v2/);
   assert.match(inspectorJs, /createContainerTarget/);

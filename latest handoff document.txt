@@ -1,5 +1,5 @@
 BRunner - Current Development Handoff
-Updated: 2026-07-17
+Updated: 2026-07-20
 
 PURPOSE
 
@@ -37,24 +37,23 @@ TRUST AND DATA BOUNDARY
 
 CURRENT PRIORITY
 
-Shared, companion, and mapper source closure is implemented. The extension/host
-round trip passed with `extension-host-roundtrip.txt |
-extension-host-roundtrip.txt | 1`. The active gate now contains only hands-on
-Companion/extension acceptance before the finalized node phase.
+Shared foundation, Companion source-checkout acceptance, and mapper-engine
+acceptance passed on 2026-07-20 after the reported foreground-fallback,
+loaded-window, body-ancestry, and verification issues were fixed and rerun. The
+extension/host round trip passed with `extension-host-roundtrip.txt |
+extension-host-roundtrip.txt | 1`.
 
-The latest automated source gate passes 279 JavaScript tests and 175 Python
-tests. These results do not replace the hands-on acceptance below.
+The latest automated source gate passes 285 JavaScript tests and 176 Python
+tests. The active milestone is now the finalized node program.
 
 Focus on:
 
-1. running the remaining Companion UI checks for lifecycle/tray behavior,
-   two-profile pairing, visible storage/approved-folder state, visible fallback,
-   and unwritable-path recovery;
-2. reloading the unpacked extension and completing every live mapper fixture
-   check in `docs/MAPPER_MANUAL_ACCEPTANCE.md`;
-3. recording any failure against the shared foundation, companion, or mapper
-   engine without retrofitting provisional nodes;
-4. starting the finalized node program only after those gates pass.
+1. using `docs/NODE_IMPLEMENTATION_STATUS.md` as the completed 94-node
+   disposition inventory and living node-phase status;
+2. implementing the four Phase 1 shared node adapters before individual nodes;
+3. then implementing Navigate, Tab Control, Scroll, Resolve Element, Check
+   Element State, and Wait for Condition in that order, with their required
+   deterministic and focused live tests.
 
 The existing Mapper Inspector is an engineering diagnostic surface for this
 work. Do not spend the current milestone polishing it into a final saved-map
@@ -63,18 +62,18 @@ and visual design are deferred to V2.
 
 CURRENT TODO SEQUENCE
 
-1. Run the manual companion source checklist.
-2. Run the complete live mapper fixture checklist after reloading the extension.
-3. Fix and retest any shared-foundation, companion, or mapper failure.
-4. Treat nonessential Inspector/saved-map visual work as deferred V2 work.
-5. After the shared, companion, and mapper foundation gates pass, begin the
-   final node program from `workflow_nodes_implementation_blueprint.md`.
-6. At node-phase start, process every blueprint node and record whether its work
-   is upgrade, rewrite/change, or add; remove provisional nodes absent from the
-   blueprint.
-7. Implement nodes in blueprint order and complete integrated V1 source
+1. COMPLETE: `docs/NODE_IMPLEMENTATION_STATUS.md` and
+   `BRunner/nodes/catalog.js` inventory all 94 finalized nodes and account for
+   every provisional action type.
+2. ACTIVE: implement Phase 1 shared target, text-matching, output/logging, and
+   retry/host-fallback adapters.
+3. Implement the six Phase 1 nodes in blueprint order and close the Phase 1
+   navigate/tab/resolve/check/wait workflow gate.
+4. Continue node Phases 2-7, removing provisional types absent from the catalog.
+5. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
-8. Ask the user before any V2 viewer, product-boundary change, packaging,
+6. Keep nonessential Inspector/saved-map visual work deferred to V2.
+7. Ask the user before any V2 viewer, product-boundary change, packaging,
    installer, or release milestone.
 
 NODE CATALOG RULE
@@ -106,8 +105,8 @@ RELEASE POLICY
 
 WORKING FOUNDATION
 
-The following foundation exists and should be preserved while working on the
-active mapper milestone:
+The following accepted foundation should be preserved while working on the
+active node milestone:
 
 - sequential recording/execution, runtime state, cancellation, navigation, and
   per-run variables;
@@ -121,8 +120,9 @@ active mapper milestone:
   diagnostics, complete operator fixtures, route-safe Inspector resolution, and
   bounded transactional Chrome-storage persistence.
 
-This list records existing source, not final product acceptance. Do not infer
-that the mapper, viewer, node catalog, security posture, or release is complete.
+This list records accepted foundation source, not final node or product-release
+acceptance. Do not infer that the viewer, finalized node catalog implementation,
+security posture, or release is complete.
 
 HISTORICAL CONTEXT - NOT CURRENT TODO
 
@@ -176,7 +176,8 @@ DEVELOPMENT RULES
 - Keep mapper decisions deterministic and fail closed on ambiguity.
 - Make no credential, redaction, privacy, or security-auth guarantee.
 - Treat pairing as a cooperative profile lock.
-- Leave provisional nodes untouched until the node phase.
+- Treat provisional nodes only as implementation reference; the finalized
+  blueprint now controls upgrades, rewrites, additions, and removals.
 - Defer polished saved-map viewing to V2.
 - Perform no release work now.
 - Update this handoff and the master roadmap together whenever priority, scope,

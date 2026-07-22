@@ -37,9 +37,16 @@ changed route/page. Use **Check live resolution** for a selected component,
 **Check live** for read-only map comparison, and **Refresh Map** only when a
 step explicitly asks for persistence.
 
+Use **Verify & Export** for fixture-level mapper checks. It performs a fresh
+read-only mapper scan, independently enumerates the live HTML/DOM, compares all
+visible top-document mapper candidates plus stable accessible-frame candidates,
+checks that every mapped path remains under the document body, and downloads a
+JSON report. A failure report includes missing, duplicate, tag-mismatched, and
+outside-body records together with the exported PageMap and DOM manifest.
+
 For every failure retain the workflow ID, URL, Component ID/`ComponentRef`, map
 version, frame/shadow/repeat scope, resolver state/reason, score, runner-up,
-margin, and selected candidate.
+margin, selected candidate, and the exported verification JSON.
 
 ## 1. Node-Neutral Static Map
 
@@ -123,9 +130,14 @@ Activate `mapper_stress_test.html`, restore policy **Max components** `500` and
 **Mutation limit** `50`, click **Save policy**, reset the mutation/repeat/large
 fixtures, and map the page.
 
+- [ ] Click **Verify & Export** and confirm the initial report passes with zero
+  missing records and zero outside-body records.
 - [ ] Record a stable static Save control and one keyed feed action.
-- [ ] Append and remove keyed records; confirm both saved references revalidate
-  without the static control taking a dynamic identity.
+- [ ] Append keyed records once, click **Verify & Export**, and confirm every
+  currently loaded `feed-action-*` record is mapped, classification remains
+  `hybrid_dynamic`, and no scan/fact-work overflow is reported.
+- [ ] Remove keyed records; confirm both saved references revalidate without the
+  static control taking a dynamic identity.
 - [ ] Refresh after the page settles and confirm the static layer remains.
 - [ ] Set **Mutation limit** to `10`, save policy, enter finite count `11`, and
   click **Run Finite Mutation Count**.
@@ -139,7 +151,7 @@ fixtures, and map the page.
   search a silently truncated corpus, the tab remains responsive, and the last
   good map is retained.
 - [ ] Clear the large controls, restore policy `500`/`50`, wait for settlement,
-  and refresh successfully.
+  refresh successfully, and obtain a passing **Verify & Export** report.
 
 Pass: static and dynamic lanes remain separate, overflow is explicit and
 bounded, and a settled explicit refresh recovers.
@@ -186,7 +198,12 @@ an unmarked closed root is not claimed.
 
 On the mapped `mapper_test.html` page:
 
-- [ ] Confirm the same-origin frame is a separate hierarchy root.
+- [ ] Confirm **Top document** is the first structure root and contains its own
+  `html > body` hierarchy.
+- [ ] Confirm **Embedded frame documents** contains a clearly labelled
+  **Same-origin frame document** whose controls remain under that document's own
+  `html > body`; frame-local coordinates must not place it before the top
+  document.
 - [ ] Resolve `frame-name` and `frame-save`, reload the page, and resolve them
   again through the saved frame path.
 - [ ] Confirm the localhost cross-origin frame is mapped under an isolated,
@@ -252,15 +269,17 @@ Pass: the bounded Chrome-storage map state survives a real extension restart.
 
 ## Completion Gate
 
-- [ ] Every section above passed in live Chrome/Chromium.
-- [ ] Every failure was fixed and its affected section rerun.
-- [x] The final automated suites pass: 279 JavaScript tests and 175 Python
-  tests on 2026-07-17.
+- [x] Every section above passed in live Chrome/Chromium.
+- [x] Every failure was fixed and its affected section rerun.
+- [x] The current automated suites pass: 285 JavaScript tests and 176 Python
+  tests on 2026-07-20.
 
-After the operator reports the live result, record it in
-`MAPPER_TODO_STATUS.md` and `FOUNDATION_TODO_STATUS.md`.
+The operator completed the live sequence and reported the corrected final
+**Verify & Export** run passing on 2026-07-20. The section checkboxes above remain
+as the reusable rerun procedure; this completion record is the current gate
+status.
 
-Only then is the mapper engine accepted for the finalized node phase. Polished
+The mapper engine is accepted for the finalized node phase. Polished
 saved-map browsing, Tree/Graph presentation, responsive/accessibility polish,
 current-node retrofits, and real-product chat/social support claims remain V2
 or node-phase work.

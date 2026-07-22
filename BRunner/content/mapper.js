@@ -52,7 +52,7 @@
   const DEFAULT_MAPPER_MAX_DOM_ROOTS = 256;
   const MAX_MAPPER_PLATFORM_PROFILE_WORK = 128000;
   const MAX_MAPPER_CANDIDATE_ASSESSMENT_WORK = 100000;
-  const MAPPER_FACT_WORK_PER_COMPONENT = 128;
+  const MAPPER_FACT_WORK_PER_COMPONENT = 256;
   const MIN_MAPPER_FACT_WORK = 2048;
   const MAX_MAPPER_FACT_WORK = 256000;
   const MAX_MAPPER_MUTATION_RECORDS = 100;
@@ -2809,9 +2809,7 @@
         tag: this.toMapperIdentifier(element.tagName),
         id: this.toMapperIdentifier(element.id),
         classes: this.getBoundedMapperClassTokens(element, 8),
-        domPath: shadowPath.length
-          ? this.getMapperDomPath(element)
-          : snapshot.domPath || this.getDomIndexPath(element),
+        domPath: this.getMapperDomPath(element),
         shadowPath,
       };
     }
@@ -3415,12 +3413,24 @@
       }
 
       const element = resolved.element;
-      element.scrollIntoView({
-        block: "center",
-        inline: "center",
-        behavior: "instant",
-      });
-      await this.delay(50);
+      const geometry = await this.settleHostFallbackGeometry(
+        element,
+        runId,
+      );
+      if (!geometry.ok) {
+        return {
+          ok: false,
+          error: geometry.error,
+          diagnostics: {
+            ...this.createExecutionDiagnostics(
+              step,
+              resolved,
+              geometry.reason,
+            ),
+            geometry: geometry.diagnostics || null,
+          },
+        };
+      }
 
       if (action === Actions.ElementType) {
         const focusResult = await this.focusHostFallbackTypeTarget(element);
@@ -3485,7 +3495,127 @@
         interactable,
         usedStrategy: resolved.strategy,
         usedValue: resolved.value,
+        geometry: geometry.diagnostics,
       };
+    }
+
+    async settleHostFallbackGeometry(element, runId = "") {
+      const maxAttempts = 8;
+      let previous = null;
+      let latest = null;
+      element.scrollIntoView({
+        block: "center",
+        inline: "center",
+        behavior: "instant",
+      });
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        this.throwIfExecutionCancelled(runId);
+        await this.waitForHostFallbackPaint();
+        await this.delay(35);
+        this.throwIfExecutionCancelled(runId);
+
+        if (!element.isConnected) {
+          return {
+            ok: false,
+            error: "Host fallback target was detached while scrolling into view.",
+            reason: "host_fallback_target_detached",
+            diagnostics: { attempt, maxAttempts },
+          };
+        }
+
+        const rect = element.getBoundingClientRect();
+        latest = {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          devicePixelRatio: Number(window.devicePixelRatio || 1),
+          scrollX: window.scrollX || window.pageXOffset || 0,
+          scrollY: window.scrollY || window.pageYOffset || 0,
+        };
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const centerInsideViewport = (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          centerX >= 0 &&
+          centerY >= 0 &&
+          centerX < window.innerWidth &&
+          centerY < window.innerHeight
+        );
+        const stable = previous
+          ? this.hostFallbackGeometrySamplesMatch(previous, latest)
+          : false;
+        const visible = this.isVisibleElement(element);
+
+        if (centerInsideViewport && visible && stable) {
+          return {
+            ok: true,
+            diagnostics: {
+              attempts: attempt,
+              stable: true,
+              centerInsideViewport: true,
+              viewportWidth: latest.viewportWidth,
+              viewportHeight: latest.viewportHeight,
+              devicePixelRatio: latest.devicePixelRatio,
+            },
+          };
+        }
+
+        if (!centerInsideViewport) {
+          element.scrollIntoView({
+            block: "center",
+            inline: "center",
+            behavior: "instant",
+          });
+        }
+        previous = latest;
+      }
+
+      return {
+        ok: false,
+        error: "Host fallback target geometry did not settle inside the visible viewport.",
+        reason: "host_fallback_geometry_unsettled",
+        diagnostics: {
+          attempts: maxAttempts,
+          viewportWidth: latest?.viewportWidth || window.innerWidth,
+          viewportHeight: latest?.viewportHeight || window.innerHeight,
+          devicePixelRatio:
+            latest?.devicePixelRatio || Number(window.devicePixelRatio || 1),
+        },
+      };
+    }
+
+    async waitForHostFallbackPaint() {
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+    }
+
+    hostFallbackGeometrySamplesMatch(first = {}, second = {}) {
+      const keys = [
+        "left",
+        "top",
+        "right",
+        "bottom",
+        "width",
+        "height",
+        "viewportWidth",
+        "viewportHeight",
+        "devicePixelRatio",
+        "scrollX",
+        "scrollY",
+      ];
+      return keys.every((key) => {
+        return Math.abs(Number(first[key]) - Number(second[key])) <= 0.5;
+      });
     }
 
     async verifyHostFallback(step = {}, runId = "") {
@@ -4343,14 +4473,13 @@
         const parent = current.parentElement;
         const tag = current.tagName.toLowerCase();
         if (!parent) {
-          if (current !== root?.documentElement) parts.unshift(`${tag}:0`);
+          parts.unshift(`${tag}:0`);
           break;
         }
         const index = this.getBoundedMapperSiblingIndex(current, "fact_dom_path_sibling");
         if (index < 0) return "";
         parts.unshift(`${tag}:${index}`);
         current = parent;
-        if (current === root?.documentElement) break;
       }
       return parts.join("/");
     }

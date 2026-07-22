@@ -333,6 +333,9 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(background, /NativeBridge\.hostAction/);
   assert.match(background, /NativeBridge\.hostVisualMatch/);
   assert.match(background, /capturePreparedComponentImage/);
+  assert.match(background, /shouldRetryVisibleHostGeometry/);
+  assert.match(background, /imageBitmap\.width \/ viewportWidth/);
+  assert.match(background, /imageBitmap\.height \/ viewportHeight/);
   assert.match(background, /mapperCoordinator\.attachExecutionContext/);
   assert.match(background, /frame_host_fallback_unsupported/);
   assert.match(background, /if \(isMapperUnresolvedError\(error\)\)/);
@@ -344,6 +347,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.match(mapper, /clientPoint/);
   assert.match(mapper, /clientBounds/);
   assert.match(mapper, /coordinateSpace: "css_viewport"/);
+  assert.match(mapper, /settleHostFallbackGeometry/);
   assert.match(background, /coordinateSpace: prepared\.coordinateSpace/);
   assert.match(background, /clientPoint: prepared\.clientPoint/);
   assert.match(background, /clientBounds: prepared\.clientBounds/);
@@ -361,7 +365,7 @@ test("visible host fallback is gated and verified", async () => {
   assert.doesNotMatch(fallbackSource, /target: prepared\.target/);
   assert.doesNotMatch(fallbackSource, /cssWindow: prepared\.cssWindow/);
   assert.match(mapper, /assertPostActionVerification/);
-  assert.match(workflow, /Visible Host Fallback Acceptance/);
+  assert.match(workflow, /(?:Visible Host Fallback Acceptance|visible_host_fallback_acceptance)/);
   assert.match(workflow, /allowVisibleHostFallback/);
   assert.match(workflow, /allowVisualMatchFallback/);
   assert.match(workflow, /verificationText/);
@@ -385,10 +389,18 @@ test("typed host fallback focuses and verifies the resolved editable before host
   );
 
   assert.ok(
-    prepareSource.indexOf("element.scrollIntoView") <
+    prepareSource.indexOf("await this.settleHostFallbackGeometry") <
       prepareSource.indexOf("await this.focusHostFallbackTypeTarget(element)"),
-    "the target must be scrolled into view before focus is prepared",
+    "the target geometry must settle after scrolling before focus is prepared",
   );
+  const settleStart = mapper.indexOf("async settleHostFallbackGeometry");
+  const settleSource = mapper.slice(
+    settleStart,
+    mapper.indexOf("    async verifyHostFallback", settleStart),
+  );
+  assert.match(settleSource, /element\.scrollIntoView/);
+  assert.match(settleSource, /waitForHostFallbackPaint/);
+  assert.match(settleSource, /hostFallbackGeometrySamplesMatch/);
   assert.match(prepareSource, /if \(action === Actions\.ElementType\)/);
   assert.match(prepareSource, /if \(!focusResult\.ok\)/);
   assert.match(prepareSource, /focusResult\.reason/);

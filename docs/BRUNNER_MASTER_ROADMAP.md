@@ -83,16 +83,16 @@ phase begins.
 
 ## Current implementation sequence
 
-### Milestone 0 - Shared and companion foundation closure (source complete)
+### Milestone 0 - Shared and companion foundation closure (accepted 2026-07-20)
 
 The automated source work listed in
 `FOUNDATION_TODO_STATUS.md` and `COMPANION_TODO_STATUS.md`: generated-artifact
 cleanup, Graph Studio build parity, generic draft/save integrity, node-neutral
 MV3 session recovery, the cooperative profile-instance lock, companion storage,
 approved-folder semantics, transport readiness, and visible-fallback
-correctness is implemented. The extension/host round trip has passed with its
-exact expected value. The remaining companion gate consists only of real
-Companion/Chrome/Windows UI and hardware checks.
+correctness is implemented. The extension/host round trip passed with its exact
+expected value, and the operator completed the Companion/Chrome/Windows source
+acceptance after the reported fallback defects were fixed and rerun.
 
 This work may proceed alongside mapper-engine closure, but it must not repair or
 redesign provisional nodes.
@@ -101,7 +101,7 @@ redesign provisional nodes.
 deterministic and focused live tests. Packaged release acceptance is not part of
 this gate.
 
-### Milestone 1 - Mapper engine and reliability closure (source complete)
+### Milestone 1 - Mapper engine and reliability closure (accepted 2026-07-20)
 
 The mapper engine source and deterministic regression gates are implemented.
 The operator fixtures now cover isolated evidence drift, ambiguity/capability
@@ -135,7 +135,13 @@ Required V1 outcomes:
    and runtime resolution are bounded before content-script CPU/message work;
    overflow defers honestly instead of accepting a truncated map.
 10. Deterministic mapper tests pass, followed by focused live extension
-   acceptance against the repository fixtures.
+    acceptance against the repository fixtures.
+
+The 2026-07-20 live pass initially reopened loaded-window mapping/body ancestry
+and off-screen high-zoom fallback. The source fixes, export-versus-DOM
+diagnostic, corrected eligibility comparison, and explicit top/frame document
+presentation are implemented and automated. The operator reported the affected
+live reruns and final export passing. Milestone 1 is accepted.
 
 The existing Mapper Inspector may be used as an engineering diagnostic surface
 for these checks. V1 does not require a polished saved-map management product,
@@ -146,9 +152,9 @@ return an accurate structured failure through the node-neutral test harness,
 and the focused fixture checklist passes with synthetic data. Current node or
 graph-route integration is not part of this gate.
 
-### Milestone 2 - Final workflow-node program
+### Milestone 2 - Final workflow-node program (next active phase)
 
-Begin only after the mapper engine gate is accepted.
+The mapper engine gate is accepted; begin this phase next.
 
 `workflow_nodes_implementation_blueprint.md` is the only node catalog. At the
 start of this phase:
@@ -166,9 +172,11 @@ start of this phase:
 6. Add deterministic tests and focused live acceptance for each completed slice.
 7. Update the living user guide as node contracts become real.
 
-Until this milestone starts, current nodes are provisional and should receive
-only fixes required to unblock mapper reliability. General node additions,
-renames, UX redesigns, and blueprint conformance work are out of sequence.
+The milestone has started. The complete 94-node disposition inventory and
+living implementation status are recorded in
+[`NODE_IMPLEMENTATION_STATUS.md`](NODE_IMPLEMENTATION_STATUS.md). Current
+runtime nodes remain provisional until their tracker rows meet the blueprint
+definition of done.
 
 **Gate:** every finalized blueprint node meets the blueprint definition of done,
 every provisional action absent from the blueprint is removed, and the
@@ -228,21 +236,21 @@ user explicitly starts a release milestone.
 ## Current TODO order
 
 Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
-`MAPPER_TODO_STATUS.md` as the detailed current checklists.
+`MAPPER_TODO_STATUS.md` as the accepted foundation records.
 
-1. Run only the remaining Companion/extension UI checks in
-   `COMPANION_TODO_STATUS.md`; the round trip and non-UI cases are automated or
-   already accepted.
-2. Reload the unpacked extension and run the complete live mapper fixture
-   checklist in `MAPPER_MANUAL_ACCEPTANCE.md`.
-3. Record any acceptance failure as a companion, shared-foundation, or mapper
-   issue and close it without changing provisional node contracts.
-4. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
-5. After all shared, companion, and mapper foundation gates pass, start the
-   finalized node program from `workflow_nodes_implementation_blueprint.md` and
-   track upgrade, rewrite/change, add, and removal status for every catalog
-   item.
-6. Complete integrated V1 source acceptance.
+1. **Complete:** create
+   [`NODE_IMPLEMENTATION_STATUS.md`](NODE_IMPLEMENTATION_STATUS.md) from the
+   finalized 94-node blueprint and inventory every provisional type with an
+   upgrade, rewrite/change, add, or remove disposition.
+2. **Active:** implement the Phase 1 shared target, text-matching,
+   output/logging, and retry/host-fallback adapters.
+3. Implement Navigate, Tab Control, Scroll, Resolve Element, Check Element
+   State, and Wait for Condition in blueprint order and close the Phase 1 gate.
+4. Continue node Phases 2-7 with deterministic and focused live acceptance per
+   slice, removing provisional types absent from the finalized catalog.
+5. Complete the six cross-node acceptance workflows and integrated V1 source
+   acceptance.
+6. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
 7. Ask the user before beginning any V2 viewer, product-boundary change, or
    release work.
 
@@ -257,8 +265,8 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
 6. Use synthetic data for development and acceptance; make no credential,
    redaction, or sensitive-data guarantee.
 7. Treat companion pairing as a cooperative profile lock, not security auth.
-8. Do not modify provisional nodes outside mapper-unblocking fixes before the
-   node milestone.
+8. During the node milestone, treat provisional nodes only as source material;
+   the finalized blueprint controls upgrades, rewrites, additions, and removals.
 9. Do not perform release work during the current mapper or node milestones.
 10. When scope or status changes, update this roadmap and the current handoff in
     the same change.

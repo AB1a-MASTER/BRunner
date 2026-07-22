@@ -76,15 +76,14 @@ to the node phase.
 
 ## Completion Gate
 
-The shared source implementation and automated regression work are complete.
-The overall foundation is not yet accepted for the finalized node phase because
-the companion and mapper hands-on acceptance checklists remain open.
+The shared source implementation, automated regression work, Companion
+source-checkout acceptance, and mapper live acceptance are complete. The
+operator reported the affected fallback and mapper reruns passing on 2026-07-20,
+so the shared foundation is accepted for the finalized node phase.
 
-All remaining unchecked foundation items now require interaction with the real
-Companion, unpacked extension, Chrome/Chromium window state, Windows shell, or
-physical monitor configuration. Fixture URLs, negative host contracts, mapper
-route isolation, storage races/schema/quota bounds, and acceptance-script syntax
-are deterministic source gates rather than manual operator work.
+Release packaging, signing, installation, and packaged-artifact acceptance
+remain deferred until an actual release is prepared. They do not block the node
+phase.
 
 The shared foundation is ready for the finalized node phase when:
 
@@ -93,3 +92,5 @@ The shared foundation is ready for the finalized node phase when:
 - MV3 restart/rehydration and companion readiness have deterministic tests;
 - companion and mapper completion gates pass; and
 - no gate depends on preserving a provisional node implementation.
+
+All conditions above are satisfied for source development as of 2026-07-20.
