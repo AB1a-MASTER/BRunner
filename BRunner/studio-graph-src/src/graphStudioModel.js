@@ -2,17 +2,19 @@ import {
   CurrentGraphWorkflowSchemaVersion,
   detectWorkflowSchema,
   isGraphWorkflowSchemaVersion,
+  upgradeWorkflowToCanonical,
   upgradeWorkflowToV2,
   validateGraphWorkflow,
   WorkflowSchemaVersion,
 } from "../../core/workflowSchema.js";
 import { createDefaultMapperSettings } from "../../mapper/core.js";
-import { validateNodeConfiguration } from "../../core/nodeAuthoring.js";
+import { prepareNodeConfiguration } from "../../core/nodeAuthoring.js";
+import { normalizeWorkflowSettings } from "../../core/workflowUtils.js";
 
 export function workflowToCanvas(input, definitions) {
   const sourceSchema = detectWorkflowSchema(input);
   const graph = isGraphWorkflowSchemaVersion(sourceSchema)
-    ? structuredClone(input)
+    ? upgradeWorkflowToCanonical(input)
     : upgradeWorkflowToV2(input);
   const validation = validateGraphWorkflow(graph);
   if (!validation.valid) {
@@ -31,12 +33,25 @@ export function workflowToCanvas(input, definitions) {
   );
   let nodes = graph.nodes.map((node) => {
     const persistedData = cloneObject(node.data);
+    const persistedDataKeys = Object.keys(persistedData);
     const originalTarget = persistedData.target ?? "";
     const contractDefinition = definitionsByContract.get(
       nodeContractKey(node.type, node.version),
     );
     const systemNode = node.type === "workflow.needs_attention";
     const definition = contractDefinition || fallbackDefinition(node, systemNode);
+    const prepared = contractDefinition
+      ? prepareNodeConfiguration(node.config, definition, {
+          node: {
+            ...node,
+            ...persistedData,
+            data: persistedData,
+          },
+        })
+      : {
+          config: cloneObject(node.config),
+          issues: [],
+        };
     return {
       id: node.id,
       type: "brunner",
@@ -45,10 +60,12 @@ export function workflowToCanvas(input, definitions) {
         ...persistedData,
         type: node.type,
         definition,
-        config: cloneObject(node.config),
+        config: prepared.config,
+        configurationIssues: prepared.issues,
         target: displayTarget(originalTarget),
         targetSource: structuredClone(originalTarget),
         targetEdited: false,
+        persistedDataKeys,
         executionMode: persistedData.executionMode || (persistedData.disabled ? "disabled" : "enabled"),
         skipWhen: persistedData.skipWhen || "",
         collapsed: persistedData.collapsed === true,
@@ -79,10 +96,12 @@ export function workflowToCanvas(input, definitions) {
       description: graph.description || input?.description || "",
       boundDomain: graph.boundDomain || "",
       schemaVersion: graph.schemaVersion || WorkflowSchemaVersion.Graph,
-      settings: cloneObject(graph.settings),
+      settings: normalizeWorkflowSettings(graph.settings),
       variables: cloneObject(graph.variables),
       datasets: cloneObject(graph.datasets),
       dataSources: cloneArray(graph.dataSources),
+      entryNodeId: String(graph.entryNodeId || ""),
+      passthrough: extractWorkflowPassthrough(graph),
     },
   };
 }
@@ -106,20 +125,22 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
     target: edge.target,
     targetHandle: edge.targetHandle || "input",
   }));
-  const incoming = new Set(graphEdges.map((edge) => edge.target));
-  const entries = graphNodes.filter((node) => !incoming.has(node.id));
-
   const graph = {
+    ...cloneObject(metadata.passthrough),
     schemaVersion: metadata.schemaVersion || CurrentGraphWorkflowSchemaVersion,
     id: String(metadata.id || "workflow-v2"),
     name: String(metadata.name || "Untitled"),
     description: String(metadata.description || ""),
     boundDomain: String(metadata.boundDomain || ""),
-    settings: cloneObject(metadata.settings),
+    settings: normalizeWorkflowSettings(metadata.settings),
     variables: cloneObject(metadata.variables),
     datasets: cloneObject(metadata.datasets),
     dataSources: cloneArray(metadata.dataSources),
-    entryNodeId: graphNodes.length ? (entries.length === 1 ? entries[0].id : "") : "",
+    entryNodeId: resolveEntryNodeId(
+      graphNodes,
+      graphEdges,
+      metadata.entryNodeId,
+    ),
     nodes: graphNodes,
     edges: graphEdges,
   };
@@ -130,13 +151,21 @@ export function canvasToGraphWorkflow(nodes, edges, metadata = {}) {
         `Cannot save graph: node ${graphNodes[index].id} uses unsupported contract ${graphNodes[index].type}@${graphNodes[index].version}.`,
       );
     }
-    const contractIssues = validateNodeConfiguration({
-      ...graphNodes[index],
-      ...graphNodes[index].data,
-    }, definition);
-    if (contractIssues.length) {
+    const prepared = prepareNodeConfiguration(
+      graphNodes[index].config,
+      definition,
+      {
+        node: {
+          ...graphNodes[index],
+          ...graphNodes[index].data,
+          data: graphNodes[index].data,
+        },
+      },
+    );
+    graphNodes[index].config = prepared.config;
+    if (prepared.issues.length) {
       throw new Error(
-        `Cannot save graph: node ${graphNodes[index].id} has invalid configuration: ${contractIssues.map((issue) => issue.message).join(" ")}`,
+        `Cannot save graph: node ${graphNodes[index].id} has invalid configuration: ${prepared.issues.map((issue) => issue.message).join(" ")}`,
       );
     }
   }
@@ -184,25 +213,49 @@ export function layoutCanvasNodes(nodes, edges, direction = "vertical") {
 }
 
 function sanitizeNodeData(source = {}) {
+  const persistedDataKeys = new Set(
+    Array.isArray(source.persistedDataKeys) ? source.persistedDataKeys : [],
+  );
   const data = Object.fromEntries(
     Object.entries(source).filter(([key, value]) => {
       return ![
         "type",
         "definition",
         "config",
+        "configurationIssues",
         "readOnly",
         "targetSource",
         "targetEdited",
+        "persistedDataKeys",
         "layoutDirection",
         "runtimeStatus",
         "executionLocked",
         "navigationLocked",
-      ].includes(key) && typeof value !== "function";
+        "target",
+      ].includes(key) &&
+        typeof value !== "function" &&
+        (
+          key !== "executionMode" ||
+          persistedDataKeys.has(key) ||
+          value !== "enabled"
+        ) &&
+        (
+          key !== "skipWhen" ||
+          persistedDataKeys.has(key) ||
+          String(value || "") !== ""
+        ) &&
+        (
+          key !== "collapsed" ||
+          persistedDataKeys.has(key) ||
+          value === true
+        );
     }),
   );
-  data.target = source.targetEdited
-    ? source.target
-    : structuredClone(source.targetSource ?? source.target ?? "");
+  if (source.targetEdited || persistedDataKeys.has("target")) {
+    data.target = source.targetEdited
+      ? structuredClone(source.target)
+      : structuredClone(source.targetSource ?? source.target ?? "");
+  }
   if (source.componentRef) data.componentRef = structuredClone(source.componentRef);
   delete data.disabled;
   return data;
@@ -250,6 +303,40 @@ function clonePosition(position) {
     x: Number(position?.x) || 0,
     y: Number(position?.y) || 0,
   };
+}
+
+function resolveEntryNodeId(nodes, edges, requestedEntryNodeId = "") {
+  if (!nodes.length) return "";
+  const incoming = new Set(edges.map((edge) => edge.target));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const requested = String(requestedEntryNodeId || "");
+  if (requested && nodeIds.has(requested) && !incoming.has(requested)) {
+    return requested;
+  }
+  const entries = nodes.filter((node) => !incoming.has(node.id));
+  return entries.length === 1 ? entries[0].id : "";
+}
+
+function extractWorkflowPassthrough(workflow = {}) {
+  const coreKeys = new Set([
+    "schemaVersion",
+    "id",
+    "name",
+    "description",
+    "boundDomain",
+    "settings",
+    "variables",
+    "datasets",
+    "dataSources",
+    "entryNodeId",
+    "nodes",
+    "edges",
+  ]);
+  return Object.fromEntries(
+    Object.entries(workflow)
+      .filter(([key]) => !coreKeys.has(key))
+      .map(([key, value]) => [key, structuredClone(value)]),
+  );
 }
 
 function fallbackDefinition(node, systemNode = false) {

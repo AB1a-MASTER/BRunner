@@ -69,15 +69,10 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "studio/index.html",
-        "studio/app.js",
-        "studio/preferences.js",
-        "studio/studioValidation.js",
         "shared/nodeAuthoring.js",
         "core/studioPreferences.js",
         "core/studioPreferencesBootstrap.js",
         "shared/studio-tokens.css",
-        "studio/style.css",
         "studio-graph/index.html",
         "studio-graph/assets/*",
         "mapper-inspector/index.html",

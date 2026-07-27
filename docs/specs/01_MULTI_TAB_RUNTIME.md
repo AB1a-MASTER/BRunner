@@ -8,6 +8,12 @@ are provisional. Do not repair them for compatibility before the node phase.
 Current sequencing is defined by `../BRUNNER_MASTER_ROADMAP.md`; the finalized
 node contract is `../../workflow_nodes_implementation_blueprint.md`.
 
+> **Direction update (2026-07-25):** Graph Studio is the only supported
+> authoring surface. Any Sequential Studio or multi-Studio requirement below is
+> historical context and must not be implemented. Sequential Studio is disabled
+> without deleting its source and will be removed during the final pre-V2
+> cleanup.
+
 ## Goal
 
 Finish the reliability foundation by recording intentional tab transitions and exposing one authoritative recording/execution state to every UI.

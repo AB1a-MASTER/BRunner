@@ -776,6 +776,75 @@ class CompanionWindowTests(unittest.TestCase):
             window.tray.hide()
             window.close()
 
+    def test_workflow_storage_toggle_persists_and_controls_recursive_listing(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        try:
+            from PySide6.QtGui import QAction
+            from PySide6.QtWidgets import QApplication
+        except ImportError:
+            self.skipTest("PySide6 is not installed")
+
+        from desktop import main_window
+        from host_settings import load_or_create_config, save_config
+        from workflow_repository import WorkflowRepository
+
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as temp:
+            base_dir = Path(temp)
+            config_file = base_dir / "brunner_config.json"
+            workflows_dir = base_dir / "Workflows"
+            repository = WorkflowRepository(workflows_dir)
+            repository.save_workflow("root.json", {"name": "Root"})
+            repository.save_workflow(
+                "node_acceptance/001_navigate_acceptance.json",
+                {"name": "Navigate Acceptance"},
+            )
+            save_config(config_file, {
+                "workflowDiscovery": {"recursive": False},
+                "approvedDirectories": [],
+            })
+
+            window = main_window.BRunnerCompanionWindow(QAction)
+            try:
+                window.connection_timer.stop()
+                window.diagnostics_timer.stop()
+                window.base_dir = base_dir
+                window.config_file = config_file
+                window.log_file = base_dir / "brunner_host.log"
+                window.config = load_or_create_config(config_file, base_dir)
+                window.repository = repository
+
+                window.refresh_workflows()
+
+                self.assertFalse(window.recursive_workflow_discovery.isChecked())
+                self.assertEqual(window.workflow_table.rowCount(), 1)
+                self.assertEqual(window.workflow_table.item(0, 0).text(), "root.json")
+
+                window.recursive_workflow_discovery.setChecked(True)
+
+                saved = json.loads(config_file.read_text(encoding="utf-8"))
+                self.assertTrue(saved["workflowDiscovery"]["recursive"])
+                self.assertEqual(window.workflow_table.rowCount(), 2)
+                self.assertEqual(
+                    {
+                        window.workflow_table.item(row, 0).text()
+                        for row in range(window.workflow_table.rowCount())
+                    },
+                    {
+                        "root.json",
+                        "node_acceptance/001_navigate_acceptance.json",
+                    },
+                )
+
+                window.recursive_workflow_discovery.setChecked(False)
+
+                saved = json.loads(config_file.read_text(encoding="utf-8"))
+                self.assertFalse(saved["workflowDiscovery"]["recursive"])
+                self.assertEqual(window.workflow_table.rowCount(), 1)
+            finally:
+                window.tray.hide()
+                window.close()
+
     def test_open_paths_and_export_diagnostics_json(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         try:

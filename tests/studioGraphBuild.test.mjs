@@ -131,7 +131,17 @@ test("graph Studio wires persistence and execution controls", async () => {
   assert.match(source, /selectCanvasNode/);
   assert.match(source, /definitionsByContract/);
   assert.match(source, /collectFieldAutocompleteOptions/);
+  assert.match(source, /createNodeAutocompleteContext/);
+  assert.match(source, /coerceNodeFieldValue/);
+  assert.match(source, /prepareNodeConfiguration/);
+  assert.match(source, /edges=\{edges\}/);
+  assert.match(source, /configurationIssues/);
   assert.match(source, /TargetEditor/);
+  assert.doesNotMatch(source, /onOpenSequential/);
+  assert.doesNotMatch(source, /\.\.\/studio\/index\.html/);
+  assert.doesNotMatch(source, /StudioKind\.Sequential/);
+  assert.doesNotMatch(source, /STUDIO_SESSION_KEY/);
+  assert.match(source, /Change the Graph Studio display size/);
 
   const graphNodeSource = await readFile(
     new URL("BRunner/studio-graph-src/src/GraphNode.jsx", root),

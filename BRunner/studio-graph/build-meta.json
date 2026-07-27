@@ -1,7 +1,7 @@
 {
   "version": 2,
   "algorithm": "sha256",
-  "inputHash": "bc6f0f2446a8341907738ab94c545acbd4f17c08cbd9db8472d965194da607c3",
+  "inputHash": "f099aac044656f4d9eea9a04387858ef763aa83eb943db3118d6d5674fd18df2",
   "inputs": [
     "BRunner/core/constants.js",
     "BRunner/core/nativeHostRequirements.js",
@@ -11,6 +11,7 @@
     "BRunner/core/studioSession.js",
     "BRunner/core/variableInspector.js",
     "BRunner/core/workflowSchema.js",
+    "BRunner/core/workflowUtils.js",
     "BRunner/icons/icon2.png",
     "BRunner/mapper/core.js",
     "BRunner/shared/nodeAuthoring.js",

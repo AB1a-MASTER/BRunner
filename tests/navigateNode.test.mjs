@@ -15,14 +15,18 @@ import {
 } from "../BRunner/nodes/shared/executionPolicy.js";
 import {
   NavigateDestinations,
+  NavigateErrorCodes,
   NavigateNoHistoryBehaviors,
   NavigateOperations,
   NavigateReadiness,
   NavigateTabSources,
+  buildNavigateOutput,
   executeNavigate,
+  isProtectedBrowserUrl,
   navigateNodeDefinition,
   normalizeNavigateConfig,
   normalizeStrictNavigationUrl,
+  validateNavigateConfig,
   verifyNavigateBeforeRetry,
 } from "../BRunner/nodes/navigation/navigate/index.js";
 
@@ -139,7 +143,7 @@ function createHarness(options = {}) {
 
 test("Navigate definition exposes the finalized package contract", () => {
   assert.equal(navigateNodeDefinition.type, "browser.navigate");
-  assert.equal(navigateNodeDefinition.version, 1);
+  assert.equal(navigateNodeDefinition.version, 2);
   assert.deepEqual(
     navigateNodeDefinition.outputPorts.map((port) => port.id),
     ["success", "error"],
@@ -147,12 +151,43 @@ test("Navigate definition exposes the finalized package contract", () => {
   assert.equal(navigateNodeDefinition.retrySafety, "verify_before_retry");
   assert.equal(navigateNodeDefinition.defaultRetryCount, 1);
   assert.equal(navigateNodeDefinition.hostClassification, "none");
-  assert.equal(navigateNodeDefinition.configSchema.length >= 10, true);
+  assert.equal(navigateNodeDefinition.configSchema.length >= 20, true);
   assert.equal(Object.isFrozen(navigateNodeDefinition), true);
   assert.equal(
     navigateNodeDefinition.outputSchema.required.includes("currentUrl"),
     true,
   );
+  assert.equal(
+    navigateNodeDefinition.outputSchema.properties.tab.required.includes("pageCapability"),
+    true,
+  );
+  for (const field of navigateNodeDefinition.configSchema) {
+    assert.equal(Boolean(field.help), true, `${field.key} help`);
+    assert.equal(Boolean(field.example), true, `${field.key} example`);
+    assert.equal(Boolean(field.placeholder), true, `${field.key} placeholder`);
+    assert.equal(Boolean(field.expressionMode), true, `${field.key} expression mode`);
+    assert.equal(Array.isArray(field.autocompleteSources), true);
+  }
+  assert.equal(
+    navigateNodeDefinition.errorCodes[NavigateErrorCodes.NavigationFailed],
+    "navigation",
+  );
+});
+
+test("Navigate output builder rejects states outside the frozen output contract", () => {
+  assert.throws(
+    () => buildNavigateOutput({
+      operation: NavigateOperations.Reload,
+      previousUrl: "https://example.com/",
+      currentUrl: "https://example.com/",
+      tab: { id: 1, url: "https://example.com/" },
+      navigationState: "made_up_state",
+      durationMs: 1,
+    }),
+    (error) => error.code === NodeErrorCodes.ValidationFailed,
+  );
+  assert.equal(isProtectedBrowserUrl("chrome-error://chromewebdata/"), true);
+  assert.equal(isProtectedBrowserUrl("https://example.com/"), false);
 });
 
 test("Navigate configuration validates all enums and strict URLs", () => {
@@ -191,6 +226,38 @@ test("Navigate configuration validates all enums and strict URLs", () => {
     }),
     (error) => error.code === NodeErrorCodes.CONFIG_INVALID,
   );
+  assert.throws(
+    () => normalizeNavigateConfig({ retryStrategy: "random" }),
+    (error) => error.code === NodeErrorCodes.CONFIG_INVALID,
+  );
+  assert.throws(
+    () => normalizeNavigateConfig({ retryDelay: -1 }),
+    (error) => error.code === NodeErrorCodes.CONFIG_INVALID,
+  );
+});
+
+test("Navigate preflight preserves expressions while resolved validation stays strict", () => {
+  const expressionConfig = {
+    operation: NavigateOperations.GotoUrl,
+    url: "https://example.com/accounts/{{ variables.accountId }}",
+    timeout: "{{ variables.timeoutMs }}",
+    retryDelay: "{{ variables.retryDelay }}",
+  };
+  const preflight = validateNavigateConfig(expressionConfig, {
+    allowExpressions: true,
+  });
+  assert.equal(preflight.valid, true);
+  assert.deepEqual(preflight.config, expressionConfig);
+  assert.equal(validateNavigateConfig(expressionConfig).valid, false);
+
+  const invalidTemplate = validateNavigateConfig({
+    operation: NavigateOperations.GotoUrl,
+    url: "search words {{ variables.accountId }}",
+  }, {
+    allowExpressions: true,
+  });
+  assert.equal(invalidTemplate.valid, false);
+  assert.match(invalidTemplate.errors[0], /absolute URL/);
 });
 
 test("goto_url publishes redirect URL, readiness, and a saved tab reference", async () => {
@@ -233,7 +300,7 @@ test("back handles unavailable history as fail, skip, or continue", async () => 
       tab: failing.current,
     }),
     (error) =>
-      error.code === NodeErrorCodes.VALIDATION_FAILED &&
+      error.code === NavigateErrorCodes.NoHistory &&
       error.details?.reason === "no_history",
   );
 
@@ -311,6 +378,56 @@ test("goto_url can create a new active destination tab", async () => {
   assert.equal(harness.calls.some((call) => call[0] === "create"), true);
 });
 
+test("goto_url new_tab can safely bootstrap without a current browser tab", async () => {
+  const harness = createHarness();
+  const result = await executeNavigate({
+    config: {
+      operation: NavigateOperations.GotoUrl,
+      tabSource: NavigateTabSources.Current,
+      url: "https://independent.example/",
+      openDestinationIn: NavigateDestinations.NewTab,
+      waitUntil: NavigateReadiness.None,
+    },
+    services: harness.services,
+    tab: null,
+  });
+
+  assert.equal(result.output.previousUrl, null);
+  assert.equal(result.output.currentUrl, "https://independent.example/");
+  assert.equal(
+    harness.calls.some((call) => call[0] === "resolve"),
+    false,
+  );
+  const createCall = harness.calls.find((call) => call[0] === "create");
+  assert.deepEqual(createCall[1], {
+    url: "https://independent.example/",
+    active: true,
+  });
+});
+
+test("Navigate still fails closed when the selected operation needs a tab", async () => {
+  const harness = createHarness();
+  harness.tabs.resolve = async () => null;
+
+  await assert.rejects(
+    executeNavigate({
+      config: {
+        operation: NavigateOperations.GotoUrl,
+        tabSource: NavigateTabSources.Current,
+        url: "https://must-have-target.example/",
+        openDestinationIn: NavigateDestinations.CurrentTab,
+      },
+      services: harness.services,
+      tab: null,
+    }),
+    (error) => error.code === NodeErrorCodes.TabNotFound,
+  );
+  assert.equal(
+    harness.calls.some((call) => call[0] === "create"),
+    false,
+  );
+});
+
 test("protected New Tab may navigate away, while protected DOM readiness obeys policy", async () => {
   const away = createHarness({ initialUrl: "chrome://newtab/" });
   const success = await executeNavigate({
@@ -351,6 +468,33 @@ test("protected New Tab may navigate away, while protected DOM readiness obeys p
     tab: skipped.current,
   });
   assert.equal(skippedResult.output.navigationState, "protected_page_skipped");
+});
+
+test("ask_user protected-page policy waits for an approved supported tab", async () => {
+  const harness = createHarness();
+  const result = await executeNavigate({
+    config: {
+      operation: NavigateOperations.GotoUrl,
+      url: "chrome://settings/",
+      waitUntil: NavigateReadiness.DomReady,
+      protectedPagePolicy: "ask_user",
+    },
+    services: {
+      ...harness.services,
+      userGate: {
+        async request(payload) {
+          assert.equal(payload.reason, "protected_page");
+          const supported = harness.tabsById.get(1);
+          supported.url = "https://approved.example/";
+          return { approved: true, tab: clone(supported) };
+        },
+      },
+    },
+    tab: harness.current,
+  });
+
+  assert.equal(result.output.currentUrl, "https://approved.example/");
+  assert.equal(result.output.navigationState, NavigateReadiness.DomReady);
 });
 
 test("retry verification suppresses a duplicate after URL change", async () => {
@@ -451,6 +595,129 @@ test("finalized runtime retries one verified navigation failure and publishes ou
     values["nodes.navigate-retry.output"],
     outcome.result.output,
   );
+});
+
+test("finalized Navigate publishes aliases, Workflow Clipboard output, and standard logs", async () => {
+  const harness = createHarness();
+  const values = {};
+  const publications = [];
+  const events = [];
+  const outcome = await executeFinalizedNode({
+    nodeId: "navigate-output",
+    nodeType: "browser.navigate",
+    nodeVersion: 2,
+    definition: navigateNodeDefinition,
+    config: {
+      operation: NavigateOperations.GotoUrl,
+      url: "https://published.example/",
+      waitUntil: NavigateReadiness.None,
+      timeout: 100,
+      saveOutputAs: "published_navigation",
+      saveToWorkflowClipboard: "replace",
+      workflowClipboardEntry: "published_navigation",
+    },
+    executor: executeNavigate,
+  }, {
+    ...harness.services,
+    registry: {
+      set(path, value) {
+        values[path] = clone(value);
+      },
+    },
+    workflowClipboard: {
+      publish(publication) {
+        publications.push(clone(publication));
+      },
+    },
+    logger(event) {
+      events.push(clone(event));
+    },
+    async withTimeout(task) {
+      return await task(new AbortController().signal);
+    },
+  });
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Success);
+  assert.deepEqual(values["variables.published_navigation"], outcome.result.output);
+  assert.deepEqual(publications[0], {
+    mode: "replace",
+    key: "published_navigation",
+    value: outcome.result.output,
+    nodeId: "navigate-output",
+  });
+  assert.deepEqual(events.map((event) => event.event), [
+    "node_started",
+    "node_completed",
+  ]);
+});
+
+test("finalized Navigate routes stable navigation failures through its error port", async () => {
+  const harness = createHarness({ navigateFailures: 1 });
+  const events = [];
+  const outcome = await executeFinalizedNode({
+    nodeId: "navigate-error",
+    nodeType: "browser.navigate",
+    nodeVersion: 2,
+    definition: navigateNodeDefinition,
+    config: {
+      operation: NavigateOperations.GotoUrl,
+      url: "https://failure.example/",
+      waitUntil: NavigateReadiness.None,
+      timeout: 100,
+      retryCount: 0,
+      onError: "error_port",
+    },
+    executor: executeNavigate,
+  }, {
+    ...harness.services,
+    registry: { set() {} },
+    logger(event) {
+      events.push(clone(event));
+    },
+    async withTimeout(task) {
+      return await task(new AbortController().signal);
+    },
+  });
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Error);
+  assert.equal(outcome.selectedRoute, FinalizedNodeRoutes.Error);
+  assert.equal(outcome.result.errors[0].code, NavigateErrorCodes.NavigationFailed);
+  assert.equal(outcome.result.errors[0].category, "navigation");
+  assert.equal(events.at(-1).event, "node_failed");
+});
+
+test("finalized runtime passes its cancellable timeout signal into Navigate services", async () => {
+  const harness = createHarness();
+  let observedSignal = null;
+  const originalWait = harness.tabs.waitForReadiness;
+  harness.tabs.waitForReadiness = async (id, state, options) => {
+    observedSignal = options.signal;
+    return await originalWait(id, state, options);
+  };
+  const controller = new AbortController();
+  const outcome = await executeFinalizedNode({
+    nodeId: "navigate-signal",
+    nodeType: "browser.navigate",
+    nodeVersion: 2,
+    definition: navigateNodeDefinition,
+    config: {
+      operation: NavigateOperations.GotoUrl,
+      url: "https://signal.example/",
+      waitUntil: NavigateReadiness.DomReady,
+      timeout: 100,
+    },
+    executor: executeNavigate,
+  }, {
+    ...harness.services,
+    registry: { set() {} },
+    logger() {},
+    async withTimeout(task) {
+      return await task(controller.signal);
+    },
+  });
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Success);
+  assert.equal(observedSignal, controller.signal);
 });
 
 function clone(value) {

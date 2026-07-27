@@ -1,5 +1,5 @@
-// Shared serializable authoring contract used by both Studios and the
-// background node registry. Kept as a classic script for Sequential Studio.
+// Shared serializable authoring contract used by Graph Studio and the
+// background node registry. Kept as a classic script for transitional imports.
 
 (function exposeNodeAuthoring(global) {
   "use strict";
@@ -41,6 +41,10 @@
     "attribute",
     "coordinates",
   ]);
+  const UNKNOWN_CONFIG_POLICIES = Object.freeze({
+    Preserve: "preserve",
+    Reject: "reject",
+  });
 
   function normalizeNodeFieldSchema(fields = []) {
     const seen = new Set();
@@ -274,21 +278,227 @@
       } else if (source === AUTOCOMPLETE_SOURCES.LoopValues) {
         values.push("{{ loop.item }}", "{{ loop.index }}");
       } else if (source === AUTOCOMPLETE_SOURCES.TabReferences) {
-        values.push(...arrayValues(context.tabReferences));
+        values.push(...referenceValues(context.tabReferences));
       } else if (source === AUTOCOMPLETE_SOURCES.ApprovedDirectories) {
         values.push(...arrayValues(context.approvedDirectories).map((entry) => {
           return typeof entry === "string" ? entry : entry?.id || entry?.alias || "";
         }));
       } else if (source === AUTOCOMPLETE_SOURCES.FileReferences) {
-        values.push(...arrayValues(context.fileReferences));
+        values.push(...referenceValues(context.fileReferences));
       }
     }
     return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
   }
 
-  function validateNodeConfiguration(node = {}, definition = {}) {
+  function createNodeAutocompleteContext(options = {}) {
+    const nodes = arrayValues(options.nodes);
+    const edges = arrayValues(options.edges);
+    const currentNodeId = String(options.currentNodeId || "").trim();
+    const nodeIds = collectReachablePredecessorNodeIds({
+      nodes,
+      edges,
+      currentNodeId,
+      entryNodeId: options.entryNodeId,
+    });
+    const predecessors = new Set(nodeIds);
+    const predecessorNodes = nodes.filter((node) => predecessors.has(String(node?.id || "")));
+    const variables = {};
+    const workflowClipboardKeys = [];
+
+    for (const name of objectKeys(options.variables)) {
+      addVariableName(variables, name);
+    }
+    for (const entry of arrayValues(options.runtimeVariables)) {
+      const name = typeof entry === "string" ? entry : entry?.name || entry?.id;
+      if (String(name || "").startsWith("workflowClipboard.")) {
+        workflowClipboardKeys.push(String(name).slice("workflowClipboard.".length));
+      } else {
+        addVariableName(variables, name);
+      }
+    }
+
+    for (const source of arrayValues(options.dataSources)) {
+      addVariableName(variables, source?.variableName || source?.id || source?.name);
+    }
+
+    const tabReferences = [...referenceValues(options.tabReferences)];
+    for (const node of predecessorNodes) {
+      const config = nodeConfiguration(node);
+      addVariableName(variables, config.saveOutputAs);
+      addVariableName(variables, config.variableName);
+
+      const tabReference = config.saveTabReferenceAs || node?.data?.tabRef || node?.tabRef;
+      if (tabReference) tabReferences.push(tabReference);
+
+      if (workflowClipboardEnabled(config.saveToWorkflowClipboard)) {
+        const clipboardKey = config.workflowClipboardEntry ||
+          normalizeVariableName(config.saveOutputAs) ||
+          String(node?.id || "");
+        if (clipboardKey) workflowClipboardKeys.push(clipboardKey);
+      }
+    }
+
+    workflowClipboardKeys.unshift(...referenceValues(options.workflowClipboardKeys));
+
+    return {
+      variables,
+      nodeIds,
+      workflowClipboardKeys: uniqueStrings(workflowClipboardKeys),
+      tabReferences: uniqueStrings(tabReferences),
+      approvedDirectories: cloneArrayValues(options.approvedDirectories),
+      fileReferences: uniqueStrings(referenceValues(options.fileReferences)),
+    };
+  }
+
+  function collectReachablePredecessorNodeIds(options = {}) {
+    const nodes = arrayValues(options.nodes);
+    const nodeOrder = nodes.map((node) => String(node?.id || "").trim()).filter(Boolean);
+    const validIds = new Set(nodeOrder);
+    const currentNodeId = String(options.currentNodeId || "").trim();
+    if (!currentNodeId || !validIds.has(currentNodeId)) return [];
+
+    const incoming = new Map(nodeOrder.map((id) => [id, []]));
+    const outgoing = new Map(nodeOrder.map((id) => [id, []]));
+    for (const edge of arrayValues(options.edges)) {
+      const source = String(edge?.source || "").trim();
+      const target = String(edge?.target || "").trim();
+      if (!validIds.has(source) || !validIds.has(target)) continue;
+      incoming.get(target).push(source);
+      outgoing.get(source).push(target);
+    }
+
+    const explicitEntry = String(options.entryNodeId || "").trim();
+    const entries = validIds.has(explicitEntry)
+      ? [explicitEntry]
+      : nodeOrder.filter((id) => incoming.get(id).length === 0);
+    if (!entries.length) return [];
+
+    const reachableBeforeCurrent = new Set();
+    const queue = [...entries];
+    while (queue.length) {
+      const id = queue.shift();
+      if (!id || reachableBeforeCurrent.has(id)) continue;
+      reachableBeforeCurrent.add(id);
+      if (id === currentNodeId) continue;
+      queue.push(...outgoing.get(id));
+    }
+
+    const ancestors = new Set();
+    const pending = [...incoming.get(currentNodeId)];
+    while (pending.length) {
+      const id = pending.pop();
+      if (!id || id === currentNodeId || ancestors.has(id)) continue;
+      ancestors.add(id);
+      pending.push(...incoming.get(id));
+    }
+
+    return nodeOrder.filter((id) => (
+      id !== currentNodeId &&
+      ancestors.has(id) &&
+      reachableBeforeCurrent.has(id)
+    ));
+  }
+
+  function coerceNodeFieldValue(field = {}, value) {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+
+    if (field.kind === "number") {
+      if (typeof value === "number") return value;
+      if (isExpression(value) || (typeof value === "string" && !value.trim())) {
+        return value;
+      }
+      const number = Number(value);
+      return Number.isFinite(number) ? number : cloneValue(value);
+    }
+
+    return cloneValue(value);
+  }
+
+  function prepareNodeConfiguration(config = {}, definition = {}, options = {}) {
     const issues = [];
+    const source = isPlainObject(config) ? config : {};
+    if (!isPlainObject(config)) {
+      issues.push({
+        fieldKey: "config",
+        message: "Node configuration must be an object.",
+      });
+    }
+
+    const fields = Array.isArray(definition.config)
+      ? definition.config
+      : Array.isArray(definition.configSchema)
+        ? definition.configSchema
+        : [];
+    const defaults = isPlainObject(definition.commonConfigDefaults)
+      ? definition.commonConfigDefaults
+      : {};
+    const knownKeys = new Set(fields.map((field) => field.key));
+    const prepared = {};
+
+    for (const field of fields) {
+      const hasSourceValue = Object.prototype.hasOwnProperty.call(source, field.key);
+      const hasFieldDefault = Object.prototype.hasOwnProperty.call(field, "default");
+      const hasCommonDefault = Object.prototype.hasOwnProperty.call(defaults, field.key);
+      let value;
+
+      if (hasSourceValue) {
+        value = source[field.key];
+        if (
+          typeof value === "string" &&
+          !value.trim() &&
+          ["number", "boolean", "select"].includes(field.kind) &&
+          (hasFieldDefault || hasCommonDefault)
+        ) {
+          value = hasFieldDefault ? field.default : defaults[field.key];
+        }
+      } else if (options.applyDefaults !== false && (hasFieldDefault || hasCommonDefault)) {
+        value = hasFieldDefault ? field.default : defaults[field.key];
+      } else {
+        continue;
+      }
+
+      prepared[field.key] = coerceNodeFieldValue(field, value);
+    }
+
+    const unknownPolicy = normalizeUnknownConfigPolicy(
+      options.unknownConfigPolicy ?? definition.unknownConfigPolicy,
+    );
+    for (const [key, value] of Object.entries(source)) {
+      if (knownKeys.has(key)) continue;
+      prepared[key] = cloneValue(value);
+      if (unknownPolicy === UNKNOWN_CONFIG_POLICIES.Reject) {
+        issues.push({
+          fieldKey: `config.${key}`,
+          message: `Unsupported configuration field: ${key}.`,
+        });
+      }
+    }
+
+    issues.push(...validatePreparedConfiguration(
+      prepared,
+      definition,
+      options.node || {},
+    ));
+    return {
+      config: prepared,
+      issues: dedupeIssues(issues),
+    };
+  }
+
+  function validateNodeConfiguration(node = {}, definition = {}) {
     const config = node.config && typeof node.config === "object" ? node.config : {};
+    const source = { ...config };
+    for (const field of definition.config || definition.configSchema || []) {
+      if (Object.prototype.hasOwnProperty.call(source, field.key)) continue;
+      const fallback = node[field.key] ?? legacyPayloadValue(node, field.key);
+      if (fallback !== undefined) source[field.key] = fallback;
+    }
+    return prepareNodeConfiguration(source, definition, { node }).issues;
+  }
+
+  function validatePreparedConfiguration(config, definition, node) {
+    const issues = [];
     if (definition.targetRequired) {
       const targetSource = node.target || node.data?.target || node.componentRef || node.data?.componentRef;
       const isComponentRef = Boolean(
@@ -330,18 +540,51 @@
       if (field.kind === "boolean" && typeof value !== "boolean") {
         issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be checked or unchecked.` });
       }
+      if (
+        ["text", "textarea"].includes(field.kind) &&
+        typeof value !== "string"
+      ) {
+        issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be text.` });
+      }
+      if (
+        field.format === "absolute_url_template" &&
+        typeof value === "string" &&
+        !isAbsoluteUrlTemplate(value, field.allowedProtocols)
+      ) {
+        issues.push({
+          fieldKey: field.key,
+          message: `${field.label || field.key} must be an absolute URL or an expression that resolves to one.`,
+        });
+      }
       if (field.kind === "number" && !isExpression(value)) {
-        const number = Number(value);
-        if (!Number.isFinite(number)) {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
           issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be a number or expression.` });
-        } else if (field.minimum !== undefined && number < Number(field.minimum)) {
+        } else if (field.integer === true && !Number.isInteger(value)) {
+          issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be a whole number.` });
+        } else if (field.minimum !== undefined && value < Number(field.minimum)) {
           issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be at least ${field.minimum}.` });
-        } else if (field.maximum !== undefined && number > Number(field.maximum)) {
+        } else if (field.maximum !== undefined && value > Number(field.maximum)) {
           issues.push({ fieldKey: field.key, message: `${field.label || field.key} must be at most ${field.maximum}.` });
         }
       }
     }
     return issues;
+  }
+
+  function normalizeUnknownConfigPolicy(value) {
+    return Object.values(UNKNOWN_CONFIG_POLICIES).includes(value)
+      ? value
+      : UNKNOWN_CONFIG_POLICIES.Preserve;
+  }
+
+  function dedupeIssues(issues) {
+    const seen = new Set();
+    return issues.filter((issue) => {
+      const key = `${issue.fieldKey || ""}\u0000${issue.message || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   function normalizeExpressionMode(field, kind, key) {
@@ -473,8 +716,53 @@
     return Array.isArray(value) ? value : [];
   }
 
+  function cloneArrayValues(value) {
+    return arrayValues(value).map((entry) => cloneValue(entry));
+  }
+
+  function referenceValues(value) {
+    return arrayValues(value).map((entry) => {
+      if (typeof entry === "string") return entry;
+      return entry?.id || entry?.referenceId || entry?.alias || entry?.name || "";
+    });
+  }
+
+  function uniqueStrings(value) {
+    return [...new Set(arrayValues(value)
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean))];
+  }
+
+  function nodeConfiguration(node) {
+    if (isPlainObject(node?.data?.config)) return node.data.config;
+    return isPlainObject(node?.config) ? node.config : {};
+  }
+
+  function addVariableName(target, value) {
+    const name = normalizeVariableName(value);
+    if (name) target[name] = true;
+  }
+
+  function normalizeVariableName(value) {
+    const name = String(value || "").trim();
+    if (!name || name === "variables" || name.startsWith("nodes.") ||
+        name.startsWith("workflowClipboard.")) {
+      return "";
+    }
+    return name.startsWith("variables.") ? name.slice("variables.".length) : name;
+  }
+
+  function workflowClipboardEnabled(value) {
+    const mode = isPlainObject(value) ? value.mode : value;
+    return Boolean(mode && String(mode).trim().toLowerCase() !== "off");
+  }
+
   function cloneValue(value) {
     return value && typeof value === "object" ? structuredClone(value) : value;
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value));
   }
 
   function conditionMatches(condition, config, node) {
@@ -499,17 +787,47 @@
     return typeof value === "string" && /\{\{[^{}]+\}\}/.test(value);
   }
 
+  function isAbsoluteUrlTemplate(value, allowedProtocols = []) {
+    const input = String(value || "").trim();
+    if (!input) return false;
+    if (/^\{\{[^{}]+\}\}/.test(input)) return true;
+    const probe = input.replace(/\{\{[^{}]+\}\}/g, "expression");
+    try {
+      const parsed = new URL(probe);
+      const allowed = Array.isArray(allowedProtocols)
+        ? allowedProtocols.map((protocol) => String(protocol).toLowerCase())
+        : [];
+      if (allowed.length && !allowed.includes(parsed.protocol.toLowerCase())) {
+        return false;
+      }
+      if (
+        ["http:", "https:"].includes(parsed.protocol.toLowerCase()) &&
+        !String(parsed.hostname || "").trim()
+      ) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   global.BRunnerNodeAuthoring = Object.freeze({
     FIELD_KINDS,
     EXPRESSION_MODES,
     AUTOCOMPLETE_SOURCES,
     TARGET_IDENTIFIER_TYPES,
+    UNKNOWN_CONFIG_POLICIES,
     normalizeNodeFieldSchema,
     normalizeFieldDefinition,
     createTargetEditorSchema,
     normalizeTargetEditorValue,
     buildTargetEditorValue,
     collectFieldAutocompleteOptions,
+    createNodeAutocompleteContext,
+    collectReachablePredecessorNodeIds,
+    coerceNodeFieldValue,
+    prepareNodeConfiguration,
     validateNodeConfiguration,
   });
 })(globalThis);

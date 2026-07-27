@@ -515,9 +515,20 @@ async def handle_export_data_file(websocket, request_id, payload):
 
 
 async def handle_list_workflows(websocket, request_id):
+    settings = current_config()
+    discovery = (
+        settings.get("workflowDiscovery")
+        if isinstance(settings.get("workflowDiscovery"), dict)
+        else {}
+    )
     await send_json(
         websocket,
-        success(request_id, files=WORKFLOW_REPOSITORY.list_workflows())
+        success(
+            request_id,
+            files=WORKFLOW_REPOSITORY.list_workflows(
+                recursive=discovery.get("recursive") is True,
+            ),
+        )
     )
 
 

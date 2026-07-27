@@ -80,6 +80,12 @@ use-new, copy, move, and restore-default choices. A location change is complete
 only when the running host and companion use the same repository and a failed
 transition remains recoverable.
 
+The Workflow Storage tab's **Include workflows in subfolders** toggle controls
+discovery only. It is disabled by default, which lists top-level workflow JSON
+files. Enabling it recursively lists nested workflow JSON using safe relative
+names. The running host reloads this setting for each list request, so a Studio
+refresh is sufficient after changing it.
+
 Approved Folders provide an alias, path, read/write permissions, and a recursive
 policy. Workflow file operations should use the alias plus a relative path.
 These checks are correctness boundaries: path escape, read/write denial,
@@ -103,8 +109,10 @@ Prerequisites:
    enabled. The repository development config points it at `AllowedFiles/`.
 3. In a separate PowerShell window, run `..\start_acceptance_server.ps1` from
    this folder, or run `start_acceptance_server.ps1` from the repository root.
-   This is the canonical server setup; tracked host-served workflows use
-   `http://127.0.0.1:8765/BRunner_Host/test.html`.
+   This is the canonical loopback, no-store server setup; tracked host-served
+   workflows use `http://127.0.0.1:8765/BRunner_Host/test.html`. Do not replace
+   it with a generic Python HTTP server because cached fixtures make
+   stopped-server failure checks nondeterministic.
 4. Reload the unpacked extension, open Graph Studio, load **Extension/Host
    Round-Trip Verification**, and run it. If custom workflow storage is active,
    copy the verification JSON into that active workflow directory first.
@@ -174,6 +182,9 @@ with dependency/version recording and full packaged integration acceptance.
 - A companion-managed host restarts automatically after a workflow-location
   change. If the host was started externally, the companion warns you to
   restart that external process before running workflows.
+- If a workflow in a subfolder is missing from either Studio, enable **Include
+  workflows in subfolders** on the Workflow Storage tab and refresh the
+  Studio's workflow list.
 - If an approved file is unexpectedly allowed or denied, check the alias's
   read/write/recursive settings and report the case against the companion TODO.
 - If visible fallback is refused, keep Chrome/Chromium foregrounded and inspect

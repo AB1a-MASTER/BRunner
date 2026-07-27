@@ -166,7 +166,7 @@ export function sequentialViewToCanonicalWorkflow(view = {}, options = {}) {
   const structureChanged = originalSignature !== nextSignature;
   if (structureChanged && hasUserManagedRoutes(base)) {
     throw new Error(
-      "This workflow contains explicit graph routes. Sequential Studio can edit node configuration without loss, but route structure must remain unchanged until nested route editing is available.",
+      "This workflow contains explicit graph routes. The legacy linear adapter cannot edit route structure; use Graph Studio.",
     );
   }
 
@@ -519,11 +519,25 @@ function ensureCanonicalMapperRoutes(input) {
   graph.schemaVersion = WorkflowSchemaVersion.MapperGraph;
   const domNodes = graph.nodes.filter((node) => isDomDependentNode(node));
   if (!domNodes.length) {
-    const orphanIds = new Set(graph.nodes
+    const systemAttentionIds = new Set(graph.nodes
       .filter((node) => (
         node.type === MapperAttentionNodeType && node.data?.systemNode === true
       ))
       .map((node) => node.id));
+    const referencedAttentionIds = new Set(graph.edges
+      .filter((edge) => (
+        edgeSourceHandle(edge) !== GraphEdgeHandles.Unresolved &&
+        (
+          systemAttentionIds.has(edge.source) ||
+          systemAttentionIds.has(edge.target)
+        )
+      ))
+      .flatMap((edge) => [edge.source, edge.target])
+      .filter((nodeId) => systemAttentionIds.has(nodeId)));
+    const orphanIds = new Set(
+      [...systemAttentionIds]
+        .filter((nodeId) => !referencedAttentionIds.has(nodeId)),
+    );
     if (orphanIds.size) {
       graph.nodes = graph.nodes.filter((node) => !orphanIds.has(node.id));
       graph.edges = graph.edges.filter((edge) => (

@@ -1,14 +1,18 @@
 export const STUDIO_SESSION_KEY = "brunner.studio.session.v1";
 
 export const StudioKind = Object.freeze({
-  Sequential: "sequential",
   Graph: "graph",
+  // Retained only to migrate sessions written by the retired Studio.
+  Sequential: "sequential",
 });
 
 export function normalizeStudioSession(input = {}) {
   const filename = String(input?.activeWorkflowFilename || "").trim();
-  const activeStudio = Object.values(StudioKind).includes(input?.activeStudio)
-    ? input.activeStudio
+  const activeStudio = [
+    StudioKind.Graph,
+    StudioKind.Sequential,
+  ].includes(input?.activeStudio)
+    ? StudioKind.Graph
     : "";
 
   return {

@@ -2,6 +2,7 @@ export {
   NAVIGATE_NODE_TYPE,
   NavigateDefaults,
   NavigateDestinations,
+  NavigateErrorCodes,
   NavigateNoHistoryBehaviors,
   NavigateOperations,
   NavigateReadiness,
@@ -24,3 +25,8 @@ export {
   executeNavigate,
   verifyNavigateBeforeRetry,
 } from "./executor.js";
+export { createChromeNavigateTabsService } from "./chromeTabsAdapter.js";
+export {
+  navigateCanBootstrapWithoutTab,
+  workflowCanBootstrapNavigateWithoutTab,
+} from "./startupPolicy.js";

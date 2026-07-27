@@ -47,7 +47,6 @@ import {
   saveStudioPreferences,
 } from "../../core/studioPreferences.js";
 import {
-  STUDIO_SESSION_KEY,
   StudioKind,
   loadStudioSession,
   saveStudioSession,
@@ -61,7 +60,10 @@ import { summarizeValue } from "../../core/variableInspector.js";
 import {
   buildTargetEditorValue,
   collectFieldAutocompleteOptions,
+  coerceNodeFieldValue,
+  createNodeAutocompleteContext,
   normalizeTargetEditorValue,
+  prepareNodeConfiguration,
 } from "../../core/nodeAuthoring.js";
 import {
   createRecoverableGraphDraft,
@@ -561,11 +563,8 @@ function GraphStudioCanvas() {
   const createNode = useCallback((definition, position) => {
     if (!canvasInteraction.canEdit) return;
     const id = `${definition.type.replace(/[^a-z0-9]+/gi, "-")}-${crypto.randomUUID().slice(0, 8)}`;
-    const config = Object.fromEntries(
-      (definition.config || [])
-        .filter((field) => field.default !== undefined)
-        .map((field) => [field.key, structuredClone(field.default)]),
-    );
+    const prepared = prepareNodeConfiguration({}, definition);
+    const config = prepared.config;
     const componentRef = definition.targetRequired
       ? createPlaceholderComponentRef(id, definition.type)
       : null;
@@ -578,6 +577,7 @@ function GraphStudioCanvas() {
         type: definition.type,
         definition,
         config,
+        configurationIssues: prepared.issues,
         target: "",
         targetSource: "",
         targetEdited: false,
@@ -828,20 +828,6 @@ function GraphStudioCanvas() {
       .catch(() => {});
   }, [busy, definitions.length, draftRecoveryStatus, hostStatus, loadWorkflow, loadedFilename]);
 
-  useEffect(() => {
-    const listener = (changes, areaName) => {
-      if (areaName !== "local" || !changes?.[STUDIO_SESSION_KEY]) return;
-      const session = changes[STUDIO_SESSION_KEY].newValue || {};
-      if (session.activeStudio === StudioKind.Graph) return;
-      const filename = session.activeWorkflowFilename || "";
-      if (!filename || filename === loadedFilename || dirty || busy || hostStatus !== "connected") return;
-      setSelectedFile(filename);
-      void loadWorkflow(filename);
-    };
-    chrome.storage?.onChanged?.addListener?.(listener);
-    return () => chrome.storage?.onChanged?.removeListener?.(listener);
-  }, [busy, dirty, hostStatus, loadWorkflow, loadedFilename]);
-
   const duplicateWorkflow = useCallback(async () => {
     if (!selectedFile || busy || hostStatus !== "connected") return;
     const base = stripJson(selectedFile);
@@ -1047,27 +1033,6 @@ function GraphStudioCanvas() {
     });
   }, [hostStatus, performGraphSave]);
 
-  const openSequentialStudio = useCallback(async (event) => {
-    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    const destination = event.currentTarget.href;
-    if (saveQueueRef.current.pending > 0) {
-      setNotice({ kind: "warning", text: "Wait for the current save to finish before switching Studios" });
-      return;
-    }
-    if (!confirmDiscard()) return;
-    if (dirtyRef.current) {
-      dirtyRef.current = false;
-      setDirty(false);
-      await clearRecoverableDraft().catch(() => {});
-    }
-    await saveStudioSession({
-      activeWorkflowFilename: draftStateRef.current?.loadedFilename || "",
-      activeStudio: StudioKind.Sequential,
-    }).catch(() => {});
-    window.location.assign(destination);
-  }, [clearRecoverableDraft, confirmDiscard]);
-
   const toggleRecording = useCallback(async () => {
     if (executionActive) return;
     try {
@@ -1237,7 +1202,6 @@ function GraphStudioCanvas() {
         hostStatus={hostStatus}
         onRetryHost={checkHostStatus}
         onNew={newWorkflow}
-        onOpenSequential={openSequentialStudio}
         files={files}
         selectedFile={selectedFile}
         onSelectedFile={setSelectedFile}
@@ -1319,6 +1283,7 @@ function GraphStudioCanvas() {
         {inspectorVisible ? <InspectorPanel
           node={selectedNode}
           nodes={nodes}
+          edges={edges}
           onNodeChange={updateSelectedNode}
           readOnly={!canvasInteraction.canEdit}
           navigationMode={canvasInteraction.effectiveTool === CanvasTool.Hand}
@@ -1394,7 +1359,6 @@ function StudioCommandBar(props) {
       <nav className="command-group identity-group" aria-label="Identity and navigation">
         <div className="brand-lockup"><img className="brand-mark" src={studioIcon} alt="" /><div><strong>BRunner</strong><span>Graph Studio</span></div></div>
         <button type="button" className="command-button" onClick={props.onNew} disabled={props.busy || props.executionActive || props.recordingActive} title="Create a new workflow"><PlusIcon /><span>New</span></button>
-        <a href="../studio/index.html" className="command-button" onClick={props.onOpenSequential} title="Open Sequential Studio"><SequenceIcon /><span>Sequential</span></a>
       </nav>
 
       <div className={`host-connection host-${props.hostStatus}`} role="status" aria-live="polite">
@@ -1406,7 +1370,7 @@ function StudioCommandBar(props) {
       <div className="command-sections">
         <section className="command-group" aria-label="Display controls">
           <span className="command-group-label">View</span>
-          <select aria-label="Studio display size" title="Change the display size in both Studios" value={props.density} onChange={(event) => props.onDensity(event.target.value)}>
+          <select aria-label="Studio display size" title="Change the Graph Studio display size" value={props.density} onChange={(event) => props.onDensity(event.target.value)}>
             <option value={StudioDensity.Compact}>Compact</option>
             <option value={StudioDensity.Comfortable}>Comfortable</option>
             <option value={StudioDensity.Large}>Large</option>
@@ -1579,7 +1543,35 @@ function InspectorPanel(props) {
   }
 
   const definition = node.data.definition;
-  const setConfig = (key, value) => props.onNodeChange({ config: { ...node.data.config, [key]: value } });
+  const autocompleteContext = createAutocompleteContext(props, node);
+  const configuration = prepareNodeConfiguration(
+    node.data.config,
+    definition,
+    {
+      node: {
+        ...node,
+        ...node.data,
+        data: node.data,
+      },
+    },
+  );
+  const setConfig = (key, value) => {
+    const field = (definition.config || []).find((entry) => entry.key === key) || {};
+    const prepared = prepareNodeConfiguration({
+      ...node.data.config,
+      [key]: coerceNodeFieldValue(field, value),
+    }, definition, {
+      node: {
+        ...node,
+        ...node.data,
+        data: node.data,
+      },
+    });
+    props.onNodeChange({
+      config: prepared.config,
+      configurationIssues: prepared.issues,
+    });
+  };
   return (
     <aside className="graph-sidebar properties-panel inspector-panel" aria-label="Inspector">
       <div className="panel-heading"><div><h2>Inspector</h2></div><button type="button" className="panel-collapse-button" onClick={() => props.onInspectorMode(props.inspectorMode === InspectorMode.Pinned ? InspectorMode.Auto : InspectorMode.Pinned)} aria-label={props.inspectorMode === InspectorMode.Pinned ? "Use automatic Inspector" : "Pin Inspector"} aria-pressed={props.inspectorMode === InspectorMode.Pinned} title={props.inspectorMode === InspectorMode.Pinned ? "Collapse Inspector until a node is selected" : "Keep Inspector pinned"}><PinIcon pinned={props.inspectorMode === InspectorMode.Pinned} /></button></div>
@@ -1594,8 +1586,18 @@ function InspectorPanel(props) {
           {node.data.executionMode === "disabled" && <p className="bypass-note">Connections remain intact; runtime passes over this node.</p>}
         </section>
         <section className="property-section" aria-labelledby="configuration-heading"><h3 id="configuration-heading">Configuration</h3>
-          {definition.targetRequired && <TargetEditor node={node} schema={definition.targetSchema} onChange={props.onNodeChange} disabled={readOnly} autocompleteContext={createAutocompleteContext(props, node)} />}
-          {(definition.config || []).map((field) => <ConfigField key={field.key} field={field} value={node.data.config[field.key] ?? field.default ?? ""} config={node.data.config} onChange={setConfig} disabled={readOnly} autocompleteOptions={collectFieldAutocompleteOptions(field, createAutocompleteContext(props, node))} />)}
+          {definition.targetRequired && <TargetEditor node={node} schema={definition.targetSchema} onChange={props.onNodeChange} disabled={readOnly} autocompleteContext={autocompleteContext} />}
+          {(definition.config || []).map((field) => <ConfigField
+            key={field.key}
+            field={field}
+            value={configuration.config[field.key] ?? field.default ?? ""}
+            config={configuration.config}
+            onChange={setConfig}
+            disabled={readOnly}
+            autocompleteOptions={collectFieldAutocompleteOptions(field, autocompleteContext)}
+            issues={configuration.issues.filter((issue) => issue.fieldKey === field.key)}
+          />)}
+          {unknownConfigurationIssueText(configuration.issues, definition) && <p className="panel-error" role="alert">{unknownConfigurationIssueText(configuration.issues, definition)}</p>}
         </section>
       </div>
     </aside>
@@ -1910,7 +1912,7 @@ function TargetEditor({ node, schema, onChange, disabled, autocompleteContext })
   );
 }
 
-function ConfigField({ field, value, config, onChange, disabled, autocompleteOptions = [], idPrefix = "property" }) {
+function ConfigField({ field, value, config, onChange, disabled, autocompleteOptions = [], issues = [], idPrefix = "property" }) {
   if (field.visibleWhen && String(config[field.visibleWhen.field] ?? "") !== String(field.visibleWhen.equals)) return null;
   const id = `${idPrefix}-${field.key}`;
   const listId = autocompleteOptions.length ? `${id}-options` : undefined;
@@ -1918,30 +1920,42 @@ function ConfigField({ field, value, config, onChange, disabled, autocompleteOpt
     field.help,
     field.example ? `Example: ${field.example}` : "",
   ].filter(Boolean).join(" ");
+  const emitChange = (nextValue) => onChange(
+    field.key,
+    coerceNodeFieldValue(field, nextValue),
+  );
   let control;
-  if (field.kind === "select") control = <select id={id} value={String(value)} disabled={disabled} onChange={(event) => onChange(field.key, event.target.value)}>{(field.options || []).map((option) => { const optionValue = typeof option === "object" ? option.value : option; const optionLabel = typeof option === "object" ? option.label : option; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select>;
-  else if (field.kind === "boolean") control = <input id={id} type="checkbox" checked={value === true} disabled={disabled} onChange={(event) => onChange(field.key, event.target.checked)} />;
-  else if (["textarea", "value"].includes(field.kind)) control = <textarea id={id} rows="5" disabled={disabled} value={typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)} placeholder={field.placeholder} onChange={(event) => onChange(field.key, event.target.value)} />;
-  else control = <><input id={id} value={String(value)} disabled={disabled} inputMode={field.kind === "number" ? "numeric" : undefined} placeholder={field.placeholder} list={listId} onChange={(event) => onChange(field.key, event.target.value)} />{listId && <datalist id={listId}>{autocompleteOptions.map((option) => <option key={option} value={option} />)}</datalist>}</>;
-  return <Field label={field.label || field.key} required={field.required} help={help} htmlFor={id}>{control}</Field>;
+  if (field.kind === "select") control = <select id={id} value={String(value)} disabled={disabled} onChange={(event) => emitChange(event.target.value)}>{(field.options || []).map((option) => { const optionValue = typeof option === "object" ? option.value : option; const optionLabel = typeof option === "object" ? option.label : option; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select>;
+  else if (field.kind === "boolean") control = <input id={id} type="checkbox" checked={value === true} disabled={disabled} onChange={(event) => emitChange(event.target.checked)} />;
+  else if (["textarea", "value"].includes(field.kind)) control = <textarea id={id} rows="5" disabled={disabled} value={typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)} placeholder={field.placeholder} onChange={(event) => emitChange(event.target.value)} />;
+  else control = <><input id={id} value={String(value)} disabled={disabled} inputMode={field.kind === "number" ? "decimal" : undefined} placeholder={field.placeholder} list={listId} onChange={(event) => emitChange(event.target.value)} />{listId && <datalist id={listId}>{autocompleteOptions.map((option) => <option key={option} value={option} />)}</datalist>}</>;
+  return <Field label={field.label || field.key} required={field.required} help={help} error={issues.map((issue) => issue.message).join(" ")} htmlFor={id}>{control}</Field>;
 }
 
-function Field({ label, required, help, htmlFor, children }) { return <div className="property-field"><label htmlFor={htmlFor}>{label}{required ? " *" : ""}</label>{children}{help && <small>{help}</small>}</div>; }
+function Field({ label, required, help, error, htmlFor, children }) { return <div className="property-field"><label htmlFor={htmlFor}>{label}{required ? " *" : ""}</label>{children}{help && <small>{help}</small>}{error && <small className="property-field-error" role="alert">{error}</small>}</div>; }
 function formatInlineList(values = []) { return values.length ? values.join(", ") : "none"; }
 function nodeContractKey(type, version) { return `${String(type || "").trim()}@${String(version ?? "").trim()}`; }
 function createAutocompleteContext(props, node) {
-  const variables = { ...(props.metadata?.variables || {}) };
-  for (const entry of Array.isArray(props.variables) ? props.variables : []) {
-    const name = typeof entry === "string" ? entry : entry?.name || entry?.id;
-    if (name) variables[name] = true;
-  }
-  const nodes = Array.isArray(props.nodes) ? props.nodes : [];
-  return {
-    variables,
-    nodeIds: nodes.filter((item) => item.id !== node.id).map((item) => item.id),
-    tabReferences: nodes.map((item) => item.data?.config?.saveTabReferenceAs || item.data?.tabRef).filter(Boolean),
+  return createNodeAutocompleteContext({
+    currentNodeId: node.id,
+    entryNodeId: props.metadata?.entryNodeId,
+    nodes: props.nodes,
+    edges: props.edges,
+    variables: props.metadata?.variables,
+    runtimeVariables: props.variables,
+    dataSources: props.metadata?.dataSources,
     approvedDirectories: props.approvedDirectories || [],
-  };
+  });
+}
+function unknownConfigurationIssueText(issues = [], definition = {}) {
+  const fieldKeys = new Set((definition.config || []).map((field) => field.key));
+  return issues
+    .filter((issue) => {
+      const key = String(issue.fieldKey || "").replace(/^config\./, "");
+      return !key || !fieldKeys.has(key);
+    })
+    .map((issue) => issue.message)
+    .join(" ");
 }
 function getRecordedStepKey(step = {}) {
   if (step.id) return `id:${step.id}`;
@@ -2008,7 +2022,6 @@ function NodeGlyphSmall() { return <svg aria-hidden="true" viewBox="0 0 24 24"><
 function NodeGlyphLarge() { return <svg aria-hidden="true" viewBox="0 0 48 48"><rect x="7" y="7" width="13" height="13" rx="3"/><rect x="28" y="28" width="13" height="13" rx="3"/><path d="M20 13.5h8a7 7 0 0 1 7 7V28"/></svg>; }
 function RefreshIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 5M20 5v6h-6"/></svg>; }
 function PlusIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>; }
-function SequenceIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="4" width="5" height="5" rx="1"/><rect x="15" y="15" width="5" height="5" rx="1"/><path d="M9 6.5h4a4 4 0 0 1 4 4V15"/></svg>; }
 function LoadIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4Z"/><path d="m12 11 0 5m-2-2 2 2 2-2"/></svg>; }
 function DuplicateIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg>; }
 function DeleteIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7M10 11v5m4-5v5"/></svg>; }

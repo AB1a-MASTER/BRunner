@@ -11,12 +11,17 @@ export const {
   EXPRESSION_MODES,
   AUTOCOMPLETE_SOURCES,
   TARGET_IDENTIFIER_TYPES,
+  UNKNOWN_CONFIG_POLICIES,
   normalizeNodeFieldSchema,
   normalizeFieldDefinition,
   createTargetEditorSchema,
   normalizeTargetEditorValue,
   buildTargetEditorValue,
   collectFieldAutocompleteOptions,
+  createNodeAutocompleteContext,
+  collectReachablePredecessorNodeIds,
+  coerceNodeFieldValue,
+  prepareNodeConfiguration,
   validateNodeConfiguration,
 } = nodeAuthoring;
 

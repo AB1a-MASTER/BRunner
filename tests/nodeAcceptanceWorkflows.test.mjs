@@ -4,6 +4,10 @@ import { test } from "node:test";
 
 import { FinalizedNodeCatalog } from "../BRunner/nodes/catalog.js";
 import {
+  GraphEdgeHandles,
+  MapperAttentionNodeType,
+} from "../BRunner/core/workflowSchema.js";
+import {
   expectedNodeAcceptanceFilename,
   validateNodeAcceptanceWorkflow,
 } from "../BRunner/nodes/acceptanceWorkflow.js";
@@ -100,4 +104,19 @@ test("every checked-in node acceptance workflow matches its catalog row and sche
       await readFile(new URL(fixturePath, root));
     }
   }
+});
+
+test("Navigate acceptance failure uses the executable Graph attention route", async () => {
+  const workflow = JSON.parse(await readFile(
+    new URL("001_navigate_acceptance.json", acceptanceDirectory),
+    "utf8",
+  ));
+  const errorEdge = workflow.edges.find(
+    (edge) => edge.sourceHandle === GraphEdgeHandles.Error,
+  );
+  const target = workflow.nodes.find((node) => node.id === errorEdge?.target);
+
+  assert.equal(errorEdge?.source, "navigate-fixture");
+  assert.equal(target?.type, MapperAttentionNodeType);
+  assert.equal(target?.data?.systemNode, true);
 });

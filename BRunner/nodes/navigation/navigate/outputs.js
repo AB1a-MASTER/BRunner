@@ -2,7 +2,17 @@ import {
   NodeErrorCodes,
   NodeExecutionError,
 } from "../../shared/nodeContracts.js";
-import { NavigateOperations } from "./definition.js";
+import {
+  NavigateOperations,
+  NavigateReadiness,
+} from "./definition.js";
+
+const NAVIGATION_STATES = new Set([
+  ...Object.values(NavigateReadiness),
+  "protected_page_skipped",
+  "no_history_skipped",
+  "no_history_continued",
+]);
 
 export function buildNavigateOutput(value = {}) {
   const operation = String(value.operation || "").trim();
@@ -14,8 +24,8 @@ export function buildNavigateOutput(value = {}) {
     invalid("Navigate output durationMs must be a non-negative number.");
   }
   const navigationState = String(value.navigationState || "").trim();
-  if (!navigationState) {
-    invalid("Navigate output navigationState is required.");
+  if (!NAVIGATION_STATES.has(navigationState)) {
+    invalid("Navigate output navigationState is invalid.");
   }
 
   return Object.freeze({
@@ -45,6 +55,7 @@ function normalizeTab(tab) {
   if (!tab || typeof tab !== "object" || !Number.isInteger(Number(tab.id))) {
     invalid("Navigate output requires a tab with an integer id.");
   }
+  const requestedPageCapability = String(tab.pageCapability || "").trim();
   return {
     id: Number(tab.id),
     windowId: nullableInteger(tab.windowId),
@@ -53,9 +64,11 @@ function normalizeTab(tab) {
     title: nullableString(tab.title),
     active: tab.active === true,
     status: nullableString(tab.status),
-    pageCapability:
-      String(tab.pageCapability || "").trim() ||
-      pageCapabilityForUrl(tab.url),
+    pageCapability: ["dom_supported", "tab_control_only"].includes(
+      requestedPageCapability,
+    )
+      ? requestedPageCapability
+      : pageCapabilityForUrl(tab.url),
   };
 }
 
@@ -67,6 +80,9 @@ export function isProtectedBrowserUrl(value) {
   const url = String(value || "").trim().toLowerCase();
   return (
     url.startsWith("chrome://") ||
+    url.startsWith("chrome-error://") ||
+    url.startsWith("chrome-search://") ||
+    url.startsWith("chrome-untrusted://") ||
     url.startsWith("edge://") ||
     url.startsWith("about:") ||
     url.startsWith("view-source:") ||

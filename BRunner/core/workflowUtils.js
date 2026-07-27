@@ -69,7 +69,12 @@ export function createDefaultWorkflowSettings() {
 }
 
 export function normalizeWorkflowSettings(settings = {}) {
+  const source =
+    settings && typeof settings === "object" && !Array.isArray(settings)
+      ? structuredClone(settings)
+      : {};
   return {
+    ...source,
     reuseExistingTabs: settings?.reuseExistingTabs === true,
     mapper: normalizeMapperSettings(settings?.mapper),
   };
@@ -109,6 +114,15 @@ export function ensureJsonFilename(name) {
     : `${cleanName}${Defaults.WorkflowFileExtension}`;
 }
 
+export function ensureJsonWorkflowReference(name) {
+  const reference = String(name || Defaults.DefaultWorkflowName)
+    .trim()
+    .replace(/\\/g, "/");
+  return reference.toLowerCase().endsWith(Defaults.WorkflowFileExtension)
+    ? reference
+    : `${reference}${Defaults.WorkflowFileExtension}`;
+}
+
 export function createAutoSaveName() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 
@@ -125,7 +139,10 @@ export function extractDomainFromUrl(url) {
 
 export function isStudioUrl(url = "") {
   try {
-    return url.startsWith(chrome.runtime.getURL("studio/index.html"));
+    return [
+      "studio-graph/",
+      "studio/",
+    ].some((path) => url.startsWith(chrome.runtime.getURL(path)));
   } catch {
     return false;
   }

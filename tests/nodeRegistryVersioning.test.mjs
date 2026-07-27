@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  NodeContractKinds,
   NodeContractResolutionCodes,
   getLatestNodeDefinition,
   getNodeDefinition,
@@ -20,6 +21,31 @@ test("registry resolves definitions by exact type and version", () => {
   assert.deepEqual(getNodeDefinitionVersions("element.click"), [1]);
   assert.equal(Object.isFrozen(definition), true);
   assert.equal(Object.isFrozen(definition.config), true);
+});
+
+test("Navigate keeps provisional v1 isolated while the palette selects finalized v2", () => {
+  const provisional = getNodeDefinition("browser.navigate", 1);
+  const finalized = getNodeDefinition("browser.navigate", 2);
+  assert.equal(provisional.label, "Navigate URL");
+  assert.equal(finalized.label, "Navigate");
+  assert.equal(provisional.contractKind, NodeContractKinds.Provisional);
+  assert.equal(finalized.contractKind, NodeContractKinds.Finalized);
+  assert.equal(finalized.catalogNumber, 1);
+  assert.deepEqual(getNodeDefinitionVersions("browser.navigate"), [1, 2]);
+  assert.equal(getLatestNodeDefinition("browser.navigate"), finalized);
+  assert.equal(
+    getNodeDefinitions().find((definition) => definition.type === "browser.navigate")?.version,
+    2,
+  );
+  assert.throws(
+    () => migrateNodeContract({
+      id: "legacy-navigation",
+      type: "browser.navigate",
+      version: 1,
+      config: { url: "https://example.com/" },
+    }, { targetVersion: 2 }),
+    (error) => error.code === NodeContractResolutionCodes.MigrationUnavailable,
+  );
 });
 
 test("registry fails closed on missing and unsupported node versions", () => {

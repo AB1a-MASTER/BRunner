@@ -97,8 +97,8 @@ the current mapper phase.
    plus post-fill verification.
 4. Register `form.fill_from_data`, add graph-schema unresolved output, expression
    input, overwrite/unmatched policy, and structured output variable.
-5. Add Graph and Sequential Studio authoring controls without requiring manual
-   Component IDs for each field.
+5. Add Graph Studio authoring controls without requiring manual Component IDs
+   for each field.
 6. Add fixtures for contact, address, login, repeated labels, hidden fields,
    dynamic forms, custom ARIA controls, and table-row iteration.
 

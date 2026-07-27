@@ -1,12 +1,13 @@
 # BRunner Node User Catalogue
 
 **Status:** Living end-user documentation  
-**Updated:** 2026-07-22
+**Updated:** 2026-07-27
 
-This catalogue documents finalized nodes that are actually available in both
-Graph Studio and Sequential Studio. A planned node is not described as usable
-until its implementation, both-Studio support, automated tests, focused
-acceptance workflow, and tracker gate pass.
+This catalogue documents finalized nodes for Graph Studio, BRunner's only
+supported workflow-authoring surface. An entry marked **Accepted** is available
+for normal use. An entry marked **Acceptance pending** documents a source
+candidate so its final live check can be performed, but it does not count as an
+accepted node yet.
 
 The complete planned inventory and developer contracts live in
 `../workflow_nodes_implementation_blueprint.md`. Progress and acceptance
@@ -14,27 +15,26 @@ evidence live in `NODE_IMPLEMENTATION_STATUS.md`.
 
 ## Current availability
 
-No finalized node has completed the full production and both-Studio acceptance
-gate yet. Existing palette actions remain provisional development behavior.
-
-This section will list each node as soon as it is accepted:
+Navigate is the first finalized node to complete the unpacked-extension
+acceptance gate. Existing version-1 Navigate workflows continue to use isolated
+provisional behavior; the accepted palette entry is the exact version-2
+contract below.
 
 | Node | Type and version | Phase | Acceptance workflow | Status |
 |---|---|---:|---|---|
-| — | — | — | — | No finalized node accepted yet |
+| Navigate | `browser.navigate@2` | 1 | `001_navigate_acceptance.json` | Accepted |
 
-## The two Studios
+## Supported Studio
 
-BRunner has two views of the same workflow:
+Graph Studio is BRunner's only supported authoring surface. It presents nodes,
+ports, routes, and configuration on a visual canvas and saves the canonical
+mapper-graph workflow consumed by the finalized runtime.
 
-- **Graph Studio** presents nodes and routes on a visual canvas.
-- **Sequential Studio** presents the same nodes, configuration, outputs, and
-  routes through a simpler ordered or nested interface.
-
-They use one workflow file, node registry, version contract, validation model,
-and executor. Saving in one Studio must preserve behavior and layout metadata
-needed by the other. The simpler Sequential Studio must not create a separate
-node type or incompatible workflow format.
+Sequential Studio is deprecated and disabled. Normal Studio launches open Graph
+Studio, and the former Sequential URL redirects there without loading
+authoring/run code. Dormant source remains only for reference until the final
+pre-V2 cleanup; it is not a fallback editor or an acceptance target for
+finalized nodes.
 
 ## Common node controls
 
@@ -44,7 +44,7 @@ entries document any different defaults.
 | Field | Meaning | Example or UI behavior |
 |---|---|---|
 | Enabled | Skip the node without side effects when off | Checkbox, on by default |
-| Display name | Friendly name used in the Studios and logs | `Open customer page` |
+| Display name | Friendly name used in Graph Studio and logs | `Open customer page` |
 | Timeout | Maximum node execution time in milliseconds | `30000` |
 | Retry count | Eligible retries after the first failed attempt | `1` |
 | Retry delay | Delay before another eligible attempt | `500` ms |
@@ -108,6 +108,184 @@ Example target inputs:
 | Attribute | `data-testid` = `save-profile` |
 | Visible text | `Continue` with exact, case-insensitive matching |
 
+## Navigate — Accepted
+
+- **Contract:** `browser.navigate@2`
+- **Ports:** `input`, `success`, `error`
+- **Native host:** not required
+- **Status:** Accepted. Source automation, cache-safe live success, and the
+  stopped-server red error route passed on 2026-07-27.
+
+### Purpose and requirements
+
+Navigate changes a selected browser tab in one of four explicit ways: go to an
+exact URL, go back, go forward, or reload. Use it whenever later nodes need a
+known page or a deliberate history action.
+
+The node needs Chrome/Chromium tab access. DOM-ready and network-idle waits also
+need scripting access on a normal supported page. Browser-controlled pages such
+as `chrome://` allow tab navigation but do not allow DOM readiness checks. The
+node executor never uses the native host. The source companion is needed only
+if Graph Studio loads the checked-in acceptance file through its OS workflow
+list.
+
+The URL field accepts absolute URLs such as `https://example.com/account/42`.
+Text such as `example search words` is rejected; Navigate never silently turns
+it into a web search.
+
+Graph Studio is a control page, not an automation target. When a workflow is
+started while Graph Studio is the active tab, an entry `browser.navigate@2`
+configured as `goto_url`, `current`, and `new_tab` may safely create its own
+destination tab. BRunner does not navigate the Studio page or guess another
+open page. Operations that need an existing tab still require a normal browser
+page, a Bound Domain, or an explicitly reusable tab.
+
+### Fields
+
+| Field | Default | How it works | Example |
+|---|---|---|---|
+| Enabled | On | Uncheck to skip without touching a tab | Checked |
+| Display Name | `Navigate` | Friendly Studio/log label | `Open account page` |
+| Operation | `goto_url` | Dropdown: `goto_url`, `back`, `forward`, `reload` | `reload` |
+| Tab Source | `current` | Dropdown: current, active, saved reference, or previous node | `saved_reference` |
+| Saved Tab Reference | empty | Required for `saved_reference`; autocompletes saved tabs | `account_tab` |
+| URL | empty | Required for `goto_url`; supports templates and expression autocomplete | `https://example.com/accounts/{{ variables.accountId }}` |
+| Open Destination In | `current_tab` | Current selected tab or a new active tab; `new_tab` can safely start a Studio-run workflow without an existing page | `new_tab` |
+| Wait Until | `dom_ready` | None, navigation start, DOM ready, full load, or network idle | `full_load` |
+| Timeout | `30000` ms | Bounds the action and readiness wait | `10000` |
+| When History Is Unavailable | `fail` | Dropdown: fail, skip, or continue | `continue` |
+| Save Tab Reference As | empty | Saves the resulting tab for later node autocomplete | `account_tab` |
+| Protected Page Policy | `fail` | Fail, skip readiness, ask the user, or wait for a supported page | `wait_until_supported` |
+| Retry Count | `1` | Eligible retries after the first attempt | `1` |
+| Retry Delay | `0` ms | Delay before an eligible retry | `500` |
+| Retry Strategy | `fixed` | Fixed or increasing delay | `fixed` |
+| Retry Only For | `navigation_failure` | Navigation failures only, or any eligible error | `navigation_failure` |
+| On Error | `fail` | Fail, continue with warning, skip, or use the Graph error port | `error_port` |
+| Save Output As | empty | Optional alias for the complete output object | `account_navigation` |
+| Workflow Clipboard | `off` | Off, replace, append, or create a version in the run-local clipboard | `replace` |
+| Clipboard Entry Name | empty | Entry name when Workflow Clipboard output is enabled | `account_navigation` |
+| Log Level | `normal` | Structural summaries or verbose local values | `normal` |
+
+`URL` autocompletes variables, previous node outputs, Workflow Clipboard
+entries, and loop values. `Saved Tab Reference` autocompletes tab references.
+Operation, destination, wait behavior, history behavior, protected-page policy,
+retry policy, error policy, clipboard mode, and log level use dropdowns so their
+meaning is never guessed from free-form text.
+
+### Graph Studio usage
+
+Drag Navigate from the Navigation category, configure the fields above,
+connect `success` to the next node, and optionally connect `error` when On Error
+is `error_port`.
+
+The finalized v2 editor shows the complete field set above. The compact legacy
+`URL` / `Open In` editor belongs only to `browser.navigate@1`; its `sameTab` /
+`newTab` aliases are never shown for or applied to v2.
+
+Saving and reopening in Graph Studio must preserve the exact contract version,
+configuration and value types, output ports, routes, node position/layout
+metadata, and expressions that the background execution plan consumes.
+
+### Execution, readiness, and retry behavior
+
+Navigate resolves the requested tab, validates the exact URL, performs one
+browser action, waits for the selected readiness state, refreshes the resulting
+tab metadata, then publishes output. Redirects are reported through
+`currentUrl`; `previousUrl` remains the URL before the action.
+
+For the safe Studio bootstrap case (`current` plus `new_tab`), no source page
+exists, so the new tab has no forced opener and `previousUrl` is `null`. If a
+normal current page does exist, it remains the opener and supplies
+`previousUrl`.
+
+- `none` returns after the browser action starts.
+- `navigation_start` confirms the action was issued.
+- `dom_ready` waits for `document.readyState` to become interactive or complete.
+- `full_load` waits for the Chrome tab status to become complete.
+- `network_idle` requires a complete document and at least 500 ms without a
+  completed resource request. This is a bounded browser approximation, not a
+  promise that application background work has ended.
+
+The default single retry is verification-gated. If the URL already changed or
+the navigation completed, Navigate does not repeat the side effect. Timeout and
+user cancellation abort readiness polling. With `ask_user`, the run log asks
+the user to navigate the selected protected tab to a supported page and waits
+within the same timeout.
+
+### Output
+
+Successful output has this stable shape:
+
+```json
+{
+  "operation": "goto_url",
+  "previousUrl": "https://start.example/",
+  "currentUrl": "https://example.com/account/42",
+  "tab": {
+    "id": 123,
+    "windowId": 4,
+    "index": 1,
+    "url": "https://example.com/account/42",
+    "title": "Account",
+    "active": true,
+    "status": "complete",
+    "pageCapability": "dom_supported"
+  },
+  "navigationState": "dom_ready",
+  "durationMs": 287
+}
+```
+
+Downstream examples:
+
+```text
+{{ nodes.navigate-fixture.output.currentUrl }}
+{{ variables.account_navigation.tab.id }}
+{{ workflowClipboard.account_navigation.currentUrl }}
+```
+
+### Expected failures and troubleshooting
+
+| Failure | Meaning and action |
+|---|---|
+| `CONFIG_INVALID` | A required option or strict absolute URL is invalid; correct the highlighted field. |
+| `TAB_NOT_FOUND` | The selected/saved tab no longer exists; choose another source or recreate the reference. |
+| `browser.navigate/NO_HISTORY` | Back/forward has no entry; choose skip/continue if that is acceptable. |
+| `browser.navigate/NAVIGATION_FAILED` | Chrome rejected or could not complete the navigation; inspect the local cause and retry evidence. |
+| `PROTECTED_PAGE` | DOM readiness is unavailable on the browser-controlled destination; change the policy or navigate away. |
+| `TIMEOUT` | The action/readiness state did not finish within Timeout. |
+| `CANCELLED` | The user stopped the workflow; no further retry occurs. |
+| No suitable browser tab | The entry action needs an existing page. Open a normal web page, set a Bound Domain, enable explicit tab reuse, or make the enabled entry Navigate node use `current` plus `new_tab`. |
+
+### Acceptance workflow
+
+The focused workflow is
+`BRunner_Host/Workflows/node_acceptance/001_navigate_acceptance.json`. Start the
+root-aware synthetic fixture launcher from any PowerShell working directory:
+
+```powershell
+& "C:\path\to\BR\start_acceptance_server.ps1"
+```
+
+The launcher binds only to `127.0.0.1`, serves the repository root explicitly,
+sends `Cache-Control: no-store` on every response, and rejects an occupied port
+that does not expose the expected fixture with that cache policy. Use this
+launcher rather than a generic Python HTTP server so the stopped-server failure
+case cannot succeed from Chrome's cache.
+
+Load `BRunner/` as an unpacked extension, start the source companion if needed,
+enable **Include workflows in subfolders** on its Workflow Storage tab, refresh
+the Studio workflow list, select
+`node_acceptance/001_navigate_acceptance.json` in Graph Studio, and run it.
+Success creates a new active tab for the versioned
+`tests/fixtures/navigate-acceptance.html` fixture URL, saves
+`navigate_acceptance_tab`, and publishes all six output keys under
+`nodes.navigate-fixture.output`,
+`variables.navigate_acceptance`, and
+`workflowClipboard.navigate_acceptance`. With the local fixture server stopped,
+the expected bounded failure follows the `error` route to Needs Attention.
+Both cases were verified from the unpacked source extension on 2026-07-27.
+
 ## Node entry standard
 
 Every accepted node receives a section with this structure:
@@ -120,7 +298,6 @@ Input and output ports
 All fields, defaults, examples, and autocomplete behavior
 Target/identifier choices where applicable
 How to configure it in Graph Studio
-How to configure it in Sequential Studio
 Execution, retry, timeout, verification, and side-effect behavior
 Output object and downstream expression examples
 Expected failures and troubleshooting

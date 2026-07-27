@@ -330,6 +330,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .property-field input[type="checkbox"] { width: auto; height: auto; padding: 0; justify-self: start; }
 .property-field textarea { min-height: 92px; padding: 9px; resize: vertical; font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .property-field small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.property-field .property-field-error { color: var(--danger); }
 .property-section { margin: 0 0 18px; padding-bottom: 4px; border-bottom: 1px solid rgba(148,163,184,0.14); }
 .property-section:last-child { border-bottom: 0; }
 .property-section h3 { margin: 2px 4px 12px; color: #8091a8; font-size: 9px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; }

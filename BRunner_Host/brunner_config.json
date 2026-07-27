@@ -1,6 +1,6 @@
 {
     "schemaVersion": 3,
-    "pairedInstanceId": "8294efd5-12b5-464c-a403-9c60dfeeda88",
+    "pairedInstanceId": "4caeec9e-9501-4f7a-bc3c-e67615f07ee7",
     "host": {
         "port": 8999,
         "startWithApp": true
@@ -8,6 +8,9 @@
     "workflowStorage": {
         "mode": "default",
         "directory": null
+    },
+    "workflowDiscovery": {
+        "recursive": true
     },
     "approvedDirectories": [
         {

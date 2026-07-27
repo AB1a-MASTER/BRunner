@@ -3,7 +3,10 @@
 
 import { Defaults, NativeCommands } from "./constants.js";
 import { NativeHostCapabilities } from "./nativeHostRequirements.js";
-import { ensureJsonFilename } from "./workflowUtils.js";
+import {
+  ensureJsonFilename,
+  ensureJsonWorkflowReference,
+} from "./workflowUtils.js";
 
 const PairingFailureCodes = new Set([
   "invalid_profile_instance_id",
@@ -510,33 +513,33 @@ export class NativeBridgeClient {
 
   async loadWorkflow(filename) {
     return this.request(NativeCommands.LoadWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
     });
   }
 
   async saveWorkflow(filename, content) {
     return this.request(NativeCommands.SaveWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
       content,
     });
   }
 
   async deleteWorkflow(filename) {
     return this.request(NativeCommands.DeleteWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
     });
   }
 
   async duplicateWorkflow(filename, newFilename) {
     return this.request(NativeCommands.DuplicateWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
       newFilename: ensureJsonFilename(newFilename),
     });
   }
 
   async renameWorkflow(filename, newFilename, content) {
     return this.request(NativeCommands.RenameWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
       newFilename: ensureJsonFilename(newFilename),
       content,
     });
@@ -544,7 +547,7 @@ export class NativeBridgeClient {
 
   async upgradeWorkflow(filename, content) {
     return this.request(NativeCommands.UpgradeWorkflow, {
-      filename: ensureJsonFilename(filename),
+      filename: ensureJsonWorkflowReference(filename),
       content,
     });
   }

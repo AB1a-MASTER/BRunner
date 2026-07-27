@@ -15,6 +15,8 @@ import {
   WorkflowSchemaVersion,
 } from "../BRunner/core/workflowSchema.js";
 import { createPlaceholderComponentRef } from "../BRunner/mapper/core.js";
+import { getNodeDefinitions } from "../BRunner/core/nodeRegistry.js";
+import { prepareNodeConfiguration } from "../BRunner/core/nodeAuthoring.js";
 
 const definitions = [{
   type: "element.click",
@@ -91,6 +93,100 @@ test("v2 graph positions, edges, configuration, and bypass survive round trip", 
   assert.equal("readOnly" in saved.nodes[0].data, false);
 });
 
+test("editable Graph v2 saves and reloads as canonical v3 without semantic drift", () => {
+  const registry = getNodeDefinitions();
+  const input = {
+    schemaVersion: WorkflowSchemaVersion.Graph,
+    id: "navigate-v2-upgrade",
+    name: "Navigate v2 upgrade",
+    description: "Canonical model gate.",
+    boundDomain: "example.com",
+    variables: { accountId: 42 },
+    datasets: { rows: [{ id: 1 }] },
+    dataSources: [{ id: "rows", format: "json", relativePath: "rows.json" }],
+    settings: { reuseExistingTabs: true },
+    entryNodeId: "open",
+    nodes: [
+      {
+        id: "open",
+        type: "browser.navigate",
+        version: 2,
+        position: { x: 41, y: 82 },
+        config: {
+          operation: "goto_url",
+          url: "https://example.com/accounts/{{ variables.accountId }}",
+          timeout: "4500",
+          retryCount: "2",
+        },
+        data: { auditTag: "first" },
+      },
+      {
+        id: "reload",
+        type: "browser.navigate",
+        version: 2,
+        position: { x: 381, y: 82 },
+        config: { operation: "reload" },
+        data: {},
+      },
+    ],
+    edges: [{
+      id: "open-reload",
+      source: "open",
+      sourceHandle: GraphEdgeHandles.Success,
+      target: "reload",
+      targetHandle: GraphEdgeHandles.Input,
+    }],
+    acceptance: { synthetic: true, catalogOrder: 1 },
+    customMetadata: { owner: "round-trip-test" },
+  };
+  const snapshot = structuredClone(input);
+
+  const model = workflowToCanvas(input, registry);
+  assert.equal(model.sourceSchema, WorkflowSchemaVersion.Graph);
+  assert.equal(model.metadata.schemaVersion, WorkflowSchemaVersion.MapperGraph);
+  assert.equal(model.metadata.entryNodeId, "open");
+  assert.deepEqual(model.metadata.passthrough.acceptance, input.acceptance);
+
+  const saved = canvasToGraphWorkflow(
+    [...model.nodes].reverse(),
+    model.edges,
+    model.metadata,
+  );
+  assert.equal(saved.schemaVersion, WorkflowSchemaVersion.MapperGraph);
+  assert.equal(saved.entryNodeId, "open");
+  assert.deepEqual(saved.acceptance, input.acceptance);
+  assert.deepEqual(saved.customMetadata, input.customMetadata);
+  assert.deepEqual(saved.edges, input.edges);
+  assert.deepEqual(
+    saved.nodes.map((node) => [node.id, node.position]),
+    [
+      ["reload", { x: 381, y: 82 }],
+      ["open", { x: 41, y: 82 }],
+    ],
+  );
+  assert.deepEqual(saved.nodes.find((node) => node.id === "open").data, {
+    auditTag: "first",
+  });
+  assert.deepEqual(saved.nodes.find((node) => node.id === "reload").data, {});
+  assert.equal(
+    saved.nodes.find((node) => node.id === "open").config.timeout,
+    4500,
+  );
+  assert.equal(
+    saved.nodes.find((node) => node.id === "open").config.retryCount,
+    2,
+  );
+
+  const reloaded = workflowToCanvas(saved, registry);
+  const savedAgain = canvasToGraphWorkflow(
+    reloaded.nodes,
+    reloaded.edges,
+    reloaded.metadata,
+  );
+  assert.deepEqual(savedAgain, saved);
+  assert.deepEqual(input, snapshot);
+});
+
 test("horizontal layout changes positions and handle direction metadata", () => {
   const graph = upgradeWorkflowToV2({
     steps: [
@@ -104,6 +200,7 @@ test("horizontal layout changes positions and handle direction metadata", () => 
   assert.deepEqual(horizontal.map((node) => node.position), [
     { x: 90, y: 120 },
     { x: 430, y: 120 },
+    { x: 770, y: 120 },
   ]);
   assert.equal(horizontal[0].data.layoutDirection, "horizontal");
 });
@@ -205,7 +302,8 @@ test("v3 mapper component refs and unresolved edges survive round trip", () => {
   assert.equal(model.metadata.schemaVersion, WorkflowSchemaVersion.MapperGraph);
   assert.deepEqual(saved.nodes[0].data.componentRef, componentRef);
   assert.equal(saved.edges[0].sourceHandle, GraphEdgeHandles.Unresolved);
-  assert.deepEqual(saved.settings.mapper, graph.settings.mapper);
+  assert.deepEqual(saved.settings.mapper, model.metadata.settings.mapper);
+  assert.deepEqual(saved.settings.mapper.queryAllowlist, ["tab"]);
 });
 
 test("unsupported graph node contract stays read-only and cannot be saved", () => {
@@ -219,5 +317,133 @@ test("unsupported graph node contract stays read-only and cannot be saved", () =
   assert.throws(
     () => canvasToGraphWorkflow(model.nodes, model.edges, model.metadata),
     /unsupported contract element\.click@99/,
+  );
+});
+
+test("Graph Studio edits and saves the shared finalized Navigate v2 contract", () => {
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "navigate-v2",
+    name: "Navigate v2",
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    settings: {},
+    entryNodeId: "navigate",
+    nodes: [{
+      id: "navigate",
+      type: "browser.navigate",
+      version: 2,
+      position: { x: 80, y: 120 },
+      config: {
+        operation: "goto_url",
+        tabSource: "current",
+        url: "https://example.com/",
+        waitUntil: "dom_ready",
+        saveOutputAs: "navigation",
+      },
+      data: {},
+    }],
+    edges: [],
+  };
+  const registry = getNodeDefinitions();
+  const definition = registry.find((entry) => entry.type === "browser.navigate");
+  const model = workflowToCanvas(graph, registry);
+  const saved = canvasToGraphWorkflow(model.nodes, model.edges, model.metadata);
+
+  assert.equal(definition.version, 2);
+  assert.equal(definition.config.some((field) => field.key === "operation"), true);
+  assert.equal(definition.config.some((field) => field.key === "retryCount"), true);
+  assert.equal(model.nodes[0].data.readOnly, false);
+  assert.equal(model.nodes[0].data.definition.version, 2);
+  assert.deepEqual(
+    saved.nodes[0].config,
+    prepareNodeConfiguration(graph.nodes[0].config, definition).config,
+  );
+  assert.deepEqual(model.nodes[0].data.configurationIssues, []);
+});
+
+test("Graph Studio loads and saves canonical field value types", () => {
+  const registry = getNodeDefinitions();
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "navigate-typed",
+    name: "Navigate typed values",
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    settings: {},
+    entryNodeId: "navigate",
+    nodes: [{
+      id: "navigate",
+      type: "browser.navigate",
+      version: 2,
+      position: { x: 25, y: 50 },
+      config: {
+        operation: "goto_url",
+        url: "https://example.com/",
+        timeout: "4500",
+        retryCount: "2",
+        retryDelay: "{{ variables.retryDelay }}",
+      },
+      data: {},
+    }],
+    edges: [],
+  };
+
+  const model = workflowToCanvas(graph, registry);
+  assert.equal(model.nodes[0].data.config.timeout, 4500);
+  assert.equal(model.nodes[0].data.config.retryCount, 2);
+  assert.equal(
+    model.nodes[0].data.config.retryDelay,
+    "{{ variables.retryDelay }}",
+  );
+  assert.equal(model.nodes[0].data.config.enabled, true);
+
+  const saved = canvasToGraphWorkflow(model.nodes, model.edges, model.metadata);
+  assert.equal(saved.nodes[0].config.timeout, 4500);
+  assert.equal(saved.nodes[0].config.retryCount, 2);
+  assert.equal(
+    saved.nodes[0].config.retryDelay,
+    "{{ variables.retryDelay }}",
+  );
+  assert.equal(saved.nodes[0].version, 2);
+});
+
+test("Graph Studio exposes invalid prepared configuration and refuses to save it", () => {
+  const registry = getNodeDefinitions();
+  const graph = {
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "navigate-invalid",
+    name: "Navigate invalid values",
+    variables: {},
+    datasets: {},
+    dataSources: [],
+    settings: {},
+    entryNodeId: "navigate",
+    nodes: [{
+      id: "navigate",
+      type: "browser.navigate",
+      version: 2,
+      position: { x: 25, y: 50 },
+      config: {
+        enabled: "yes",
+        operation: "goto_url",
+        url: "https://example.com/",
+        unexpected: true,
+      },
+      data: {},
+    }],
+    edges: [],
+  };
+
+  const model = workflowToCanvas(graph, registry);
+  assert.deepEqual(
+    model.nodes[0].data.configurationIssues.map((issue) => issue.fieldKey),
+    ["config.unexpected", "enabled"],
+  );
+  assert.throws(
+    () => canvasToGraphWorkflow(model.nodes, model.edges, model.metadata),
+    /Unsupported configuration field: unexpected.*Enabled must be checked or unchecked/,
   );
 });

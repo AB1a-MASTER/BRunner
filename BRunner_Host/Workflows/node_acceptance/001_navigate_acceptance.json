@@ -1,0 +1,148 @@
+{
+    "acceptance": {
+        "schemaVersion": 1,
+        "catalogOrder": 1,
+        "nodeType": "browser.navigate",
+        "nodeVersion": 2,
+        "synthetic": true,
+        "primaryBehavior": "Create a new active tab for the repository fixture, wait for DOM readiness, save the resulting tab reference, and publish the standardized output. This also verifies safe Studio startup when no ordinary browser tab is selected.",
+        "expectedOutputKeys": [
+            "operation",
+            "previousUrl",
+            "currentUrl",
+            "tab",
+            "navigationState",
+            "durationMs"
+        ],
+        "safeFailureOrAlternate": "If the local fixture server is unavailable, the stable failure is sent through the Graph error port to the Needs Attention node without guessing a destination.",
+        "fixturePaths": [
+            "tests/fixtures/navigate-acceptance.html"
+        ]
+    },
+    "schemaVersion": 3,
+    "id": "node-acceptance-001-navigate",
+    "name": "Node 001 - Navigate Acceptance",
+    "description": "Synthetic source acceptance for finalized browser.navigate@2.",
+    "boundDomain": "",
+    "settings": {
+        "reuseExistingTabs": false,
+        "mapper": {
+            "enabled": true,
+            "mode": "automatic",
+            "captureMode": "static_bounded",
+            "shadowDom": "open_only",
+            "maxComponents": 500,
+            "maxVersions": 3,
+            "materialMutationLimit": 50,
+            "queryAllowlist": [],
+            "siteOverrides": {},
+            "pageOverrides": {}
+        }
+    },
+    "variables": {},
+    "datasets": {},
+    "dataSources": [],
+    "entryNodeId": "navigate-fixture",
+    "nodes": [
+        {
+            "id": "navigate-fixture",
+            "type": "browser.navigate",
+            "version": 2,
+            "position": {
+                "x": 75.5402298850575,
+                "y": 88.7816091954023
+            },
+            "config": {
+                "enabled": true,
+                "displayName": "Open Navigate acceptance fixture",
+                "operation": "goto_url",
+                "tabSource": "current",
+                "tabReference": "",
+                "url": "http://127.0.0.1:8765/tests/fixtures/navigate-acceptance.html?acceptance=001-navigate-v2",
+                "openDestinationIn": "new_tab",
+                "waitUntil": "dom_ready",
+                "timeout": 10000,
+                "onNoHistory": "fail",
+                "saveTabReferenceAs": "navigate_acceptance_tab",
+                "protectedPagePolicy": "fail",
+                "retryCount": 1,
+                "retryDelay": 250,
+                "retryStrategy": "fixed",
+                "retryOnlyFor": "navigation_failure",
+                "onError": "error_port",
+                "saveOutputAs": "navigate_acceptance",
+                "saveToWorkflowClipboard": "replace",
+                "workflowClipboardEntry": "navigate_acceptance",
+                "logLevel": "normal"
+            },
+            "data": {
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "host.hello",
+                    "workflow.list",
+                    "workflow.load",
+                    "workflow.save",
+                    "workflow.delete",
+                    "workflow.duplicate",
+                    "workflow.rename",
+                    "workflow.upgrade",
+                    "host.window",
+                    "host.action",
+                    "host.visual_match",
+                    "os.keystroke",
+                    "local_file.read",
+                    "approved_directory.list",
+                    "approved_file.find",
+                    "approved_file.write",
+                    "data_file.export",
+                    "data_source.read",
+                    "execution_log.save"
+                ]
+            }
+        },
+        {
+            "id": "navigate-error-attention",
+            "type": "workflow.needs_attention",
+            "version": 1,
+            "position": {
+                "x": 126.09852216748777,
+                "y": 436.3415435139573
+            },
+            "config": {},
+            "data": {
+                "systemNode": true,
+                "hostConnected": true,
+                "hostCapabilities": [
+                    "host.hello",
+                    "workflow.list",
+                    "workflow.load",
+                    "workflow.save",
+                    "workflow.delete",
+                    "workflow.duplicate",
+                    "workflow.rename",
+                    "workflow.upgrade",
+                    "host.window",
+                    "host.action",
+                    "host.visual_match",
+                    "os.keystroke",
+                    "local_file.read",
+                    "approved_directory.list",
+                    "approved_file.find",
+                    "approved_file.write",
+                    "data_file.export",
+                    "data_source.read",
+                    "execution_log.save"
+                ]
+            }
+        }
+    ],
+    "edges": [
+        {
+            "id": "navigate-error-route",
+            "source": "navigate-fixture",
+            "sourceHandle": "error",
+            "target": "navigate-error-attention",
+            "targetHandle": "input"
+        }
+    ]
+}

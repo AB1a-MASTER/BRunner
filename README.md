@@ -28,19 +28,31 @@ node implementations are not release contracts.
   [`workflow_nodes_implementation_blueprint.md`](workflow_nodes_implementation_blueprint.md)
   is the sole node contract. Existing node implementations are development
   scaffolding and have no compatibility or preservation guarantee.
+- Graph Studio is the only supported workflow-authoring Studio. Sequential
+  Studio is deprecated and disabled: normal launches open Graph Studio, and
+  the former Sequential URL redirects there without loading authoring code.
+  Its source remains dormant until the final cleanup milestone after integrated
+  V1 acceptance and before V2.
+- Finalized workflows use one canonical mapper-graph model and graph runtime.
+  The deprecated Sequential Studio UI and the provisional legacy linear
+  executor are separate concerns; disabling the UI does not authorize removing
+  a runtime path that is still required by provisional behavior.
 
 ## Current phase order
 
-1. Preserve the accepted mapper, extension, companion, storage, Studio-shell,
+1. Preserve the accepted mapper, extension, companion, storage, Graph Studio,
    and MV3 foundations.
-2. Close the node base-contract and Studio-unification gate: one versioned node
-   model, one workflow schema, shared validation/runtime behavior, and two
-   editor presentations.
+2. Close the node base-contract and Graph Studio consolidation gate: one
+   versioned node model, one canonical graph workflow schema, one editor
+   contract, and one finalized graph runtime.
 3. Implement every node in finalized catalog order, one at a time, with a
    node-specific acceptance workflow, automated and live evidence, end-user
    documentation, tracker update, and user-controlled Git commit.
-4. Complete integrated source acceptance, then build release packages only
-   after the product acceptance gates pass and the user starts release work.
+4. Complete integrated source acceptance.
+5. Run the pre-V2 cleanup milestone, including physical removal of the already
+   disabled Sequential Studio and its exclusively owned tests/documentation.
+6. Build release packages or begin V2 work only after the product acceptance
+   and cleanup gates pass and the user explicitly starts that work.
 
 Do not spend time repairing a provisional node merely to preserve its current
 behavior. Fix it early only when it blocks testing of a shared foundation.
@@ -78,6 +90,8 @@ context but cannot override the sources above.
 - `BRunner/` — Chrome/Chromium MV3 extension.
 - `BRunner/studio-graph-src/` — Graph Studio React/Vite source.
 - `BRunner/studio-graph/` — built Graph Studio assets loaded by the extension.
+- `BRunner/studio/` — deprecated Sequential Studio source retained temporarily
+  for reference; it is not a supported authoring surface.
 - `BRunner_Host/` — Windows companion source.
 - `BRunner_Host/Workflows/node_acceptance/` — focused acceptance workflow for
   each finalized node.

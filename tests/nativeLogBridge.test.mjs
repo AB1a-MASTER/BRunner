@@ -430,6 +430,34 @@ test("mapper graph traversal routes unresolved outcomes explicitly", async () =>
   assert.match(runtimeProjection, /runtimeStatus = "unresolved"/);
 });
 
+test("production runner dispatches finalized Navigate v2 through the shared runtime", async () => {
+  const [background, finalizedRuntime] = await Promise.all([
+    readFile(new URL("BRunner/background.js", root), "utf8"),
+    readFile(
+      new URL("BRunner/nodes/runtime/executeFinalizedNode.js", root),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(background, /isFinalizedNavigateContract\(nodeDefinition\)/);
+  assert.match(background, /executeFinalizedNavigateWorkflowNode/);
+  assert.match(background, /executeFinalizedNode\(\{/);
+  assert.match(background, /createChromeNavigateTabsService/);
+  assert.match(background, /validateNavigateConfig/);
+  assert.match(background, /verifyNavigateBeforeRetry/);
+  assert.match(background, /createFinalizedNodeTimeoutService/);
+  assert.match(background, /validateConfig:\s*\(preparedConfig\)/);
+  assert.match(finalizedRuntime, /prepareNodeConfiguration/);
+  assert.match(finalizedRuntime, /preparedConfiguration\.issues/);
+  assert.match(background, /selectedRoute === GraphEdgeHandles\.Error/);
+  assert.match(background, /mapper_\$\{routeLabel\}_route_missing/);
+  assert.match(background, /action === Actions\.BrowserNavigate[\s\S]*executeNavigateStep/);
+  assert.match(
+    background,
+    /function assertNativeHostRequirement[\s\S]*action === MapperAttentionNodeType\) return/,
+  );
+});
+
 test("host-served workflows reference files exposed by the repository-root server", async () => {
   const workflowDir = new URL("BRunner_Host/Workflows/", root);
   const filenames = (await readdir(workflowDir))

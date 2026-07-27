@@ -1,4 +1,5 @@
 import {
+  NodeErrorCategories,
   NodeErrorCodes,
   NodeExecutionError,
 } from "../../shared/nodeContracts.js";
@@ -8,6 +9,7 @@ import {
 } from "../../shared/executionPolicy.js";
 import {
   NavigateDestinations,
+  NavigateErrorCodes,
   NavigateNoHistoryBehaviors,
   NavigateOperations,
   NavigateReadiness,
@@ -32,8 +34,10 @@ export async function executeNavigate(context = {}) {
   const services = context.services || {};
   const tabs = requireTabs(services.tabs);
   const startedMs = nowMs(services.clock);
-  let tab = await resolveTab(tabs, config, context);
-  const previousUrl = nullableUrl(tab.url);
+  let tab = canCreateIndependentDestination(config, context)
+    ? null
+    : await resolveTab(tabs, config, context);
+  const previousUrl = nullableUrl(tab?.url);
   let actionStarted = false;
   let navigationState = NavigateReadiness.None;
   let warnings = [];
@@ -268,16 +272,18 @@ async function performNavigationAction(tabs, config, tab, context) {
   if (config.operation === NavigateOperations.GotoUrl) {
     if (config.openDestinationIn === NavigateDestinations.NewTab) {
       requireMethod(tabs, "create");
+      const createProperties = {
+        url: config.url,
+        active: true,
+      };
+      if (Number.isInteger(Number(tab?.id))) {
+        createProperties.openerTabId = Number(tab.id);
+      }
+      if (Number.isInteger(Number(tab?.windowId))) {
+        createProperties.windowId = Number(tab.windowId);
+      }
       return normalizeNavigateTab(
-        await tabs.create(
-          {
-            url: config.url,
-            active: true,
-            openerTabId: tab.id,
-            windowId: tab.windowId,
-          },
-          options,
-        ),
+        await tabs.create(createProperties, options),
       );
     }
     requireMethod(tabs, "navigate");
@@ -302,6 +308,15 @@ async function performNavigationAction(tabs, config, tab, context) {
   return normalizeActionTab(result, tab);
 }
 
+function canCreateIndependentDestination(config, context) {
+  return (
+    !context.tab &&
+    config.operation === NavigateOperations.GotoUrl &&
+    config.tabSource === NavigateTabSources.Current &&
+    config.openDestinationIn === NavigateDestinations.NewTab
+  );
+}
+
 async function checkHistoryAvailability(tabs, operation, tab, context) {
   const method =
     operation === NavigateOperations.Back ? "canGoBack" : "canGoForward";
@@ -312,13 +327,14 @@ async function checkHistoryAvailability(tabs, operation, tab, context) {
 function noHistoryResult(config, tab, previousUrl, startedMs, services) {
   if (config.onNoHistory === NavigateNoHistoryBehaviors.Fail) {
     throw new NodeExecutionError(
-      NodeErrorCodes.ValidationFailed,
+      NavigateErrorCodes.NoHistory,
       "Browser history is unavailable for Navigate " + config.operation + ".",
       {
         operation: config.operation,
         reason: "no_history",
         retryable: false,
       },
+      { category: NodeErrorCategories.Navigation },
     );
   }
 
@@ -337,7 +353,7 @@ function noHistoryResult(config, tab, previousUrl, startedMs, services) {
     }),
     warnings: [
       {
-        code: NodeErrorCodes.ValidationFailed,
+        code: NavigateErrorCodes.NoHistory,
         message: "Browser history was unavailable; Navigate " + suffix + ".",
       },
     ],
@@ -373,14 +389,16 @@ async function applyProtectedReadinessPolicy({
     const request =
       services.userGate?.request || services.requestUser;
     if (typeof request !== "function") dependency("userGate.request");
-    const approved = await request(
+    const approval = await request(
       {
         reason: "protected_page",
         tab,
         operation: config.operation,
+        timeoutMs: config.timeout,
       },
       serviceOptions(context),
     );
+    const approved = approval === true || approval?.approved === true;
     if (!approved) {
       throw new NodeExecutionError(
         NodeErrorCodes.ProtectedPage,
@@ -388,7 +406,9 @@ async function applyProtectedReadinessPolicy({
         { retryable: false },
       );
     }
-    return { tab, skipReadiness: true };
+    return approval?.tab
+      ? { tab: normalizeNavigateTab(approval.tab), skipReadiness: false }
+      : { tab, skipReadiness: true };
   }
 
   if (typeof tabs.waitUntilSupported !== "function") {
@@ -445,13 +465,14 @@ function normalizeActionTab(result, fallback, url = null) {
 
 function navigationFailure(error, details) {
   return new NodeExecutionError(
-    NodeErrorCodes.ValidationFailed,
+    NavigateErrorCodes.NavigationFailed,
     error?.message || "Browser navigation failed.",
     {
       ...details,
       retryReason: RetryReasons.NavigationFailure,
       causeCode: error?.code || null,
     },
+    { category: NodeErrorCategories.Navigation },
   );
 }
 

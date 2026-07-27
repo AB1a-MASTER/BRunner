@@ -3,7 +3,7 @@
 // Matches current sidebar.html body:
 // - main-sidebar-view
 // - studio-active-view
-// - btn-open-studio
+// - btn-open-studio (Graph Studio)
 // - search-input
 // - workflow-list
 // - selected-label
@@ -25,6 +25,12 @@ const Messages = Object.freeze({
   GetRuntimeState: "GET_RUNTIME_STATE",
   RuntimeStateChanged: "RUNTIME_STATE_CHANGED",
 });
+
+const GRAPH_STUDIO_PATH = "studio-graph/index.html";
+const STUDIO_CONTROL_ROOTS = Object.freeze([
+  "studio-graph/",
+  "studio/",
+]);
 
 let isRecording = false;
 let isWorkflowRunning = false;
@@ -70,7 +76,7 @@ function init() {
 }
 
 function wireControls() {
-  openStudioButton?.addEventListener("click", openStudio);
+  openStudioButton?.addEventListener("click", openGraphStudio);
   openMapperInspectorButton?.addEventListener("click", openMapperInspector);
   recordButton?.addEventListener("click", toggleRecording);
   playButton?.addEventListener("click", runSelectedWorkflow);
@@ -135,8 +141,7 @@ async function syncSidebarVisibilityForActiveTab() {
       currentWindow: true,
     });
 
-    const studioUrl = chrome.runtime.getURL("studio/index.html");
-    const isStudio = Boolean(tab?.url?.startsWith(studioUrl));
+    const isStudio = isStudioControlUrl(tab?.url);
 
     if (isStudio) {
       mainSidebarView.style.display = "none";
@@ -151,20 +156,21 @@ async function syncSidebarVisibilityForActiveTab() {
   }
 }
 
-async function openStudio() {
-  const studioUrl = chrome.runtime.getURL("studio/index.html");
+async function openGraphStudio() {
+  const graphStudioUrl = chrome.runtime.getURL(GRAPH_STUDIO_PATH);
+  const graphStudioRoot = chrome.runtime.getURL("studio-graph/");
+  const tabs = await chrome.tabs.query({});
+  const existingStudioTab = tabs.find((tab) => (
+    tab?.id && tab?.url?.startsWith(graphStudioRoot)
+  ));
 
-  const tabs = await chrome.tabs.query({
-    url: studioUrl,
-  });
-
-  if (tabs.length > 0) {
-    await chrome.tabs.update(tabs[0].id, {
+  if (existingStudioTab) {
+    await chrome.tabs.update(existingStudioTab.id, {
       active: true,
     });
 
-    if (tabs[0].windowId) {
-      await chrome.windows.update(tabs[0].windowId, {
+    if (existingStudioTab.windowId) {
+      await chrome.windows.update(existingStudioTab.windowId, {
         focused: true,
       });
     }
@@ -173,9 +179,16 @@ async function openStudio() {
   }
 
   await chrome.tabs.create({
-    url: studioUrl,
+    url: graphStudioUrl,
     active: true,
   });
+}
+
+function isStudioControlUrl(url = "") {
+  if (!url) return false;
+  return STUDIO_CONTROL_ROOTS.some((path) => (
+    url.startsWith(chrome.runtime.getURL(path))
+  ));
 }
 
 async function toggleRecording() {

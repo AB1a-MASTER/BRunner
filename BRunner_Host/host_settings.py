@@ -36,6 +36,9 @@ def create_default_config():
             "mode": "default",
             "directory": None,
         },
+        "workflowDiscovery": {
+            "recursive": False,
+        },
         "approvedDirectories": roots_to_approved_directories(
             DEFAULT_ALLOWED_ROOTS,
             enabled=False,
@@ -89,6 +92,11 @@ def normalize_config(config, base_dir=None):
         if isinstance(source.get("workflowStorage"), dict)
         else {}
     )
+    workflow_discovery = (
+        source.get("workflowDiscovery")
+        if isinstance(source.get("workflowDiscovery"), dict)
+        else {}
+    )
     host_fallback = (
         source.get("hostFallback")
         if isinstance(source.get("hostFallback"), dict)
@@ -111,6 +119,9 @@ def normalize_config(config, base_dir=None):
             "startWithApp": host.get("startWithApp") is not False,
         },
         "workflowStorage": normalize_workflow_storage(workflow_storage),
+        "workflowDiscovery": {
+            "recursive": workflow_discovery.get("recursive") is True,
+        },
         "approvedDirectories": approved_directories,
         "hostFallback": {
             "enabled": host_fallback.get("enabled") is not False,

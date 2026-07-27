@@ -42,10 +42,9 @@ test("runtime checkpoints use session storage and gate host readiness on hello p
   assert.match(source, /status:\s*"interrupted"/);
 });
 
-test("all execution UIs identify the run they intend to stop", async () => {
+test("supported execution UIs identify the run they intend to stop", async () => {
   const sources = await Promise.all([
     readFile(new URL("BRunner/sidebar/sidebar.js", root), "utf8"),
-    readFile(new URL("BRunner/studio/app.js", root), "utf8"),
     readFile(new URL("BRunner/studio-graph-src/src/GraphStudio.jsx", root), "utf8"),
   ]);
 

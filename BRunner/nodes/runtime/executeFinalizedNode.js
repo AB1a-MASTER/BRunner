@@ -20,6 +20,7 @@ import {
   executeWithRetry,
   normalizeRetryPolicy,
 } from "../shared/executionPolicy.js";
+import { prepareNodeConfiguration } from "../../core/nodeAuthoring.js";
 
 export const FinalizedNodeRoutes = NodeOutcomeRoutes;
 
@@ -63,8 +64,13 @@ export async function executeFinalizedNode(request = {}, services = {}) {
       { nodeId, nodeType, nodeVersion: requestedVersion, definitionVersion },
     );
   }
-  const config = normalizeCommonNodeConfig(
+  const preparedConfiguration = prepareNodeConfiguration(
     request.config || request.node?.config || {},
+    definition,
+    { node: request.node || {} },
+  );
+  const config = normalizeCommonNodeConfig(
+    preparedConfiguration.config,
     definition.commonConfigDefaults || {
       displayName: definition.displayName || definition.label || nodeType || "Node",
       retryCount: definition.defaultRetryCount,
@@ -118,6 +124,19 @@ export async function executeFinalizedNode(request = {}, services = {}) {
   }
 
   try {
+    if (preparedConfiguration.issues.length) {
+      throw new NodeExecutionError(
+        NodeErrorCodes.ConfigInvalid,
+        `Node configuration is invalid: ${preparedConfiguration.issues
+          .map((issue) => issue.message)
+          .join(" ")}`,
+        {
+          nodeId,
+          nodeType,
+          issues: preparedConfiguration.issues,
+        },
+      );
+    }
     await validateNodeRequest(request, {
       nodeId,
       nodeType,
@@ -272,12 +291,18 @@ async function executeAttemptWithTimeout({
 
   const timeout = Number(timeoutMs);
   if (!Number.isFinite(timeout) || timeout <= 0) {
-    return await executor(context);
+    return await executor({
+      ...context,
+      signal: services.signal,
+    });
   }
 
   if (typeof services.withTimeout === "function") {
     return await services.withTimeout(
-      () => executor(context),
+      (signal) => executor({
+        ...context,
+        signal: signal || services.signal,
+      }),
       timeout,
       context,
     );

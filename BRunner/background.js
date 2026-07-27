@@ -25,6 +25,23 @@ import {
   resolveNodeDefinition,
 } from "./core/nodeRegistry.js";
 import {
+  NodeErrorCodes,
+  NodeExecutionError,
+} from "./nodes/shared/nodeContracts.js";
+import {
+  FinalizedNodeRoutes,
+  executeFinalizedNode,
+} from "./nodes/runtime/executeFinalizedNode.js";
+import {
+  NAVIGATE_NODE_TYPE,
+  createChromeNavigateTabsService,
+  executeNavigate,
+  navigateNodeDefinition,
+  validateNavigateConfig,
+  verifyNavigateBeforeRetry,
+  workflowCanBootstrapNavigateWithoutTab,
+} from "./nodes/navigation/navigate/index.js";
+import {
   evaluateNativeHostRequirement,
   formatNativeCapabilities,
   NativeHostCapabilities,
@@ -48,8 +65,6 @@ import {
   summarizeVariables,
 } from "./core/variableInspector.js";
 import {
-  normalizeWorkflow,
-  normalizeWorkflowSettings,
   extractDomainFromUrl,
   isBrowserInternalUrl,
   isStudioUrl,
@@ -60,10 +75,12 @@ import {
 import {
   GraphEdgeHandles,
   MapperAttentionNodeType,
-  WorkflowSchemaVersion,
-  isMapperGraphWorkflow,
-  validateGraphWorkflow,
 } from "./core/workflowSchema.js";
+import {
+  WorkflowExecutionModels,
+  createWorkflowVariableState,
+  prepareWorkflowForExecution,
+} from "./core/workflowPreparation.js";
 import {
   buildStaticPageMap,
   createDefaultMapperSettings,
@@ -1974,13 +1991,17 @@ async function runWorkflow(rawWorkflow, options = {}) {
     };
   }
 
-  const mapperGraphWorkflow = isMapperGraphWorkflow(rawWorkflow)
-    ? normalizeMapperGraphWorkflowForRun(rawWorkflow)
-    : null;
-  const workflow = mapperGraphWorkflow || normalizeWorkflow(rawWorkflow);
-  const steps = mapperGraphWorkflow
-    ? mapperGraphWorkflow.nodes.map(graphNodeToStep)
-    : workflow.steps;
+  const preparedWorkflow = prepareWorkflowForExecution(rawWorkflow, {
+    name: options.workflowName || rawWorkflow?.name,
+    validateFinalizedConfig: validateFinalizedWorkflowConfiguration,
+  });
+  const executionPlan = preparedWorkflow.executionPlan;
+  const canonicalGraph =
+    executionPlan.executionModel === WorkflowExecutionModels.CanonicalGraph;
+  const workflow = executionPlan.workflow;
+  const steps = canonicalGraph
+    ? executionPlan.nodeInvocations.map(graphNodeToStep)
+    : executionPlan.nodeInvocations;
 
   if (!Array.isArray(steps) || steps.length === 0) {
     return {
@@ -2010,23 +2031,20 @@ async function runWorkflow(rawWorkflow, options = {}) {
     unresolvedNodeIds: [],
     logs: [],
   });
-  const variableRegistry = new VariableRegistry(workflow.variables || {});
-  const variableOrigins = Object.fromEntries(
-    Object.keys(workflow.variables || {}).map((name) => [
-      name,
-      {
-        source: "workflow",
-        nodeId: "",
-        action: "workflow.variable",
-      },
-    ]),
+  const variableState = createWorkflowVariableState(
+    workflow.variables,
+    executionPlan.executionModel,
   );
+  const variableRegistry = new VariableRegistry(variableState.values);
+  const variableOrigins = variableState.origins;
   activeRun = {
     runId,
     cancelRequested: false,
     abortControllers: new Set(),
     variableRegistry,
     variableOrigins,
+    executionModel: executionPlan.executionModel,
+    executionPlanVersion: executionPlan.planVersion,
   };
   runtimeState.appendExecutionLog({
     runId,
@@ -2050,16 +2068,20 @@ async function runWorkflow(rawWorkflow, options = {}) {
       variables: summarizeVariables(variableRegistry.snapshot(), variableOrigins),
     });
 
-    let tab = await resolveStartingTab(workflow);
+    let tab = await resolveStartingTab(workflow, {
+      allowTablessBootstrap:
+        workflowCanBootstrapNavigateWithoutTab(workflow),
+    });
     const tabsByRef = new Map();
     const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
     if (initialTabRef && tab?.id) {
       tabsByRef.set(initialTabRef, tab);
     }
 
-    const executionResult = mapperGraphWorkflow
+    const executionResult = canonicalGraph
       ? await executeMapperGraphWorkflow({
         workflow,
+        nodeInvocations: executionPlan.nodeInvocations,
         tab,
         tabsByRef,
         variableRegistry,
@@ -2199,6 +2221,7 @@ async function executeLinearWorkflowSteps({
 
 async function executeMapperGraphWorkflow({
   workflow,
+  nodeInvocations,
   tab,
   tabsByRef,
   variableRegistry,
@@ -2207,9 +2230,12 @@ async function executeMapperGraphWorkflow({
   workflowName,
 }) {
   const progress = createExecutionProgress();
-  const nodeById = new Map(workflow.nodes.map((node) => [node.id, node]));
+  const executableNodes = Array.isArray(nodeInvocations)
+    ? nodeInvocations
+    : [];
+  const nodeById = new Map(executableNodes.map((node) => [node.id, node]));
   const outgoing = createGraphOutgoingIndex(workflow.edges);
-  const maxVisits = Math.max(1, workflow.nodes.length + workflow.edges.length + 1);
+  const maxVisits = Math.max(1, executableNodes.length + workflow.edges.length + 1);
   let currentNodeId = workflow.entryNodeId;
   let currentTab = tab;
   let visitCount = 0;
@@ -2239,7 +2265,7 @@ async function executeMapperGraphWorkflow({
     const result = await executeWorkflowNode({
       step: graphNodeToStep(node),
       index: visitCount - 1,
-      totalSteps: workflow.nodes.length,
+      totalSteps: executableNodes.length,
       tab: currentTab,
       tabsByRef,
       variableRegistry,
@@ -2254,11 +2280,19 @@ async function executeMapperGraphWorkflow({
     const route = result.route || GraphEdgeHandles.Success;
     const nextEdge = outgoing.get(node.id)?.[route] || null;
     if (!nextEdge) {
-      if (route === GraphEdgeHandles.Unresolved) {
-        const error = new Error(`Mapper unresolved node "${node.id}" has no unresolved route.`);
+      if (
+        route === GraphEdgeHandles.Unresolved ||
+        route === GraphEdgeHandles.Error
+      ) {
+        const routeLabel = route === GraphEdgeHandles.Error
+          ? "error"
+          : "unresolved";
+        const error = new Error(
+          `Mapper ${routeLabel} node "${node.id}" has no ${routeLabel} route.`,
+        );
         error.diagnostics = {
           action: node.type || "unknown",
-          finalReason: "mapper_unresolved_route_missing",
+          finalReason: `mapper_${routeLabel}_route_missing`,
         };
         throw error;
       }
@@ -2389,14 +2423,30 @@ async function executeWorkflowNode({
     }
   }
 
+  let selectedRoute = GraphEdgeHandles.Success;
   try {
-    currentTab = await executeStep(
-      currentTab,
-      resolvedStep,
-      tabsByRef,
-      variableRegistry,
-      runId,
-    );
+    if (isFinalizedNavigateContract(nodeDefinition)) {
+      const navigateResult = await executeFinalizedNavigateWorkflowNode({
+        step: resolvedStep,
+        definition: nodeDefinition,
+        currentTab,
+        tabsByRef,
+        variableRegistry,
+        runId,
+        workflowName,
+        stepIndex: index,
+      });
+      currentTab = navigateResult.tab || currentTab;
+      selectedRoute = navigateResult.route || GraphEdgeHandles.Success;
+    } else {
+      currentTab = await executeStep(
+        currentTab,
+        resolvedStep,
+        tabsByRef,
+        variableRegistry,
+        runId,
+      );
+    }
   } catch (error) {
     if (!allowUnresolvedRoute || !isMapperUnresolvedError(error)) {
       throw error;
@@ -2412,6 +2462,41 @@ async function executeWorkflowNode({
       progress,
       tab: currentTab,
     });
+  }
+
+  if (selectedRoute === GraphEdgeHandles.Error) {
+    if (!allowUnresolvedRoute) {
+      const error = new NodeExecutionError(
+        NodeErrorCodes.ConfigInvalid,
+        "Sequential execution cannot follow a Graph error route.",
+        { field: "onError", route: GraphEdgeHandles.Error },
+      );
+      error.diagnostics = {
+        action: resolvedStep?.action || resolvedStep?.type || "unknown",
+        stepIndex: index,
+        finalReason: "linear_error_route_unsupported",
+      };
+      throw error;
+    }
+    progress.executedCount += 1;
+    runtimeState.appendExecutionLog({
+      runId,
+      workflowName,
+      nodeId: resolvedStep?.id || "",
+      stepIndex: index,
+      action: resolvedStep?.action || resolvedStep?.type || "unknown",
+      status: "failed",
+      message: "Node failure routed through its error output.",
+    });
+    runtimeState.updateExecution({
+      variables: summarizeVariables(
+        variableRegistry.snapshot(),
+        variableOrigins,
+      ),
+    });
+    throwIfRunCancelled(runId);
+    await delayWithRunCancellation(Defaults.StepDelayMs, runId);
+    return { tab: currentTab, route: GraphEdgeHandles.Error };
   }
 
   progress.executedCount += 1;
@@ -2451,7 +2536,7 @@ async function executeWorkflowNode({
   await delayWithRunCancellation(Defaults.StepDelayMs, runId);
   throwIfRunCancelled(runId);
 
-  return { tab: currentTab, route: GraphEdgeHandles.Success };
+  return { tab: currentTab, route: selectedRoute };
 }
 
 function handleMapperUnresolvedNode({
@@ -2475,7 +2560,7 @@ function handleMapperUnresolvedNode({
   };
   const outputVariableName = inferOutputVariableName(step);
   if (outputVariableName) {
-    variableRegistry?.set(outputVariableName, output);
+    setWorkflowVariable(variableRegistry, outputVariableName, output);
     registerNodeOutputVariable(step, variableOrigins);
   }
 
@@ -2516,13 +2601,23 @@ function createExecutionProgress() {
 }
 
 function registerNodeOutputVariable(step = {}, variableOrigins = {}) {
-  const outputVariableName = inferOutputVariableName(step);
-  if (!outputVariableName) return;
-  variableOrigins[outputVariableName] = {
-    source: "node",
-    nodeId: step.id || "",
-    action: step.action || step.type || "unknown",
-  };
+  const outputAlias = String(step.config?.saveOutputAs || "").trim();
+  const names = [
+    inferOutputVariableName(step),
+    outputAlias
+      ? outputAlias.startsWith("variables.")
+        ? outputAlias
+        : `variables.${outputAlias}`
+      : "",
+    step.id ? `nodes.${step.id}.output` : "",
+  ].filter(Boolean);
+  for (const name of names) {
+    variableOrigins[name] = {
+      source: "node",
+      nodeId: step.id || "",
+      action: step.action || step.type || "unknown",
+    };
+  }
 }
 
 function isMapperUnresolvedError(error) {
@@ -2549,35 +2644,6 @@ function createMapperUnresolvedDiagnostics(error, step = {}, stepIndex = -1) {
     runnerUpConfidence: Number.isFinite(diagnostics.runnerUpConfidence)
       ? diagnostics.runnerUpConfidence
       : undefined,
-  };
-}
-
-function normalizeMapperGraphWorkflowForRun(input = {}) {
-  const validation = validateGraphWorkflow(input);
-  if (!validation.valid) {
-    throw new Error(`Invalid mapper graph workflow: ${validation.errors.join(" ")}`);
-  }
-  return {
-    schemaVersion: WorkflowSchemaVersion.MapperGraph,
-    id: String(input.id || "workflow-v3"),
-    name: String(input.name || "Untitled"),
-    description: typeof input.description === "string" ? input.description : "",
-    boundDomain: typeof input.boundDomain === "string" ? input.boundDomain : "",
-    variables:
-      input.variables && typeof input.variables === "object"
-        ? structuredClone(input.variables)
-        : {},
-    datasets:
-      input.datasets && typeof input.datasets === "object" && !Array.isArray(input.datasets)
-        ? structuredClone(input.datasets)
-        : {},
-    dataSources: Array.isArray(input.dataSources)
-      ? structuredClone(input.dataSources)
-      : [],
-    settings: normalizeWorkflowSettings(input.settings),
-    entryNodeId: String(input.entryNodeId || ""),
-    nodes: structuredClone(input.nodes || []),
-    edges: structuredClone(input.edges || []),
   };
 }
 
@@ -2659,7 +2725,7 @@ async function loadWorkflowDataSources({
     });
 
     const result = await NativeBridge.readDataSource(source);
-    variableRegistry.set(variableName, result.data);
+    setWorkflowVariable(variableRegistry, variableName, result.data);
     variableOrigins[variableName] = {
       source: "dataSource",
       nodeId: "",
@@ -2756,7 +2822,314 @@ async function delayWithRunCancellation(ms, runId) {
   throwIfRunCancelled(runId);
 }
 
-async function resolveStartingTab(workflow) {
+function isFinalizedNavigateContract(definition = {}) {
+  return definition.type === NAVIGATE_NODE_TYPE &&
+    definition.version === navigateNodeDefinition.version;
+}
+
+function validateFinalizedWorkflowConfiguration(config, context = {}) {
+  if (isFinalizedNavigateContract(context.definition)) {
+    return validateNavigateConfig(config, { allowExpressions: true });
+  }
+  return {
+    valid: true,
+    config: structuredClone(config),
+    errors: [],
+  };
+}
+
+function setWorkflowVariable(variableRegistry, name, value) {
+  if (!variableRegistry || typeof variableRegistry.set !== "function") return;
+  const path = String(name || "").trim();
+  if (!path) return;
+  variableRegistry.set(path, value);
+
+  if (
+    activeRun?.executionModel !== WorkflowExecutionModels.CanonicalGraph ||
+    path.startsWith("variables.") ||
+    path.startsWith("nodes.") ||
+    path.startsWith("workflowClipboard.") ||
+    path.startsWith("workflowClipboardVersions.")
+  ) {
+    return;
+  }
+  variableRegistry.set(`variables.${path}`, value);
+}
+
+async function executeFinalizedNavigateWorkflowNode({
+  step,
+  definition,
+  currentTab,
+  tabsByRef,
+  variableRegistry,
+  runId,
+  workflowName,
+  stepIndex,
+}) {
+  const config = step?.config || {};
+  const tabs = createChromeNavigateTabsService({
+    chromeApi: chrome,
+    tabsByRef,
+    currentTab,
+    previousTab: currentTab,
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+  });
+  const services = {
+    tabs,
+    scripting: chrome.scripting,
+    registry: variableRegistry,
+    workflowClipboard: createWorkflowClipboardAdapter(variableRegistry),
+    isCancelled: () => (
+      activeRun?.runId === runId && activeRun.cancelRequested
+    ),
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+    withTimeout: createFinalizedNodeTimeoutService(runId),
+    logger: (event) => appendFinalizedNodeLog({
+      event,
+      runId,
+      workflowName,
+      step,
+      stepIndex,
+    }),
+    userGate: {
+      async request(payload = {}, runtime = {}) {
+        runtimeState.appendExecutionLog({
+          runId,
+          workflowName,
+          nodeId: step?.id || "",
+          stepIndex,
+          action: step?.action || step?.type || NAVIGATE_NODE_TYPE,
+          status: "waiting_async",
+          message: "User action required: navigate the selected tab to a supported page.",
+        });
+        const supportedTab = await tabs.waitUntilSupported(payload.tab?.id, {
+          timeoutMs: payload.timeoutMs,
+          signal: runtime.signal,
+        });
+        return { approved: true, tab: supportedTab };
+      },
+    },
+  };
+  const outcome = await executeFinalizedNode({
+    nodeId: step.id,
+    nodeType: step.action || step.type,
+    nodeVersion: step.version,
+    definition,
+    config,
+    inputs: {
+      operation: config.operation,
+      tabSource: config.tabSource,
+      url: config.url,
+    },
+    tabRef: config.tabReference || step.tabRef || "",
+    url: config.url || "",
+    validateConfig: (preparedConfig) => validateNavigateConfig(preparedConfig),
+    executor: (context) => executeNavigate({
+      ...context,
+      tab: currentTab,
+      previousTab: currentTab,
+    }),
+    verifyBeforeRetry: ({ error }) => {
+      const verificationTab = tabs.currentTab() || currentTab;
+      error.details = {
+        ...(error.details || {}),
+        tabId: error.details?.tabId ?? verificationTab?.id ?? null,
+        previousUrl: error.details?.previousUrl ?? currentTab?.url ?? null,
+        targetUrl: error.details?.targetUrl ?? config.url ?? null,
+        phase: error.details?.phase || "after_action",
+      };
+      return verifyNavigateBeforeRetry({
+        config,
+        services: { tabs },
+        context: {},
+        error,
+      });
+    },
+  }, services);
+
+  const latestTab = tabs.currentTab() || currentTab;
+  if (outcome.route === FinalizedNodeRoutes.Fail) {
+    throwFinalizedNodeFailure(outcome, step, stepIndex);
+  }
+  return {
+    tab: latestTab,
+    route: outcome.route,
+    result: outcome.result,
+  };
+}
+
+function createFinalizedNodeTimeoutService(runId) {
+  return async (task, timeoutMs, context = {}) => {
+    if (activeRun?.runId === runId && activeRun.cancelRequested) {
+      throw new NodeExecutionError(
+        NodeErrorCodes.Cancelled,
+        "Navigate execution was cancelled.",
+        { attempt: context.attempt, retryable: false },
+      );
+    }
+    const controller = new AbortController();
+    const controllers = activeRun?.runId === runId
+      ? activeRun.abortControllers
+      : null;
+    controllers?.add(controller);
+    let timer = null;
+    let removeAbortListener = () => {};
+
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new NodeExecutionError(
+          NodeErrorCodes.Timeout,
+          "Navigate execution timed out.",
+          {
+            attempt: context.attempt,
+            timeoutMs,
+            retryReason: "navigation_failure",
+            sideEffectState: "unknown",
+          },
+        ));
+        controller.abort();
+      }, timeoutMs);
+    });
+    const cancellationPromise = new Promise((_, reject) => {
+      const onAbort = () => reject(new NodeExecutionError(
+        NodeErrorCodes.Cancelled,
+        "Navigate execution was cancelled.",
+        { attempt: context.attempt, retryable: false },
+      ));
+      controller.signal.addEventListener("abort", onAbort, { once: true });
+      removeAbortListener = () => {
+        controller.signal.removeEventListener("abort", onAbort);
+      };
+    });
+
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => task(controller.signal)),
+        timeoutPromise,
+        cancellationPromise,
+      ]);
+    } finally {
+      clearTimeout(timer);
+      removeAbortListener();
+      controllers?.delete(controller);
+    }
+  };
+}
+
+function createWorkflowClipboardAdapter(variableRegistry) {
+  return {
+    async publish(publication = {}) {
+      const key = normalizeWorkflowClipboardKey(publication.key);
+      const value = structuredClone(publication.value);
+      const path = `workflowClipboard.${key}`;
+      if (publication.mode === "replace") {
+        variableRegistry.set(path, value);
+        return;
+      }
+      if (publication.mode === "append") {
+        const current = variableRegistry.get(path);
+        const values = Array.isArray(current)
+          ? current
+          : current === undefined
+            ? []
+            : [current];
+        variableRegistry.set(path, [...values, value]);
+        return;
+      }
+      if (publication.mode === "version") {
+        const versionsPath = `workflowClipboardVersions.${key}`;
+        const currentVersions = variableRegistry.get(versionsPath);
+        const versions = Array.isArray(currentVersions)
+          ? currentVersions
+          : [];
+        variableRegistry.set(versionsPath, [
+          ...versions,
+          { version: versions.length + 1, value },
+        ]);
+        variableRegistry.set(path, value);
+        return;
+      }
+      throw new NodeExecutionError(
+        NodeErrorCodes.ConfigInvalid,
+        `Unsupported Workflow Clipboard mode: ${String(publication.mode)}.`,
+        { field: "saveToWorkflowClipboard" },
+      );
+    },
+  };
+}
+
+function normalizeWorkflowClipboardKey(value) {
+  const key = String(value || "").trim();
+  const parts = key.split(".");
+  if (
+    key.length > 120 ||
+    parts.some((part) => (
+      !/^[A-Za-z0-9_-]+$/.test(part) ||
+      ["__proto__", "prototype", "constructor"].includes(part)
+    ))
+  ) {
+    throw new NodeExecutionError(
+      NodeErrorCodes.ConfigInvalid,
+      "Workflow Clipboard entry name is invalid.",
+      { field: "workflowClipboardEntry" },
+    );
+  }
+  return key;
+}
+
+function appendFinalizedNodeLog({
+  event,
+  runId,
+  workflowName,
+  step,
+  stepIndex,
+}) {
+  const eventName = String(event?.event || "node_update");
+  const messages = {
+    node_started: "Finalized node attempt started.",
+    node_retry: "Finalized node retry scheduled.",
+    node_completed: "Finalized node completed.",
+    node_failed: "Finalized node failed.",
+    node_timed_out: "Finalized node timed out.",
+    node_cancelled: "Finalized node cancelled.",
+    node_skipped: "Finalized node skipped.",
+  };
+  runtimeState.appendExecutionLog({
+    runId,
+    workflowName,
+    nodeId: step?.id || event?.nodeId || "",
+    stepIndex,
+    action: step?.action || step?.type || NAVIGATE_NODE_TYPE,
+    status: event?.status || eventName,
+    message: messages[eventName] || "Finalized node execution update.",
+    diagnostics: {
+      attempt: Number(event?.attempt) || 1,
+      status: event?.status || "",
+    },
+  });
+}
+
+function throwFinalizedNodeFailure(outcome, step, stepIndex) {
+  const failure = outcome?.result?.errors?.[0] || {};
+  const error = new NodeExecutionError(
+    failure.code || NodeErrorCodes.ValidationFailed,
+    failure.message || "Navigate failed.",
+    failure.details || null,
+    { category: failure.category },
+  );
+  error.diagnostics = {
+    action: step?.action || step?.type || NAVIGATE_NODE_TYPE,
+    stepIndex,
+    attempt: outcome?.result?.execution?.attempt || 1,
+    finalReason: String(failure.code || "navigate_failed")
+      .toLowerCase()
+      .replaceAll("/", "_")
+      .replaceAll("-", "_"),
+  };
+  throw error;
+}
+
+async function resolveStartingTab(workflow, options = {}) {
   const activeTab = await getActiveTab();
   const boundDomain = String(workflow.boundDomain || "").trim();
   const reuseExistingTabs = workflow.settings?.reuseExistingTabs === true;
@@ -2800,7 +3173,12 @@ async function resolveStartingTab(workflow) {
     if (bestTab) return bestTab;
   }
 
-  throw new Error("No suitable browser tab found for workflow execution.");
+  if (options.allowTablessBootstrap === true) return null;
+
+  throw new Error(
+    "No suitable browser tab found. Open a normal web page, set a Bound Domain, " +
+    "or start with Navigate configured to open a new tab.",
+  );
 }
 
 function normalizeBoundDomainUrl(boundDomain) {
@@ -2934,7 +3312,7 @@ async function executeStep(
       ? step.config?.template ?? ""
       : step.config?.value;
 
-    variableRegistry?.set(variableName, value);
+    setWorkflowVariable(variableRegistry, variableName, value);
     return contextReadyTab;
   }
 
@@ -2946,7 +3324,7 @@ async function executeStep(
     }
 
     const value = executeDataTransform(action, step.config || {});
-    variableRegistry?.set(variableName, value);
+    setWorkflowVariable(variableRegistry, variableName, value);
     return contextReadyTab;
   }
 
@@ -3013,11 +3391,11 @@ async function executeStep(
   );
 
   if (isExtractionAction(action)) {
-    variableRegistry?.set(extractionVariableName, response?.value ?? "");
+    setWorkflowVariable(variableRegistry, extractionVariableName, response?.value ?? "");
   }
 
   if (action === Actions.FileInputUpload) {
-    variableRegistry?.set(fileUploadVariableName, response?.value ?? null);
+    setWorkflowVariable(variableRegistry, fileUploadVariableName, response?.value ?? null);
   }
 
   return contextReadyTab;
@@ -3044,6 +3422,7 @@ function assertNodeContract(step, stepIndex = -1) {
 
 function assertNativeHostRequirement(step, stepIndex = -1, definition = null) {
   const action = step?.action || step?.type || "unknown";
+  if (action === MapperAttentionNodeType) return;
   const resolvedDefinition = definition || resolveNodeDefinition(step);
   if (!resolvedDefinition?.nativeHost) return;
 
@@ -3093,7 +3472,7 @@ async function executeHttpRequestStep(step, variableRegistry, runId) {
       signal: controller.signal,
     });
     throwIfRunCancelled(runId);
-    variableRegistry?.set(variableName, value);
+    setWorkflowVariable(variableRegistry, variableName, value);
   } finally {
     controllers?.delete(controller);
   }
@@ -3132,7 +3511,7 @@ async function executeApprovedDirectoryStep(action, step, variableRegistry) {
     throw new Error(`Unsupported approved directory action: ${action || "unknown"}`);
   }
 
-  variableRegistry?.set(variableName, value);
+  setWorkflowVariable(variableRegistry, variableName, value);
 }
 
 async function executeClipboardStep(action, step, variableRegistry, runId) {
@@ -3158,7 +3537,7 @@ async function executeClipboardStep(action, step, variableRegistry, runId) {
   });
   throwIfRunCancelled(runId);
 
-  if (variableName) variableRegistry?.set(variableName, result);
+  if (variableName) setWorkflowVariable(variableRegistry, variableName, result);
 }
 
 async function executeDownloadWaitStep(step, variableRegistry, runId) {
@@ -3188,7 +3567,7 @@ async function executeDownloadWaitStep(step, variableRegistry, runId) {
       signal: controller.signal,
     });
     throwIfRunCancelled(runId);
-    variableRegistry?.set(variableName, value);
+    setWorkflowVariable(variableRegistry, variableName, value);
   } finally {
     controllers?.delete(controller);
   }
@@ -3231,7 +3610,7 @@ async function executeScreenshotCaptureStep(
     download: (options) => chrome.downloads.download(options),
   });
   throwIfRunCancelled(runId);
-  variableRegistry?.set(variableName, value);
+  setWorkflowVariable(variableRegistry, variableName, value);
 }
 
 async function executeLocalFileUploadStep(
@@ -3290,7 +3669,7 @@ async function executeLocalFileUploadStep(
     },
   }, runId);
   throwIfRunCancelled(runId);
-  variableRegistry?.set(variableName, response?.value ?? null);
+  setWorkflowVariable(variableRegistry, variableName, response?.value ?? null);
 }
 
 async function sendOffscreenClipboardOperation(operation, value = "") {

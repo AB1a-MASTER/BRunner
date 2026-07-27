@@ -18,6 +18,7 @@ sys.path.insert(0, str(HOST_DIR))
 import brunner_host
 from host_runtime_status import read_connection_status
 from pairing_coordinator import PairingCoordinator
+from workflow_repository import WorkflowRepository
 
 
 PROFILE_A = "123e4567-e89b-42d3-a456-426614174000"
@@ -422,6 +423,59 @@ class LiveHostWebSocketContractTests(unittest.IsolatedAsyncioTestCase):
                 set(brunner_host.PROTOCOL_V2_CAPABILITIES)
                 .issubset(set(brunner_host.HOST_CAPABILITIES))
             )
+
+    async def test_workflow_list_honors_live_recursive_discovery_setting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base_dir = Path(temp)
+            workflows_dir = base_dir / "Workflows"
+            repository = WorkflowRepository(workflows_dir)
+            repository.save_workflow("root.json", {"name": "Root"})
+            repository.save_workflow(
+                "node_acceptance/001_navigate_acceptance.json",
+                {"name": "Navigate Acceptance"},
+            )
+            settings = MemorySettings({
+                "pairedInstanceId": PROFILE_A,
+                "host": {"port": 8999},
+                "workflowDiscovery": {"recursive": False},
+                "approvedDirectories": [],
+            })
+            coordinator = PairingCoordinator(settings.load, settings.save)
+
+            with mock.patch.object(
+                brunner_host,
+                "WORKFLOW_REPOSITORY",
+                repository,
+            ):
+                async with live_host(base_dir, settings, coordinator) as (uri, _port):
+                    async with websockets.connect(
+                        uri,
+                        open_timeout=2,
+                        close_timeout=2,
+                    ) as client:
+                        announced = await request(
+                            client,
+                            command("announce-workflows", "PROFILE_HELLO", {
+                                "profileInstanceId": PROFILE_A,
+                            }),
+                        )
+                        self.assertEqual(announced["status"], "success")
+
+                        top_level = await request(
+                            client,
+                            command("list-top-level", "LIST_WORKFLOWS"),
+                        )
+                        self.assertEqual(top_level["files"], ["root.json"])
+
+                        settings.settings["workflowDiscovery"]["recursive"] = True
+                        recursive = await request(
+                            client,
+                            command("list-recursive", "LIST_WORKFLOWS"),
+                        )
+                        self.assertEqual(recursive["files"], [
+                            "node_acceptance/001_navigate_acceptance.json",
+                            "root.json",
+                        ])
 
     async def test_pairing_rejects_other_profile_and_duplicate_live_connection(self):
         with tempfile.TemporaryDirectory() as temp:

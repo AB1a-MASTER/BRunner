@@ -47,8 +47,10 @@ Open Tab explicitly chooses whether execution continues in the current or new ta
 
 HTTP Request live acceptance:
 
-1. Serve the repository root locally, for example with
-   `python -m http.server 8765`.
+1. Serve the repository root with the root-aware launcher:
+   `& "C:\path\to\BR\start_acceptance_server.ps1"`. Do not start
+   `python -m http.server 8765` directly from `BRunner_Host`; that serves the
+   wrong directory and makes repository fixtures return 404.
 2. Add an HTTP Request node using `GET`, response type `json`, output variable
    `http_result`, and URL
    `http://127.0.0.1:8765/tests/fixtures/http-response.json`.

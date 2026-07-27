@@ -9,6 +9,12 @@ and compatibility behavior are provisional and are finalized only in the node
 phase. Polished Mapper Inspector/map-view UI is a separate V2 concern, not a V1
 Studio gate.
 
+> **Direction update (2026-07-25):** Graph Studio is now the only supported
+> authoring surface. All Sequential Studio refinement, cross-Studio parity, and
+> shared-density requirements below are historical and superseded. Sequential
+> Studio is disabled without deleting its source and will be removed during the
+> final pre-V2 cleanup.
+
 Slice 1 delivered:
 
 - workflow-description preservation across v1 upgrade, v2 graph metadata,

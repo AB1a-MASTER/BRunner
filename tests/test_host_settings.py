@@ -41,6 +41,7 @@ class HostSettingsTests(unittest.TestCase):
         self.assertIsNone(config["pairedInstanceId"])
         self.assertEqual(config["host"]["port"], DEFAULT_PORT)
         self.assertEqual(config["workflowStorage"]["mode"], "default")
+        self.assertFalse(config["workflowDiscovery"]["recursive"])
         self.assertEqual(config["approvedDirectories"][0]["id"], "allowedfiles")
         self.assertEqual(config["hostFallback"]["minimumCoordinateConfidence"], 0.9)
         self.assertEqual(config["port"], DEFAULT_PORT)
@@ -96,6 +97,7 @@ class HostSettingsTests(unittest.TestCase):
                 "pairedInstanceId": PROFILE_INSTANCE_ID,
                 "host": {"port": "9002", "startWithApp": False},
                 "workflowStorage": {"mode": "custom", "directory": "C:/Flows"},
+                "workflowDiscovery": {"recursive": True},
                 "approvedDirectories": [{
                     "id": "imports",
                     "displayName": "Imports",
@@ -116,6 +118,7 @@ class HostSettingsTests(unittest.TestCase):
         self.assertEqual(config["pairedInstanceId"], PROFILE_INSTANCE_ID)
         self.assertEqual(config["host"]["port"], DEFAULT_PORT)
         self.assertEqual(config["workflowStorage"]["directory"], "C:/Flows")
+        self.assertTrue(config["workflowDiscovery"]["recursive"])
         self.assertEqual(config["approvedDirectories"][0]["id"], "imports")
         self.assertEqual(config["approvedDirectories"][0]["recursive"], False)
         self.assertEqual(config["hostFallback"]["enabled"], False)

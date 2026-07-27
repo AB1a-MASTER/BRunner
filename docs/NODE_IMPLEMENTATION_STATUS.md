@@ -1,6 +1,6 @@
 # Finalized Node Program Tracker
 
-Updated: 2026-07-22
+Updated: 2026-07-25
 
 This is the single authoritative work tracker for the finalized node program
 and the implementation-status companion to
@@ -11,25 +11,28 @@ inventory. `AGENTS.md` defines the repeatable working instructions and
 `NODE_USER_CATALOG.md` documents only behavior accepted for end users.
 
 Update this file in the same change that closes a base task or node. A node row
-may be marked **Complete** only after its acceptance workflow, both-Studio
-round-trip, user documentation, and automated/live evidence pass. Add the user
-commit hash to the completion ledger after the accepted slice is committed.
+may be marked **Complete** only after its acceptance workflow,
+Graph-editor/save/runtime round-trip, user documentation, and automated/live
+evidence pass. Add the user commit hash to the completion ledger after the
+accepted slice is committed.
 
 ## Current status
 
 | Workstream | Status | Meaning |
 |---|---|---|
 | Finalized catalog inventory | **Complete** | All 94 blueprint nodes have a stable type, phase, disposition, and provisional-code reference inventory. |
-| Base contract hardening | **Complete** | B01-B15 are closed. Exact versioning, fail-closed migration, stable ports/errors, canonical workflows, both-Studio schema parity, and acceptance validation are enforced. |
-| Finalized node implementations | **Ready for Node 1** | No finalized node is accepted yet. The next isolated slice is Navigate; provisional behavior and scaffolds still do not count. |
-| Phase 1 shared adapters | **Integration pending** | Shared contracts and deterministic ambiguity behavior are ready; production integration proceeds only through each applicable node slice. |
+| Base contract hardening | **Complete** | B01-B15 and B19 are closed for Node 1; phase-specific B16-B18 remain due only before their listed phases. |
+| Sequential Studio retirement | **Complete; source dormant** | B19 evidence is recorded in [`work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md`](work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md). Every normal launch opens Graph Studio, the former URL is fail-closed, and physical source removal remains C12. |
+| Finalized node implementations | **Node 1 accepted; commit pending** | Navigate v2 passed its complete automated and unpacked-extension acceptance gates. The user-controlled commit hash is the only remaining Node 1 closeout item. |
+| Phase 1 shared adapters | **Navigate integrated** | Standard runtime/output/logging/retry plus the Chrome tab adapter are production-integrated for Navigate only; later nodes remain pending. |
 | Provisional removals | **Queued** | `browser.search` and `http.request` are absent from the finalized catalog and must be removed during runtime integration. |
 
-Base closeout verification on 2026-07-22: Graph Studio production build passed
-from source (190 modules), all 385 JavaScript tests passed, all 176 Python tests
-passed, changed JavaScript sources passed syntax checks, and `git diff --check`
-reported no whitespace errors. This evidence closes infrastructure only; it
-does not mark any finalized node accepted or replace per-node live acceptance.
+Base closeout verification on 2026-07-25: Graph Studio production build passed
+from source (191 modules), all 441 JavaScript tests passed, all 181 Python tests
+passed, ten affected JavaScript sources passed syntax checks, the production
+build fingerprint matched, and `git diff --check` reported no whitespace
+errors. This closes the Node 1 base gate; it does not replace Navigate's
+focused live acceptance.
 
 ## Status and disposition legend
 
@@ -37,8 +40,8 @@ does not mark any finalized node accepted or replace per-node live acceptance.
 - **Blocked by base**: implementation must not start until applicable base
   contract items pass.
 - **In progress**: active implementation work; not yet accepted.
-- **Integration pending**: isolated source/tests exist but production and both
-  Studios do not consume the contract yet.
+- **Integration pending**: isolated source/tests exist but Graph Studio and the
+  production runtime do not yet consume the same contract.
 - **Complete**: definition, editor, executor, outputs, logging, tests, and
   applicable live acceptance meet the blueprint definition of done, the user
   catalogue is current, and a node acceptance workflow exists.
@@ -48,10 +51,10 @@ does not mark any finalized node accepted or replace per-node live acceptance.
   different and must be replaced by the finalized contract.
 - **Add**: no provisional action implements the finalized node.
 
-## Base Contract and Studio Unification
+## Base Contract and Graph Studio Consolidation
 
-Complete B01-B15 before accepting Node 1. B16-B18 are phase prerequisites and
-must close before their listed phase begins.
+Complete B01-B15 and B19 before accepting Node 1. B16-B18 are phase
+prerequisites and must close before their listed phase begins.
 
 | ID | Required work | Due | Status | Evidence / notes |
 |---|---|---|---|---|
@@ -64,15 +67,16 @@ must close before their listed phase begins.
 | B07 | Rename Resolve Element cardinality from `matchMode` to `resultCardinality`. | Before Node 1 | Complete | Blueprint terminology corrected. |
 | B08 | Define coordinate-only targets as explicit non-component targets; never fabricate a durable ComponentRef. | Before Node 1 | Complete | Blueprint target contract corrected. |
 | B09 | Align package rules with JavaScript and shared schema-driven UI. | Before Node 1 | Complete | Separate `ui.js` only for a shared editor extension. |
-| B10 | Build one finalized node registry/field renderer/validator/autocomplete source for both Studios. | Before Node 1 | Complete | Both Studios consume the serialized exact-version registry and shared `nodeAuthoring` field, target, validation, and autocomplete contract. |
-| B11 | Make one canonical workflow schema support ordered, nested, and graph routes without lossy adapters. | Before Node 1 | Complete | Canonical mapper-graph JSON is saved/run by both Studios; Sequential is a route-preserving view and fails closed on structural edits it cannot represent yet. |
-| B12 | Add Graph→Sequential→Graph and Sequential→Graph→Sequential semantic round-trip gates. | Before Node 1 | Complete | Deterministic round trips preserve versions, configuration, routes, positions, metadata, and supported unknown node data. |
+| B10 | Consolidate one finalized node registry, Graph field renderer, validator, value coercion, and reachability-aware autocomplete path. | Before Node 1 | Complete | [`work_items/B10_GRAPH_AUTHORING_SEMANTICS.md`](work_items/B10_GRAPH_AUTHORING_SEMANTICS.md): exact registry-backed preparation now governs Graph create/edit/load/save and finalized runtime input; autocomplete is reachability-aware. Focused passed 87/87, Graph gates 7/7, JavaScript 425/425, Python 181/181, syntax and whitespace passed. |
+| B11 | Make canonical mapper-graph v3 the only finalized workflow preparation and runtime path. | Before Node 1 | Complete | [`work_items/B11_CANONICAL_WORKFLOW_PREPARATION.md`](work_items/B11_CANONICAL_WORKFLOW_PREPARATION.md): all Graph/finalized runs prepare as canonical v3 before side effects, including preserved Navigate error-to-attention routing; Graph rebuilt, JavaScript passed 436/436, Python 181/181, syntax/fingerprint/whitespace gates passed. |
+| B12 | Add Graph editor→save→reload→execution-plan semantic round-trip gates. | Before Node 1 | Complete | [`work_items/B12_GRAPH_RUNTIME_ROUND_TRIP.md`](work_items/B12_GRAPH_RUNTIME_ROUND_TRIP.md): canonical Graph/save/reload/background-plan parity and the checked-in Navigate route pass 60/60 focused checks; Graph rebuilt from 191 modules, JavaScript passed 441/441, Python 181/181, and syntax/fingerprint/whitespace gates passed. |
 | B13 | Standardize field help, valid examples, expression modes, autocomplete, and identifier/matching selectors. | Before Node 1 | Complete | Shared metadata guarantees help, valid examples/placeholders, expression modes, autocomplete sources, checkboxes/dropdowns, and explicit target/matching controls. |
 | B14 | Add schema/source validation for `Workflows/node_acceptance/NNN_<slug>_acceptance.json`. | Before Node 1 | Complete | Directory scanner binds filename/order/type/version to the catalog, validates canonical graph and synthetic metadata, and verifies referenced fixtures exist. |
 | B15 | Establish the living end-user catalogue and require an accepted entry per node. | Before Node 1 | Complete | `docs/NODE_USER_CATALOG.md`. |
 | B16 | Define controlled file-reference schema, lifecycle, size limits, parser dependencies, and host capability matrix. | Before Phase 4 | Queued | Required for catalog 31–43 and later file outputs. |
 | B17 | Define feasible Function/Code execution environments, MV3 constraints, async/cancel limits, and available APIs. | Before Phase 5 | Queued | Required for catalog 59–60. |
 | B18 | Implement canonical graph traversal, scopes, multi-port routing, limits, joins, cancellation, and deadlock rules. | Before Phase 6 | Queued | Never emulate these inside the legacy linear executor. |
+| B19 | Disable Sequential Studio entry points and authoring/run access without deleting its source. | Before Node 1 | Complete | [`work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md`](work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md): sidebar and former URL route to Graph; Graph has no switch/session listener; former scripts/styles are not web-accessible; source is dormant for C12. Graph build fingerprint passed, 15 syntax checks passed, JavaScript passed 416/416, Python passed 181/181, and `git diff --check` reported no errors. |
 
 ## Contract version policy
 
@@ -81,8 +85,9 @@ must close before their listed phase begins.
   `2`: Navigate, Scroll, Click, Hover / Move Pointer, and Focus Element.
 - Later incompatible schema, port, output, service, or execution changes bump
   the version and require migration or an unsupported-version result.
-- The current Navigate version-1 package is scaffold and must move to the
-  finalized version-2 contract before acceptance.
+- Navigate v2 is the finalized source candidate. Provisional
+  `browser.navigate@1` remains exact-version isolated with no silent migration;
+  the v2 candidate is not accepted until its unpacked-extension run passes.
 
 ## Per-node completion checklist
 
@@ -90,11 +95,11 @@ For each catalog row, complete these items in one isolated slice:
 
 - [ ] Contract definition and correct version.
 - [ ] Shared field schema with help, examples, selectors, and autocomplete.
-- [ ] Graph Studio and Sequential Studio editing/parity.
+- [ ] Graph Studio authoring and canonical save/reload/runtime parity.
 - [ ] Validator, executor, output builder, stable errors, logging, cancellation,
       timeout, retry/side-effect, resolver, and host behavior as applicable.
 - [ ] Deterministic unit/integration/failure tests.
-- [ ] Cross-Studio semantic round-trip tests.
+- [ ] Graph editor/save/reload/execution-plan semantic round-trip tests.
 - [ ] Focused synthetic node acceptance workflow and schema test.
 - [ ] Focused live source acceptance where applicable.
 - [ ] Replaced provisional paths removed or explicitly isolated.
@@ -107,36 +112,102 @@ For each catalog row, complete these items in one isolated slice:
 |---|---|---|
 | Shared target configuration | **Integration pending** | One normalized Component-ID-first target contract with ordered fallback, ambiguity handling, map refresh, explicit coordinate targets, and structured resolution output. |
 | Shared text matching | **Integration pending** | Ambiguity-before-occurrence, matching modes, case/whitespace control, and stable error mapping are complete; finalized node packages must adopt the adapter. |
-| Standard output and logging | **Integration pending** | Stable result envelope, selected route, output binding, warnings/errors, timing, execution method, and configured local log publication. |
-| Retry safety and host fallback | **Integration pending** | Central retry classification and browser-first, visible-host-last policy with verification and stable failure codes. |
+| Standard output and logging | **Navigate integrated** | Navigate publishes the stable envelope, aliases, Workflow Clipboard values, selected routes, timing, warnings/errors, and standard local log events. |
+| Retry safety and host fallback | **Navigate integrated** | Navigate uses verify-before-retry with stable navigation categories and no host fallback; later node policies remain pending. |
 
 ## Known architecture gaps
 
 1. `BRunner/core/constants.js` and the version-aware registry still expose the
    provisional action set. Finalized definitions replace or isolate those
    entries only in their catalog-numbered node slices.
-2. Most execution remains centralized in `BRunner/background.js` and related
-   content-script switches instead of finalized per-node definition, executor,
-   validator, output, UI, and test packages.
-3. Shared adapter contracts and deterministic tests are ready, but production
-   execution integration remains per-node work.
-4. Graph Studio and Sequential Studio now share canonical workflow JSON,
-   exact-version definitions, validation, authoring metadata, targets, and
-   autocomplete. Finalized node-specific editors and executors are still absent.
+2. Apart from Navigate v2, most execution remains centralized in
+   `BRunner/background.js` and related content-script switches instead of
+   finalized per-node definition, executor, validator, output, UI, and test
+   packages.
+3. Shared adapter contracts and deterministic tests are ready; Navigate now
+   uses them in production and remaining integration proceeds per node.
+4. The two-Studio audit disproved full authoring parity. Graph Studio is now the
+   sole supported editor, but B10-B12 must still consolidate its value coercion,
+   higher-level validation, reachability-aware autocomplete, canonical entry
+   and routes, saved JSON, and background execution preparation.
 5. Finalized multi-port control behavior, nested scope semantics, cancellation,
    and output schemas are not yet implemented for Phases 5-7.
-6. Existing tests protect provisional runtime behavior. Every finalized node
-   still needs its blueprint unit, integration, failure-path, logging, and
-   focused live acceptance coverage.
+6. Existing tests protect provisional runtime behavior. Navigate v2 has its
+   blueprint automated and canonical Graph round-trip coverage plus live
+   fixture proof, but still needs the freshly rebuilt unpacked-extension
+   workflow run; Nodes 2-94 need their full coverage.
 7. Removing `browser.search` and `http.request` from runtime code is deferred
    until their affected registry, editor, executor, workflow, and test paths
    can be removed together.
+8. Sequential Studio is disabled but retained as dormant source. B19 blocks
+   authoring/run access and routes users to Graph; C12 removes its code only
+   after integrated V1 acceptance.
+
+## Node 1 — Navigate acceptance evidence
+
+Power-loss-safe ordered work and the current live checkpoint are recorded in
+[`work_items/N001_NAVIGATE_FINALIZATION.md`](work_items/N001_NAVIGATE_FINALIZATION.md).
+
+Current source verification on 2026-07-27: all 445 JavaScript tests and all
+183 Python tests passed; the cache-safe fixture server and focused
+Navigate/workflow checks passed 21/21; Graph Studio remains the verified
+191-module build; the new Python sources passed syntax checks; the production
+fingerprint remains covered by the full suite; and the affected
+`git diff --check` reported no whitespace errors. The live success run
+returned the expected title, heading, marker, ready state, completed node, and
+populated runtime namespace summaries. Its unavailable-fixture attempts exposed
+and drove repairs for Chromium's internal network-error document and browser
+cache reuse. The canonical workflow now uses a fresh stable URL served with a
+strict no-store policy. The cache-safe success rerun passed. The verified
+fixture server was then stopped, and the user confirmed the same workflow
+failed Navigate and followed the red route to Needs Attention as intended.
+
+The later two-Studio audit found that those passing tests did not exercise the
+real acceptance workflow through both payload builders: Sequential conversion
+discarded its explicit error route while Graph preserved it. Sequential Studio
+is now deprecated instead of being repaired. Existing cross-Studio evidence is
+retired and does not satisfy the replacement B10-B12 Graph-only gates.
+
+- [x] Frozen `browser.navigate@2` definition, typed ports, capabilities,
+      services, host policy, protected-page policies, and output schema.
+- [x] Shared field schema with defaults, help, valid examples, selectors,
+      advanced controls, expression modes, and applicable autocomplete.
+- [x] Strict validator, output builder, stable namespaced errors, Chrome tabs
+      adapter, cancellation, bounded readiness, logging, error routing,
+      output aliases, Workflow Clipboard, and verify-before-retry behavior.
+- [x] Provisional `browser.navigate@1` remains exact-version isolated; v1 is
+      never migrated or dispatched as v2.
+- [x] Studio startup permits a tabless entry only for enabled
+      `browser.navigate@2` `goto_url` with current source and `new_tab`;
+      current-tab and history operations still fail closed without a target.
+- [x] Graph Studio renders the complete shared v2 configuration.
+- [x] Graph editor/save/reload/execution-plan round trips preserve v2
+      configuration and value types, routes, entry, positions, metadata, and
+      node data through the canonical background preparation path.
+- [x] Focused deterministic unit/integration/failure/source tests pass.
+- [x] Acceptance workflow schema passes for
+      `001_navigate_acceptance.json` and its repository fixture; the workflow
+      opens a new destination tab so Studio execution exercises tabless startup.
+- [x] Companion workflow discovery and extension load/save references preserve
+      the nested `node_acceptance/001_navigate_acceptance.json` path when the
+      persisted recursive-discovery toggle is enabled, retain top-level-only
+      behavior when disabled, and reject absolute and traversal paths.
+- [x] The fixture was served from the source checkout and verified live in
+      Chrome at `127.0.0.1:8765` (title, heading, marker, and ready state).
+- [x] End-user catalogue entry covers requirements, every field, examples,
+      Graph Studio usage, readiness/retry behavior, outputs, and
+      troubleshooting.
+- [x] Load `BRunner/` unpacked and run the focused workflow from Graph Studio;
+      verify the six output keys, saved tab reference, and bounded error route.
+- [x] Mark the live acceptance result Accepted only after that live run.
+- [ ] Add the user commit hash, mark Node 1 Complete, and only then begin
+      Node 2.
 
 ## Full finalized node tracker
 
 | # | Finalized node | Stable type | Phase | Disposition | Provisional action reference(s) | Status |
 |---:|---|---|---:|---|---|---|
-| 1 | Navigate | `browser.navigate` | 1 | Rewrite | `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload` | Queued |
+| 1 | Navigate | `browser.navigate` | 1 | Rewrite | `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload` | Accepted — user commit pending |
 | 2 | Scroll | `browser.scroll` | 1 | Rewrite | `browser.scroll`, `element.scroll_into_view` | Queued |
 | 3 | Tab Control | `browser.tab.control` | 1 | Rewrite | `browser.tab.switch`, `browser.tab.open`, `browser.tab.close` | Queued |
 | 4 | Resolve Element | `element.resolve` | 1 | Add | — | Queued |
@@ -259,16 +330,17 @@ node-specific acceptance workflow.
 | C09 | Pass full JavaScript/Python suites and current Graph Studio build parity. | Queued | Run after the final integrated source slice. |
 | C10 | Synchronize README, roadmap, handoff, user guide, user catalogue, and affected specifications. | Queued | No conflicting current instructions. |
 | C11 | Complete integrated V1 source acceptance with synthetic data. | Queued | Source and unpacked extension; release artifacts are not evidence. |
+| C12 | Run pre-V2 cleanup and physically remove the dormant Sequential Studio. | Queued | Only after C11: remove `BRunner/studio/`, Sequential-only tests/session/navigation/manifest/docs paths, and dead adapters after proving supported Graph/sidebar/runtime paths remain intact. |
 
 ## Next acceptance boundary
 
-Base-contract items B01-B15 are complete. Implement **Node 1: Navigate** only,
-including its finalized version-2 package, applicable shared-adapter
-integration, both-Studio parity, deterministic tests, focused synthetic
-acceptance workflow, live source acceptance, user-catalogue entry, and tracker
-evidence. Do not begin Scroll until Navigate is accepted and the user has made
-the quick commit. Phase 1 still closes only after Nodes 1-6 pass their own gates
-and the combined blueprint workflow succeeds in both Studios.
+B10-B12 and B19 are complete; dormant Sequential Studio source remains deferred
+to C12. **Node 1: Navigate** passed its full source and live acceptance gate.
+The immediate boundary is its user-controlled quick commit and ledger hash.
+After the hash is recorded and Navigate is marked Complete, create the Node 2
+work record and begin **Scroll**. Phase 1 closes only after Nodes 1-6 and the
+combined blueprint workflow succeed through Graph Studio and the canonical
+graph runtime.
 
 ## Completed-node ledger
 
@@ -277,4 +349,4 @@ commit is created by the user after reviewing the completed slice.
 
 | # | Node | Final contract | Acceptance workflow | Automated evidence | Live evidence | Commit |
 |---:|---|---|---|---|---|---|
-| — | No finalized nodes accepted yet | — | — | — | — | — |
+| 1 | Navigate | `browser.navigate@2` | `node_acceptance/001_navigate_acceptance.json` | JavaScript 445/445; Python 183/183; cache-safe focused checks 21/21; verified 191-module Graph build | Cache-safe success and stopped-server red error route passed 2026-07-27 | Pending user commit |

@@ -1,5 +1,5 @@
 BRunner - Current Development Handoff
-Updated: 2026-07-22
+Updated: 2026-07-27
 
 PURPOSE
 
@@ -15,6 +15,15 @@ CURRENT PRODUCT BOUNDARY
   local Windows companion application.
 - The extension owns workflow authoring/execution, tabs/pages, browser actions,
   the mapper engine, and post-action checks.
+- Graph Studio is the only supported workflow-authoring surface. Finalized
+  workflows use one canonical mapper-graph schema and graph runtime.
+- Sequential Studio is deprecated and disabled under B19. Normal launches open
+  Graph Studio, its former URL redirects without loading authoring/run code,
+  and `BRunner/studio/` remains dormant until the final pre-V2 cleanup after
+  integrated V1 source acceptance.
+- Do not equate the deprecated Sequential Studio UI with the provisional legacy
+  linear executor. Retain the executor wherever a supported transitional path
+  still depends on it, and remove it only through a separate dependency audit.
 - The companion owns local workflow persistence, approved-folder operations,
   process status, and explicitly requested visible operating-system assistance.
 - The product assumes one cooperating local user and one selected browser
@@ -43,21 +52,27 @@ loaded-window, body-ancestry, and verification issues were fixed and rerun. The
 extension/host round trip passed with `extension-host-roundtrip.txt |
 extension-host-roundtrip.txt | 1`.
 
-The latest automated source gate passes 357 JavaScript tests and 176 Python
-tests. The active milestone is the finalized node program, beginning with its
-base-contract and Studio-unification gate before Node 1.
+The most recent recorded source verification on 2026-07-27 passed 445
+JavaScript tests and 183 Python tests; Graph Studio remains the verified
+191-module build and the cache-safe focused Navigate/server set passed 21/21.
+Rerun the relevant gates after implementation changes rather than treating
+those counts as permanent. Navigate v2 passed both its unpacked-extension
+success case and its stopped-server red error route. Its user-controlled commit
+hash is the only remaining Node 1 closeout item.
 
 Focus on:
 
 1. using `docs/NODE_IMPLEMENTATION_STATUS.md` as the canonical work tracker,
    evidence ledger, and completed 94-node disposition inventory;
-2. closing base items B02-B06 and B10-B14 so versions, ports/routes, errors,
-   ambiguity handling, registry/schema rendering, workflow files, validation,
-   help, autocomplete, identifier selectors, and acceptance workflows have one
-   shared contract;
-3. correcting and integrating the four Phase 1 shared node adapters; and
-4. implementing Navigate, Scroll, Tab Control, Resolve Element, Check Element
-   State, and Wait for Condition in catalog order.
+2. preserving completed B10-B12 so Graph authoring, saved JSON, validation,
+   autocomplete, value coercion, workflow preparation, and execution continue
+   to use one canonical semantic path;
+3. preserving completed B19 isolation while retaining dormant source for
+   pre-V2 cleanup;
+4. recording the accepted Navigate slice in the user-controlled quick commit;
+   and
+5. only after that commit, continuing Scroll, Tab Control, Resolve Element,
+   Check Element State, and Wait for Condition in catalog order.
 
 The existing Mapper Inspector is an engineering diagnostic surface for this
 work. Do not spend the current milestone polishing it into a final saved-map
@@ -69,19 +84,24 @@ CURRENT TODO SEQUENCE
 1. COMPLETE: `docs/NODE_IMPLEMENTATION_STATUS.md` and
    `BRunner/nodes/catalog.js` inventory all 94 finalized nodes and account for
    every provisional action type.
-2. ACTIVE: close tracker base-contract and Studio-unification items B02-B06 and
-   B10-B14.
-3. Correct and integrate Phase 1 target, text-matching,
-   output/logging/routing, and retry/host-fallback adapters.
-4. Implement the six Phase 1 nodes in catalog order and close the Phase 1 gate.
+2. COMPLETE: Graph Studio consolidation items B10-B12.
+3. COMPLETE: B19 disables Sequential Studio entry points and authoring/run
+   access while retaining `BRunner/studio/` as dormant reference source.
+4. ACCEPTED, COMMIT PENDING: Navigate passed focused Graph Studio success and
+   stopped-server error-route acceptance. Record the user-controlled commit
+   hash, then correct and integrate the remaining Phase 1 adapters and nodes in
+   catalog order beginning with Scroll.
 5. Continue node Phases 2-7 one node at a time, removing provisional types
    absent from the catalog. Every node gets automated tests, a focused workflow
    under `BRunner_Host/Workflows/node_acceptance/`, focused live evidence, an
    end-user catalog entry, a tracker update, and a quick user-controlled commit.
 6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
-7. Keep nonessential Inspector/saved-map visual work deferred to V2.
-8. Ask the user before any V2 viewer, product-boundary change, packaging,
+7. Run the pre-V2 cleanup: remove the already-disabled Sequential Studio and
+   its exclusively owned code/tests/docs only after supported Graph, sidebar,
+   and runtime paths pass an import/dependency audit.
+8. Keep nonessential Inspector/saved-map visual work deferred to V2.
+9. Ask the user before any V2 viewer, product-boundary change, packaging,
    installer, or release milestone.
 
 NODE CATALOG RULE
@@ -96,11 +116,16 @@ During the node milestone, follow the blueprint definition of done and track
 upgrade, rewrite/change, add, and removal status. Current actions are reference
 code, not a compatibility contract.
 
-Graph Studio and Sequential Studio must use the same versioned node definitions,
-workflow schema, ports, validation, and runtime. Sequential Studio is only a
-simpler editing presentation. Runtime dispatch uses `(type, version)`; reused
-provisional type IDs start their finalized contract at version 2, and unknown
-versions fail closed.
+Graph Studio is the sole finalized node editor. Its registry-driven editor,
+saved mapper-graph JSON, validation, workflow preparation, and background graph
+runtime must agree on the same versioned node definitions, ports, routes,
+configuration, and output contracts. Runtime dispatch uses `(type, version)`;
+reused provisional type IDs start their finalized contract at version 2, and
+unknown versions fail closed.
+
+Sequential Studio is not a compatibility target. It is disabled without
+deletion; leave the dormant source untouched during node work and remove it only
+in the tracked pre-V2 cleanup.
 
 Do not implement graph branching, loops, joins, or error paths in the linear
 executor. They require graph traversal, explicit ports, validation, limits, and
@@ -122,8 +147,9 @@ WORKING FOUNDATION
 The following accepted foundation should be preserved while working on the
 active node milestone:
 
-- sequential recording/execution, runtime state, cancellation, navigation, and
-  per-run variables;
+- runtime state, cancellation, navigation, per-run variables, and any legacy
+  linear recording/execution infrastructure still required by a supported
+  transitional path;
 - Graph Studio, graph persistence, legacy adapters, and mapper schema-v3
   `success`/`unresolved` traversal;
 - current provisional browser, element, wait, data, file, clipboard, download,
@@ -196,8 +222,10 @@ DEVELOPMENT RULES
 - Treat pairing as a cooperative profile lock.
 - Treat provisional nodes only as implementation reference; the finalized
   blueprint now controls upgrades, rewrites, additions, and removals.
-- Use one canonical workflow/node model in both Studios; only their UI/UX may
-  differ.
+- Use one canonical mapper-graph workflow/node model through Graph Studio,
+  persistence, validation, preparation, and execution.
+- Keep Sequential Studio disabled but present until the final pre-V2 cleanup;
+  do not repair it or use it as acceptance evidence.
 - Complete one node at a time, including its acceptance workflow and end-user
   documentation, then hand it to the user for the quick Git commit.
 - Defer polished saved-map viewing to V2.

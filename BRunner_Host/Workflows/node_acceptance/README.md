@@ -50,3 +50,15 @@ and binds its filename, catalog number, type, and version to
 `BRunner/nodes/catalog.js`.
 
 These workflows are source acceptance assets, not release-package evidence.
+Repository HTTP fixtures must be served through
+`start_acceptance_server.ps1`. Its loopback-only no-store policy prevents a
+stopped fixture server from being mistaken for live success through browser
+cache reuse.
+
+Enable **Include workflows in subfolders** on the companion's Workflow Storage
+tab to index this folder. In either Studio, a workflow here then appears by its
+repository-relative name, for example
+`node_acceptance/001_navigate_acceptance.json`. When the toggle is disabled,
+only workflow JSON files directly inside the active workflow folder are listed.
+Relative names are stable load/save references; absolute paths and `..`
+traversal are rejected.

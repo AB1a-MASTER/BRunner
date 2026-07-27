@@ -22,6 +22,7 @@ class WorkflowRepositoryTests(unittest.TestCase):
 
     def write_workflow(self, filename, content):
         path = self.workflows_dir / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(content), encoding="utf-8")
         return path
 
@@ -44,6 +45,76 @@ class WorkflowRepositoryTests(unittest.TestCase):
 
         with self.assertRaisesRegex(WorkflowRepositoryError, "Invalid filename"):
             self.repository.save_workflow(".", {})
+
+    def test_lists_and_loads_nested_workflows_by_relative_reference(self):
+        self.write_workflow("root.json", {"name": "Root"})
+        self.write_workflow(
+            "node_acceptance/001_navigate_acceptance.json",
+            {"name": "Navigate Acceptance"},
+        )
+
+        self.assertEqual(
+            self.repository.list_workflows(),
+            ["root.json"],
+        )
+        self.assertEqual(
+            self.repository.list_workflows(recursive=True),
+            ["node_acceptance/001_navigate_acceptance.json", "root.json"],
+        )
+        loaded = self.repository.load_workflow(
+            r"node_acceptance\001_navigate_acceptance"
+        )
+        self.assertEqual(
+            loaded["filename"],
+            "node_acceptance/001_navigate_acceptance.json",
+        )
+        self.assertEqual(loaded["content"]["name"], "Navigate Acceptance")
+
+        summaries = self.repository.list_workflow_summaries(recursive=True)
+        self.assertEqual(
+            [summary["filename"] for summary in summaries],
+            ["node_acceptance/001_navigate_acceptance.json", "root.json"],
+        )
+
+    def test_nested_paths_remain_confined_to_workflow_root(self):
+        invalid_names = [
+            "../outside.json",
+            "node_acceptance/../../outside.json",
+            "/absolute.json",
+            r"C:\outside.json",
+            r"\\server\share\outside.json",
+        ]
+
+        for filename in invalid_names:
+            with self.subTest(filename=filename):
+                with self.assertRaisesRegex(
+                    WorkflowRepositoryError,
+                    "Invalid filename|Invalid workflow path",
+                ):
+                    self.repository.save_workflow(filename, {})
+
+        self.assertFalse((Path(self.temp.name) / "outside.json").exists())
+
+    def test_nested_workflow_mutations_return_canonical_references(self):
+        saved = self.repository.save_workflow(
+            "node_acceptance/example",
+            {"schemaVersion": 2, "nodes": [], "edges": []},
+        )
+        self.assertEqual(saved["filename"], "node_acceptance/example.json")
+
+        duplicated = self.repository.duplicate_workflow(
+            r"node_acceptance\example.json",
+            "copy.json",
+        )
+        self.assertEqual(duplicated["filename"], "node_acceptance/example.json")
+        self.assertEqual(duplicated["newFilename"], "copy.json")
+
+        renamed = self.repository.rename_workflow(
+            "node_acceptance/example.json",
+            "renamed.json",
+        )
+        self.assertEqual(renamed["filename"], "node_acceptance/example.json")
+        self.assertEqual(renamed["newFilename"], "renamed.json")
 
     def test_delete_missing_matches_existing_protocol_error(self):
         with self.assertRaisesRegex(WorkflowRepositoryError, "File not found"):

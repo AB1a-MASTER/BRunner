@@ -110,6 +110,69 @@ test("disabled finalized nodes do not require an executor", async () => {
   assert.equal(outcome.route, FinalizedNodeRoutes.Success);
 });
 
+test("finalized runtime executes the same prepared configuration as Graph Studio", async () => {
+  const harness = createHarness();
+  harness.services.withTimeout = async (task) => task();
+  let receivedConfig;
+  const outcome = await executeFinalizedNode({
+    nodeId: "typed-config",
+    definition: {
+      unknownConfigPolicy: "reject",
+      config: [
+        { key: "enabled", label: "Enabled", kind: "boolean", default: true },
+        { key: "timeout", label: "Timeout", kind: "number", default: 1000, minimum: 1 },
+        { key: "retryCount", label: "Retry Count", kind: "number", default: 0, integer: true, minimum: 0 },
+        { key: "displayName", label: "Display Name", kind: "text", default: "Typed node" },
+      ],
+    },
+    config: {
+      timeout: "2500",
+      retryCount: "2",
+    },
+    async executor(context) {
+      receivedConfig = context.config;
+      return { output: { timeout: context.config.timeout } };
+    },
+  }, harness.services);
+
+  assert.equal(outcome.result.status, NodeStatuses.COMPLETED);
+  assert.equal(receivedConfig.timeout, 2500);
+  assert.equal(receivedConfig.retryCount, 2);
+  assert.equal(receivedConfig.enabled, true);
+  assert.equal(receivedConfig.displayName, "Typed node");
+});
+
+test("finalized runtime fails closed before execution on shared configuration issues", async () => {
+  const harness = createHarness();
+  let executions = 0;
+  const outcome = await executeFinalizedNode({
+    nodeId: "invalid-config",
+    definition: {
+      unknownConfigPolicy: "reject",
+      config: [
+        { key: "enabled", label: "Enabled", kind: "boolean", default: true },
+        { key: "displayName", label: "Display Name", kind: "text", default: "Invalid node" },
+      ],
+    },
+    config: {
+      enabled: "yes",
+      unsupported: true,
+    },
+    async executor() {
+      executions += 1;
+      return { output: "unexpected" };
+    },
+  }, harness.services);
+
+  assert.equal(executions, 0);
+  assert.equal(outcome.result.status, NodeStatuses.FAILED);
+  assert.equal(outcome.result.errors[0].code, NodeErrorCodes.CONFIG_INVALID);
+  assert.deepEqual(
+    outcome.result.errors[0].details.issues.map((issue) => issue.fieldKey),
+    ["config.unsupported", "enabled"],
+  );
+});
+
 test("successful nodes publish structured output before returning", async () => {
   const harness = createHarness();
   const output = {

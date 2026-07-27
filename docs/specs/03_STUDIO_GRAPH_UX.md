@@ -9,6 +9,12 @@ provisional. The emitted `BRunner/studio-graph/` assets must always match
 `BRunner/studio-graph-src/`. Final node UI is implemented later from
 `../../workflow_nodes_implementation_blueprint.md`.
 
+> **Direction update (2026-07-25):** Graph Studio is now the only supported
+> authoring surface. References below to keeping, linking to, or maintaining
+> parity with Sequential Studio are historical and superseded. Sequential
+> Studio is disabled without deleting its source and will be removed during the
+> final pre-V2 cleanup.
+
 ## Goal
 
 Replace the hard-coded sequential editor with an n8n-inspired React Flow Studio driven by the canonical node registry.

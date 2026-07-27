@@ -10,9 +10,12 @@ BRunner is a local browser-automation system for Windows and Chrome/Chromium.
 
 - The extension owns page mapping, workflow authoring, browser context, and
   browser execution.
-- Graph Studio and Sequential Studio are two authoring views of the same
-  workflow and versioned node contracts. Graph Studio uses a visual canvas;
-  Sequential Studio presents the same capabilities in a simpler ordered UI.
+- Graph Studio is the only supported workflow-authoring surface. It uses one
+  canonical mapper-graph workflow and the finalized graph runtime.
+- Sequential Studio is deprecated and disabled. Normal Studio launches open
+  Graph Studio, and the former Sequential URL redirects there without loading
+  its authoring/run code. Retained source is removed only during final cleanup
+  after V1 source acceptance and before V2.
 - The Windows companion owns local workflow storage, approved-folder services,
   companion status, and opt-in visible operating-system fallback.
 - The mapper engine is a primary reliability foundation. Its job is to discover
@@ -71,8 +74,8 @@ executors are development scaffolding.
 
 During the node phase, every finalized node is handled one by one:
 
-1. Close the shared base-contract and two-Studio parity requirements before the
-   first node.
+1. Close the shared base-contract and Graph Studio consolidation requirements
+   before the first node.
 2. Find any provisional equivalent and explicitly upgrade, rewrite, add, or
    remove it according to the final node card.
 3. Implement its versioned schema, stable ports, editor controls, runtime,
@@ -80,7 +83,7 @@ During the node phase, every finalized node is handled one by one:
 4. Add a focused workflow under `BRunner_Host/Workflows/node_acceptance/` and
    pass it with synthetic data.
 5. Document purpose, requirements, every field, practical examples,
-   autocomplete, identifier choices, outputs, errors, and both-Studio usage in
+   autocomplete, identifier choices, outputs, errors, and Graph Studio usage in
    [`NODE_USER_CATALOG.md`](NODE_USER_CATALOG.md).
 6. Mark the tracker complete only after the entire gate passes; the user then
    creates the quick Git commit.
@@ -88,14 +91,18 @@ During the node phase, every finalized node is handled one by one:
 No compatibility guarantee exists for provisional workflows or node types.
 Workflow migration, if later required, will be a separate feature.
 
-## Studios and workflow files
+## Graph Studio and workflow files
 
-Graph Studio and Sequential Studio load and save the same canonical workflow
-format. They use the same node definitions, versions, fields, validation,
-outputs, ports/routes, autocomplete providers, and runtime behavior. Graph
-Studio exposes graph routing on a canvas; Sequential Studio simplifies the
-authoring experience without creating a separate node type or incompatible
-workflow. Until the node phase finishes, provisional node contracts may change.
+Graph Studio loads and saves the canonical mapper-graph workflow format. Its
+node definitions, versions, fields, validation, outputs, ports/routes,
+autocomplete providers, saved JSON, and background execution preparation must
+remain one semantic contract. Until the node phase finishes, provisional node
+contracts may change.
+
+Sequential Studio is not a supported fallback editor. During the transition its
+source may still be present, but users must author and run current workflows
+from Graph Studio or use the sidebar only for supported saved-workflow
+execution. Do not rely on a Sequential Studio link, draft, editor, or run path.
 
 Studio source and the runtime bundle are separate:
 
@@ -108,6 +115,15 @@ the built assets are current before loading the extension.
 Workflow files are local JSON documents. The companion workflow directory is
 configurable. Moving that directory must complete atomically and update the
 running host before the new location is reported as active.
+
+The companion's **Workflow Storage** tab also has an **Include workflows in
+subfolders** toggle. It is off by default. When off, the companion and Graph
+Studio list only JSON workflows directly inside the active workflow folder.
+When on, they recursively discover JSON workflows and display nested entries by
+repository-relative name, such as
+`node_acceptance/001_navigate_acceptance.json`. Changing the toggle is persisted
+and applies to the next workflow-list refresh; it does not grant access outside
+the active workflow folder.
 
 For the currently accepted node list and detailed usage, consult
 [`NODE_USER_CATALOG.md`](NODE_USER_CATALOG.md). It describes only nodes whose
@@ -267,8 +283,11 @@ validation are deferred until the actual release phase.
 
 - Final nodes have not yet been implemented from the finalized blueprint.
 - Provisional workflows may stop working during the node phase.
-- Node palettes and workflow compatibility remain provisional until the shared
-  two-Studio contract and node migrations are complete.
+- Node palettes and workflow compatibility remain provisional until the
+  Graph-only canonical authoring/runtime contract and node migrations are
+  complete.
+- Sequential Studio is disabled; its retained dormant source is not supported
+  behavior.
 - The polished map viewer is deferred to V2.
 - Cross-platform, headless, cloud, and multi-user operation are out of scope.
 - Live companion and mapper acceptance remains required before a release can be

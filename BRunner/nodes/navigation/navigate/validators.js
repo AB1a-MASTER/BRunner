@@ -3,6 +3,7 @@ import {
   NodeExecutionError,
   normalizeCommonNodeConfig,
 } from "../../shared/nodeContracts.js";
+import { RetryReasons } from "../../shared/executionPolicy.js";
 import {
   NavigateDefaults,
   NavigateDestinations,
@@ -101,9 +102,13 @@ export function normalizeNavigateConfig(value = {}) {
   return Object.freeze(config);
 }
 
-export function validateNavigateConfig(value = {}) {
+export function validateNavigateConfig(value = {}, options = {}) {
   try {
-    return { valid: true, config: normalizeNavigateConfig(value), errors: [] };
+    const config = options.allowExpressions === true &&
+        containsExpression(value)
+      ? validateNavigateExpressionConfig(value)
+      : normalizeNavigateConfig(value);
+    return { valid: true, config, errors: [] };
   } catch (error) {
     if (error instanceof NodeExecutionError) {
       return { valid: false, config: null, errors: [error.message] };
@@ -158,6 +163,14 @@ function validateOptionalRawValues(value) {
       field: "retryCount",
     });
   }
+  if (
+    Object.prototype.hasOwnProperty.call(value, "retryDelay") &&
+    (!Number.isFinite(Number(value.retryDelay)) || Number(value.retryDelay) < 0)
+  ) {
+    invalid("retryDelay must be a non-negative number.", {
+      field: "retryDelay",
+    });
+  }
   for (const key of ["enabled"]) {
     if (
       Object.prototype.hasOwnProperty.call(value, key) &&
@@ -165,6 +178,89 @@ function validateOptionalRawValues(value) {
     ) {
       invalid(key + " must be boolean.", { field: key });
     }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(value, "displayName") &&
+    (typeof value.displayName !== "string" || !value.displayName.trim())
+  ) {
+    invalid("displayName must be a non-empty string.", {
+      field: "displayName",
+    });
+  }
+  validateRawEnum(value, "retryStrategy", ["fixed", "increasing"]);
+  validateRawEnum(value, "onError", [
+    "fail",
+    "continue_with_warning",
+    "skip",
+    "error_port",
+  ]);
+  validateRawEnum(value, "saveToWorkflowClipboard", [
+    "off",
+    "replace",
+    "append",
+    "version",
+  ]);
+  validateRawEnum(value, "logLevel", ["normal", "verbose"]);
+  if (Object.prototype.hasOwnProperty.call(value, "retryOnlyFor")) {
+    const reasons = Array.isArray(value.retryOnlyFor)
+      ? value.retryOnlyFor
+      : [value.retryOnlyFor];
+    const allowed = [RetryReasons.NavigationFailure, RetryReasons.AnyError];
+    if (
+      reasons.length === 0 ||
+      reasons.some((reason) => !allowed.includes(String(reason || "").trim()))
+    ) {
+      invalid("retryOnlyFor contains an unsupported retry reason.", {
+        field: "retryOnlyFor",
+        allowed,
+      });
+    }
+  }
+  for (const key of [
+    "saveTabReferenceAs",
+    "saveOutputAs",
+    "workflowClipboardEntry",
+  ]) {
+    if (
+      Object.prototype.hasOwnProperty.call(value, key) &&
+      value[key] !== null &&
+      typeof value[key] !== "string"
+    ) {
+      invalid(key + " must be text.", { field: key });
+    }
+  }
+}
+
+function validateNavigateExpressionConfig(value) {
+  const probe = structuredClone(value);
+  if (isExpression(probe.url)) {
+    probe.url = /^\s*\{\{[^{}]+\}\}\s*$/.test(probe.url)
+      ? "https://expression.invalid/"
+      : probe.url.replace(/\{\{[^{}]+\}\}/g, "expression");
+  }
+  if (isExpression(probe.tabReference)) {
+    probe.tabReference = "expression_tab";
+  }
+  for (const [key, fallback] of Object.entries({
+    timeout: NavigateDefaults.timeout,
+    retryCount: NavigateDefaults.retryCount,
+    retryDelay: NavigateDefaults.retryDelay,
+  })) {
+    if (isExpression(probe[key])) probe[key] = fallback;
+  }
+
+  normalizeNavigateConfig(probe);
+  return Object.freeze(structuredClone(value));
+}
+
+function validateRawEnum(value, key, allowed) {
+  if (!Object.prototype.hasOwnProperty.call(value, key)) return;
+  const normalized = String(value[key] ?? "").trim().toLowerCase();
+  if (!allowed.includes(normalized)) {
+    invalid(key + " contains an unsupported option.", {
+      field: key,
+      allowed,
+    });
   }
 }
 
@@ -202,6 +298,17 @@ function invalid(message, details = {}) {
 
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
+}
+
+function containsExpression(value) {
+  if (typeof value === "string") return isExpression(value);
+  if (Array.isArray(value)) return value.some(containsExpression);
+  if (isPlainObject(value)) return Object.values(value).some(containsExpression);
+  return false;
+}
+
+function isExpression(value) {
+  return typeof value === "string" && /\{\{[^{}]+\}\}/.test(value);
 }
 
 function isPlainObject(value) {

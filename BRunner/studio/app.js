@@ -7,6 +7,7 @@ import {
   canonicalWorkflowToSequentialView,
   sequentialViewToCanonicalWorkflow,
 } from "../core/workflowSchema.js";
+import { usesLegacyNavigateEditor } from "./navigateEditorPolicy.js";
 
 const Messages = Object.freeze({
   StudioLoaded: "STUDIO_LOADED",
@@ -976,10 +977,12 @@ function createStep(action) {
 
   switch (action) {
     case Actions.BrowserNavigate:
-      step.url = "";
-      step.openIn = NavigationTargets.SameTab;
-      step.payload.primary = "";
-      step.payload.openIn = NavigationTargets.SameTab;
+      if (usesLegacyNavigateEditor(step)) {
+        step.url = "";
+        step.openIn = NavigationTargets.SameTab;
+        step.payload.primary = "";
+        step.payload.openIn = NavigationTargets.SameTab;
+      }
       break;
 
     case Actions.ElementType:
@@ -1111,8 +1114,10 @@ function applyPayloadValueToStep(step, value) {
 
   switch (step.action) {
     case Actions.BrowserNavigate:
-      step.url = value;
-      step.config.url = value;
+      if (usesLegacyNavigateEditor(step)) {
+        step.url = value;
+        step.config.url = value;
+      }
       break;
 
     case Actions.ElementType:
@@ -1224,9 +1229,11 @@ function normalizeStep(step) {
 
   switch (action) {
     case Actions.BrowserNavigate:
-      normalized.url = step.url ?? primaryPayload ?? "";
-      normalized.openIn =
-        step.openIn || payload.openIn || NavigationTargets.SameTab;
+      if (usesLegacyNavigateEditor(normalized)) {
+        normalized.url = step.url ?? primaryPayload ?? "";
+        normalized.openIn =
+          step.openIn || payload.openIn || NavigationTargets.SameTab;
+      }
       break;
 
     case Actions.BrowserTabSwitch:
@@ -1934,7 +1941,7 @@ function getStepFieldsHtml(step) {
     html += getTargetEditorHtml(step);
   }
 
-  if (step.action === Actions.BrowserNavigate) {
+  if (usesLegacyNavigateEditor(step)) {
     html += `
       <div class="node-input-group" data-field="url">
         <label>URL *</label>

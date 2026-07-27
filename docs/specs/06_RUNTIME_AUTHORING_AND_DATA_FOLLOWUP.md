@@ -9,6 +9,13 @@ capability, and authoring work belongs to the later node phase and must follow
 `../../workflow_nodes_implementation_blueprint.md`; current node behavior does
 not need compatibility work.
 
+> **Direction update (2026-07-25):** Graph Studio is the only supported
+> authoring surface. Any Sequential Studio continuity or cross-Studio parity
+> work below is historical and must not be implemented. Sequential Studio is
+> disabled without deleting its source and will be removed during the pre-V2
+> cleanup. The legacy linear executor is a separate runtime concern and may
+> remain temporarily where a supported transitional path still requires it.
+
 ## Goal
 
 Close the remaining gaps between recording, authoring, execution, native-host

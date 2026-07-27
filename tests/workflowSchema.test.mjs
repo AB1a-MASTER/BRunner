@@ -52,7 +52,7 @@ test("v1 upgrades to a deterministic linear v2 graph", () => {
   assert.equal(validateGraphWorkflow(graph).valid, true);
 });
 
-test("v2 sequential adapter preserves runtime step fields", () => {
+test("legacy linear adapter preserves runtime step fields", () => {
   const graph = upgradeWorkflowToV2(legacy);
   const sequential = graphWorkflowToSequential(graph);
 
@@ -99,7 +99,7 @@ test("branching and disconnected v2 graphs are rejected", () => {
   assert.throws(() => graphWorkflowToSequential(graph), /Invalid graph workflow/);
 });
 
-test("empty v2 graph remains a valid empty sequential workflow", () => {
+test("empty v2 graph remains a valid empty legacy linear workflow", () => {
   const graph = upgradeWorkflowToV2({ steps: [] });
   assert.equal(validateGraphWorkflow(graph).valid, true);
   assert.deepEqual(graphWorkflowToSequential(graph).steps, []);
@@ -195,6 +195,46 @@ test("v3 preserves one stable error route and keeps it out of the linear adapter
   );
 });
 
+test("canonicalization preserves a referenced system attention error target", () => {
+  const graph = upgradeWorkflowToCanonical({
+    schemaVersion: WorkflowSchemaVersion.MapperGraph,
+    id: "navigate-error-attention",
+    name: "Navigate error attention",
+    entryNodeId: "navigate",
+    nodes: [
+      {
+        id: "navigate",
+        type: "browser.navigate",
+        version: 2,
+        position: { x: 0, y: 0 },
+        config: {},
+        data: {},
+      },
+      {
+        id: "attention",
+        type: MapperAttentionNodeType,
+        version: 1,
+        position: { x: 240, y: 0 },
+        config: {},
+        data: { systemNode: true },
+      },
+    ],
+    edges: [{
+      id: "navigate-error-attention",
+      source: "navigate",
+      sourceHandle: GraphEdgeHandles.Error,
+      target: "attention",
+      targetHandle: GraphEdgeHandles.Input,
+    }],
+  });
+
+  assert.equal(
+    graph.nodes.some((node) => node.id === "attention"),
+    true,
+  );
+  assert.equal(graph.edges[0].sourceHandle, GraphEdgeHandles.Error);
+});
+
 test("graph validation rejects missing or invalid node contract versions", () => {
   const graph = upgradeWorkflowToV2(legacy);
   delete graph.nodes[0].version;
@@ -204,7 +244,7 @@ test("graph validation rejects missing or invalid node contract versions", () =>
   );
 });
 
-test("Graph to Sequential to Graph preserves canonical routes and node data", () => {
+test("canonical graph to legacy view round trip preserves routes and node data", () => {
   const canonical = upgradeWorkflowToCanonical({
     ...legacy,
     steps: [{
@@ -228,7 +268,7 @@ test("Graph to Sequential to Graph preserves canonical routes and node data", ()
   assert.equal(validateGraphWorkflow(saved).valid, true);
 });
 
-test("Sequential to Graph to Sequential keeps versions and ordered semantics", () => {
+test("legacy view to graph round trip keeps versions and ordered semantics", () => {
   const firstView = canonicalWorkflowToSequentialView({
     name: "Sequential",
     steps: [
@@ -246,7 +286,43 @@ test("Sequential to Graph to Sequential keeps versions and ordered semantics", (
   assert.deepEqual(secondView.steps.map((step) => step.config), firstView.steps.map((step) => step.config));
 });
 
-test("Sequential configuration edits preserve explicit error routes and structural edits fail closed", () => {
+test("Navigate v2 configuration survives legacy view adapters exactly", () => {
+  const config = {
+    operation: "goto_url",
+    tabSource: "saved_reference",
+    tabReference: "origin_tab",
+    url: "https://example.com/{{ variables.accountId }}",
+    openDestinationIn: "new_tab",
+    waitUntil: "network_idle",
+    timeout: 12000,
+    onNoHistory: "continue",
+    saveTabReferenceAs: "account_tab",
+    protectedPagePolicy: "fail",
+    retryCount: 1,
+    onError: "fail",
+    saveOutputAs: "account_navigation",
+  };
+  const firstView = canonicalWorkflowToSequentialView({
+    name: "Navigate Contract",
+    variables: { accountId: "42" },
+    steps: [{
+      id: "open-account",
+      action: "browser.navigate",
+      version: 2,
+      config,
+    }],
+  });
+  const graph = sequentialViewToCanonicalWorkflow(firstView);
+  const secondView = canonicalWorkflowToSequentialView(graph);
+
+  assert.equal(graph.nodes[0].type, "browser.navigate");
+  assert.equal(graph.nodes[0].version, 2);
+  assert.deepEqual(graph.nodes[0].config, config);
+  assert.deepEqual(secondView.steps[0].config, config);
+  assert.equal(secondView.steps[0].version, 2);
+});
+
+test("legacy view config edits preserve error routes and structural edits fail closed", () => {
   const graph = {
     schemaVersion: WorkflowSchemaVersion.MapperGraph,
     id: "routed",
@@ -274,7 +350,7 @@ test("Sequential configuration edits preserve explicit error routes and structur
   view.steps.reverse();
   assert.throws(
     () => sequentialViewToCanonicalWorkflow(view),
-    /route structure must remain unchanged/,
+    /legacy linear adapter cannot edit route structure/,
   );
 });
 

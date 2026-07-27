@@ -1,7 +1,7 @@
 # BRunner Master Roadmap
 
 **Status:** Current product scope and implementation sequence
-**Updated:** 2026-07-22
+**Updated:** 2026-07-25
 
 ## Authority
 
@@ -156,17 +156,25 @@ return an accurate structured failure through the node-neutral test harness,
 and the focused fixture checklist passes with synthetic data. Current node or
 graph-route integration is not part of this gate.
 
-### Milestone 2 - Final workflow-node program (next active phase)
+### Milestone 2 - Final workflow-node program (active phase)
 
 The mapper engine gate is accepted. The node program is active, beginning with
-the shared base-contract and Studio-unification gate before Node 1.
+the shared base-contract and Graph Studio consolidation gate before Node 1.
+
+Product direction changed on 2026-07-25 after the two-Studio audit found
+different workflow preparation, validation, field coercion, entry selection,
+route handling, and runtime paths. Graph Studio is now the sole supported
+authoring surface. Sequential Studio is deprecated and disabled without
+deleting its source. B19 completed that isolation: normal launches open Graph
+Studio, the former URL redirects without authoring/run code, and its source
+remains dormant until the pre-V2 cleanup milestone.
 
 `workflow_nodes_implementation_blueprint.md` is the only node catalog. At the
 start of this phase:
 
-1. Establish one canonical versioned node/workflow model used by both Graph
-   Studio and Sequential Studio. Their difference is editing UX, not available
-   nodes, node schemas, ports, validation, runtime behavior, or saved format.
+1. Establish one canonical versioned mapper-graph workflow model used by Graph
+   Studio, background validation, and the finalized graph runtime. There is one
+   supported editor and no Studio-specific workflow conversion.
 2. Dispatch node behavior by `(type, version)`, migrate only through explicit
    migrations, and fail closed on unknown versions. Final contracts that reuse
    provisional type IDs begin at version 2.
@@ -195,11 +203,12 @@ living implementation status are recorded in
 runtime nodes remain provisional until their tracker rows meet the blueprint
 definition of done.
 
-**Gate:** base-contract and two-Studio parity items are complete; every finalized
-blueprint node meets the blueprint definition of done; every provisional action
-absent from the blueprint is removed; each node-specific acceptance workflow
-passes; the end-user catalog matches the implementation; and the cross-node
-acceptance workflows pass.
+**Gate:** the Graph Studio consolidation and base-contract items are complete;
+Sequential Studio is inaccessible but retained as dormant source; every
+finalized blueprint node meets the blueprint definition of done; every
+provisional action absent from the blueprint is removed; each node-specific
+acceptance workflow passes; the end-user catalog matches the implementation;
+and the cross-node acceptance workflows pass.
 
 ### Milestone 3 - Integrated V1 acceptance
 
@@ -215,6 +224,25 @@ After the shared, companion, mapper, and node gates:
 
 This milestone validates the working source product. It is not permission to
 publish, install, sign, or distribute a release.
+
+### Milestone 4 - Pre-V2 repository cleanup
+
+Run this only after integrated V1 source acceptance and before V2 or release
+work:
+
+- remove the already disabled `BRunner/studio/` Sequential Studio source;
+- remove Sequential-only tests, navigation/session glue, manifest resources,
+  documentation, and dead compatibility adapters after proving no supported
+  path imports them;
+- retain the legacy linear executor only if a separately tracked supported
+  runtime path still requires it; otherwise remove it with focused regression
+  evidence;
+- remove generated release/build artifacts according to the policy below;
+- run the complete JavaScript/Python suites, rebuild Graph Studio, and verify
+  the unpacked extension from source.
+
+This cleanup is not permission to redesign the product, start the V2 saved-map
+experience, or perform release packaging.
 
 ## Deferred V2 saved-map experience
 
@@ -261,24 +289,26 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
    [`NODE_IMPLEMENTATION_STATUS.md`](NODE_IMPLEMENTATION_STATUS.md) from the
    finalized 94-node blueprint and inventory every provisional type with an
    upgrade, rewrite/change, add, or remove disposition.
-2. **Complete:** tracker base items B02-B06 and B10-B14 now enforce versioned
-   dispatch and fail-closed migration, deterministic ambiguity behavior,
-   extensible errors, typed ports/routes, shared authoring metadata, one
-   canonical workflow, cross-Studio round trips, and acceptance-workflow
-   validation.
-3. **Active:** implement Node 1, Navigate, as a finalized version-2 package and
-   integrate only the shared adapters required by that node. Complete its tests,
-   focused acceptance workflow, live evidence, end-user catalogue entry, and
-   tracker row before starting Node 2.
-4. Continue Scroll, Tab Control, Resolve Element, Check Element State, and Wait
-   for Condition strictly one at a time, then close the Phase 1 gate.
+2. **Complete:** tracker base items B10-B12 now enforce one Graph Studio,
+   canonical mapper-graph preparation, and editor/save/runtime semantic parity.
+   B19 remains complete: Sequential Studio is disabled without deleting its
+   source.
+3. **Accepted — user commit pending:** Node 1, Navigate, passed the exact
+   version-2 source, Graph Studio, cache-safe success, and stopped-server red
+   error-route gates. Record the user-controlled commit hash and mark the
+   tracker row Complete before starting Node 2.
+4. After the Navigate commit is recorded, continue Scroll, Tab Control, Resolve
+   Element, Check Element State, and Wait for Condition strictly one at a time,
+   then close the Phase 1 gate.
 5. Continue node Phases 2-7 one node at a time. For each node: add automated
    tests, its focused acceptance workflow and live evidence, update the end-user
    catalog and tracker, then hand off for a quick user-controlled commit.
 6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
-7. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
-8. Ask the user before beginning any V2 viewer, product-boundary change, or
+7. Run the pre-V2 cleanup milestone, including physical removal of the dormant
+   Sequential Studio.
+8. Keep the saved-map viewer and dedicated map-view windows deferred to V2.
+9. Ask the user before beginning any V2 viewer, product-boundary change, or
    release work.
 
 ## Development rules
@@ -297,8 +327,11 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
 9. Do not perform release work during the current mapper or node milestones.
 10. When scope or status changes, update this roadmap and the current handoff in
     the same change.
-11. Both Studios must load and save the same canonical workflow and node
-    contracts. Sequential Studio simplifies presentation only.
-12. Never mark a node complete without its versioned contract, both-Studio
-    round trip, focused acceptance workflow, automated/live evidence, end-user
-    documentation, and tracker entry.
+11. Graph Studio is the sole supported authoring surface. Its editor state,
+    saved canonical JSON, validation, and finalized graph execution plan must
+    remain semantically identical.
+12. B19 is complete; Sequential Studio remains disabled-but-present until
+    Milestone 4. Do not repair or expand it during the node program.
+13. Never mark a node complete without its versioned contract,
+    editor/save/runtime round trip, focused acceptance workflow, automated/live
+    evidence, end-user documentation, and tracker entry.

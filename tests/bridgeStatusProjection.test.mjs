@@ -124,11 +124,10 @@ test("native bridge listener clears capabilities on disconnect and restores new 
   }
 });
 
-test("background and every open extension UI consume live bridge transitions", async () => {
-  const [background, sidebar, sequential, graph] = await Promise.all([
+test("background and supported extension UIs consume live bridge transitions", async () => {
+  const [background, sidebar, graph] = await Promise.all([
     readFile(new URL("BRunner/background.js", root), "utf8"),
     readFile(new URL("BRunner/sidebar/sidebar.js", root), "utf8"),
-    readFile(new URL("BRunner/studio/app.js", root), "utf8"),
     readFile(new URL("BRunner/studio-graph-src/src/GraphStudio.jsx", root), "utf8"),
   ]);
 
@@ -137,13 +136,12 @@ test("background and every open extension UI consume live bridge transitions", a
   assert.match(background, /type:\s*Messages\.BridgeStatus/);
   assert.match(background, /capabilities:\s*bridge\.capabilities/);
 
-  for (const source of [sidebar, sequential, graph]) {
+  for (const source of [sidebar, graph]) {
     assert.match(source, /BridgeStatus:\s*"BRIDGE_STATUS"/);
     assert.match(source, /request\?\.type === Messages\.BridgeStatus/);
     assert.match(source, /request\.bridge \|\| request/);
   }
   assert.match(sidebar, /applyPairingResponse/);
-  assert.match(sequential, /applyBridgeStatus/);
   assert.match(graph, /setHostCapabilities\([\s\S]{0,120}connected[\s\S]{0,120}: \[\]/);
   assert.match(graph, /setApprovedDirectories\(\[\]\)/);
 });

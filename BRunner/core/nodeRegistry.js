@@ -12,6 +12,12 @@ import {
   createTargetEditorSchema,
   normalizeNodeFieldSchema,
 } from "./nodeAuthoring.js";
+import { navigateNodeDefinition } from "../nodes/navigation/navigate/index.js";
+
+export const NodeContractKinds = Object.freeze({
+  Provisional: "provisional",
+  Finalized: "finalized",
+});
 
 const definitions = [
   {
@@ -35,6 +41,7 @@ const definitions = [
     inputs: ["input"],
     outputs: ["success"],
   },
+  navigateNodeDefinition,
   {
     type: Actions.ElementClick,
     version: 1,
@@ -1296,6 +1303,7 @@ function normalizeNodeDefinition(definition) {
   );
   const normalized = {
     nativeHost: DEFAULT_NATIVE_HOST_REQUIREMENT,
+    contractKind: NodeContractKinds.Provisional,
     ...definition,
     version,
     config,
@@ -1308,6 +1316,9 @@ function normalizeNodeDefinition(definition) {
     inputs: inputPorts.map((port) => port.id),
     outputs: outputPorts.map((port) => port.id),
     nativeHost: normalizeNativeHostRequirement(definition.nativeHost),
+    contractKind: definition.contractKind === NodeContractKinds.Finalized
+      ? NodeContractKinds.Finalized
+      : NodeContractKinds.Provisional,
   };
   normalized.guidance = normalizeNodeGuidance(normalized);
   return normalized;

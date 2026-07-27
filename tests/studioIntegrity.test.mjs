@@ -135,22 +135,16 @@ test("recoverable graph drafts omit callbacks but retain generic graph state", (
   assert.equal("onMutate" in draft.edges[0].data, false);
 });
 
-test("both Studio sources guard drafts and expose generic controls on narrow screens", async () => {
-  const [sequential, graph, sequentialCss, graphCss, sequentialHtml] = await Promise.all([
-    readFile(new URL("BRunner/studio/app.js", root), "utf8"),
+test("Graph Studio guards drafts and exposes controls on narrow screens", async () => {
+  const [graph, graphCss] = await Promise.all([
     readFile(new URL("BRunner/studio-graph-src/src/GraphStudio.jsx", root), "utf8"),
-    readFile(new URL("BRunner/studio/style.css", root), "utf8"),
     readFile(new URL("BRunner/studio-graph-src/src/studio.css", root), "utf8"),
-    readFile(new URL("BRunner/studio/index.html", root), "utf8"),
   ]);
 
-  for (const source of [sequential, graph]) {
-    assert.match(source, /beforeunload/);
-    assert.match(source, /Recover unsaved/);
-    assert.match(source, /hashWorkflowSnapshot/);
-    assert.match(source, /revision/);
-  }
-  assert.match(sequential, /saveQueue/);
+  assert.match(graph, /beforeunload/);
+  assert.match(graph, /Recover unsaved/);
+  assert.match(graph, /hashWorkflowSnapshot/);
+  assert.match(graph, /revision/);
   assert.match(graph, /createSerializedSaveQueue/);
   assert.match(graph, /reconcileGraphSaveResponse/);
   assert.match(
@@ -161,17 +155,7 @@ test("both Studio sources guard drafts and expose generic controls on narrow scr
     graph,
     /if \(reconciliation\.clearDirty\) \{\s*dirtyRef\.current = false;/,
   );
-  assert.match(graph, /onOpenSequential/);
-  assert.match(sequential, /isWorkflowDirty = false;[\s\S]{0,160}clearRecoverableDraft/);
   assert.match(graph, /dirtyRef\.current = false;[\s\S]{0,180}clearRecoverableDraft/);
-  assert.match(
-    sequential,
-    /if \(loadedWorkflowFilename === filename\) \{\s*loadedWorkflowFilename = "";\s*markWorkflowDirty\("Saved source deleted;/,
-  );
-  assert.match(
-    sequential,
-    /recording\?\.boundDomain[\s\S]{0,220}workflow\.boundDomain = recording\.boundDomain;\s*markWorkflowDirty\("Workflow domain auto-bound from recording"\)/,
-  );
   assert.match(
     graph,
     /if \(loadedFilename === selectedFile\) \{\s*setLoadedFilename\(""\);\s*markDirty\(\);/,
@@ -180,8 +164,7 @@ test("both Studio sources guard drafts and expose generic controls on narrow scr
     graph,
     /if \(readOnly && loadedFilename === selectedFile\) \{[\s\S]{0,220}Upgrade this legacy workflow before deleting/,
   );
-  assert.match(sequentialHtml, /id="draft-status"/);
-  assert.match(sequentialCss, /@media \(max-width: 720px\)/);
   assert.match(graphCss, /\.properties-panel[\s\S]*position:\s*absolute/);
   assert.match(graph, /aria-label="Save workflow changes"/);
+  assert.doesNotMatch(graph, /onOpenSequential/);
 });

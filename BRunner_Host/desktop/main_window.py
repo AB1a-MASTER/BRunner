@@ -189,7 +189,7 @@ class BRunnerCompanionWindow:
                 self.tabs = QTabWidget()
                 self.setCentralWidget(self.tabs)
                 self._build_status_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox)
-                self._build_storage_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem)
+                self._build_storage_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox)
                 self._build_folders_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem)
                 self._build_fallback_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox, QDoubleSpinBox)
                 self._build_pairing_tab(QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton)
@@ -231,11 +231,22 @@ class BRunnerCompanionWindow:
                 layout.addStretch(1)
                 self.tabs.addTab(tab, "Status")
 
-            def _build_storage_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem):
+            def _build_storage_tab(self, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QCheckBox):
                 tab = QWidget()
                 layout = QVBoxLayout(tab)
                 self.workflow_folder = QLabel()
                 layout.addWidget(self.workflow_folder)
+                self.recursive_workflow_discovery = QCheckBox(
+                    "Include workflows in subfolders"
+                )
+                self.recursive_workflow_discovery.setToolTip(
+                    "When enabled, workflow lists include valid JSON files in "
+                    "all subfolders of the active workflow folder."
+                )
+                self.recursive_workflow_discovery.toggled.connect(
+                    self.save_recursive_workflow_discovery
+                )
+                layout.addWidget(self.recursive_workflow_discovery)
                 self.workflow_table = QTableWidget(0, 4)
                 self.workflow_table.setHorizontalHeaderLabels(["Filename", "Name", "Schema", "Updated"])
                 self.workflow_table.horizontalHeader().setStretchLastSection(True)
@@ -479,11 +490,18 @@ class BRunnerCompanionWindow:
 
             def refresh_workflows(self):
                 storage = self.config.get("workflowStorage") if isinstance(self.config.get("workflowStorage"), dict) else {}
+                discovery = self.config.get("workflowDiscovery") if isinstance(self.config.get("workflowDiscovery"), dict) else {}
+                recursive = discovery.get("recursive") is True
                 mode = storage.get("mode") or "default"
                 self.workflow_folder.setText(
                     f"Active workflow folder ({mode}): {self.repository.workflows_dir}"
                 )
-                summaries = self.repository.list_workflow_summaries()
+                self.recursive_workflow_discovery.blockSignals(True)
+                self.recursive_workflow_discovery.setChecked(recursive)
+                self.recursive_workflow_discovery.blockSignals(False)
+                summaries = self.repository.list_workflow_summaries(
+                    recursive=recursive
+                )
                 self.workflow_table.setRowCount(len(summaries))
                 for row, summary in enumerate(summaries):
                     values = [
@@ -494,6 +512,38 @@ class BRunnerCompanionWindow:
                     ]
                     for column, value in enumerate(values):
                         self.workflow_table.setItem(row, column, self.table_item_class(value))
+
+            def save_recursive_workflow_discovery(self, enabled):
+                current_discovery = (
+                    self.config.get("workflowDiscovery")
+                    if isinstance(self.config.get("workflowDiscovery"), dict)
+                    else {}
+                )
+                previous = current_discovery.get("recursive") is True
+                updated = {
+                    **self.config,
+                    "workflowDiscovery": {
+                        **current_discovery,
+                        "recursive": enabled is True,
+                    },
+                }
+                try:
+                    self.config = save_config(self.config_file, updated)
+                except Exception as error:
+                    self.recursive_workflow_discovery.blockSignals(True)
+                    self.recursive_workflow_discovery.setChecked(previous)
+                    self.recursive_workflow_discovery.blockSignals(False)
+                    self.message_box.warning(
+                        self,
+                        "Workflow Storage",
+                        f"Could not save workflow discovery setting: {error}",
+                    )
+                    return
+                mode = "recursive" if enabled else "top-level only"
+                self.write_companion_log(
+                    f"Workflow discovery set to {mode}."
+                )
+                self.refresh_workflows()
 
             def refresh_folders(self):
                 self.folder_rows = list_approved_directories(self.config, self.base_dir)

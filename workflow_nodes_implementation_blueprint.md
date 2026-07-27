@@ -28,8 +28,8 @@ For every finalized node:
    tags.
 3. Implement its executor using the shared contracts in Sections 3–7.
 4. Implement structured outputs, warnings, errors, and run-log entries.
-5. Add the unit, browser, host, cross-Studio, and acceptance tests listed in the
-   node card, including its focused workflow under
+5. Add the unit, browser, host, Graph-authoring/runtime-parity, and acceptance
+   tests listed in the node card, including its focused workflow under
    `BRunner_Host/Workflows/node_acceptance/`.
 6. Remove provisional node types and handlers absent from this catalog.
 7. Mark the node complete only when it meets the shared done criteria in
@@ -50,8 +50,9 @@ A node is complete only when it has all of the following:
 - Node metadata: stable `type`, display name, category, icon, description, and
   explicit contract `version`.
 - Config schema with validation, defaults, help text, and advanced settings.
-- One shared editor contract rendered by both Graph Studio and Sequential
-  Studio without changing node type, version, ports, configuration, or output.
+- One shared editor contract rendered by Graph Studio without changing node
+  type, version, ports, configuration, or output between editor state, saved
+  JSON, validation, and execution.
 - A valid example for every user-entered field and shared autocomplete for
   applicable variables, prior outputs, references, and expressions.
 - Input/output ports and a documented output object.
@@ -65,13 +66,13 @@ A node is complete only when it has all of the following:
 - Correct use of companion-host fallback when the node supports it.
 - Safe handling of protected browser pages.
 - Automated tests for success, expected failure, timeout, disabled node, retry behavior, and output availability.
-- Cross-Studio save/open/round-trip coverage using one canonical workflow
-  schema.
+- Graph Studio editor-to-save-to-reload-to-runtime round-trip coverage using
+  one canonical workflow schema.
 - A synthetic focused acceptance workflow under
   `BRunner_Host/Workflows/node_acceptance/` and live source acceptance where
   browser or host behavior applies.
 - An end-user entry in `docs/NODE_USER_CATALOG.md` with requirements, fields,
-  examples, outputs, failure guidance, and instructions for both Studios.
+  examples, outputs, failure guidance, and Graph Studio instructions.
 
 ### Standard node lifecycle
 
@@ -142,18 +143,21 @@ Every node receives these baseline properties.
   unsupported-version result. Old configuration must never be silently
   interpreted as the latest contract.
 
-#### One workflow model for both Studios
+#### One canonical Graph Studio workflow model
 
-Graph Studio and Sequential Studio are two presentations of the same canonical
-workflow. Both consume the same finalized node registry, contract versions,
-field schema, validators, autocomplete providers, ports, runtime, and output
-contracts. Graph Studio uses a canvas. Sequential Studio uses a simpler ordered
-or nested presentation, including control-flow scopes where needed. Neither
-Studio may serialize a private node type or lossy workflow representation.
+Graph Studio is the sole supported authoring surface. Its canvas, Inspector,
+saved mapper-graph JSON, validation, autocomplete providers, ports, background
+execution preparation, runtime, and output contracts must consume the same
+exact-version node definition without a private or lossy representation.
 
-Saving in either Studio must preserve workflow semantics and the other
-Studio's layout metadata. A deterministic round-trip test is required for each
-node before completion.
+Sequential Studio is deprecated and disabled while its source remains dormant
+until the final pre-V2 cleanup milestone. It is not an implementation,
+compatibility, documentation, or acceptance target for finalized nodes.
+
+Saving and reopening a workflow must preserve its semantics and layout
+metadata, and the resulting background execution plan must match the saved
+canonical graph. A deterministic editor/save/reload/runtime round-trip test is
+required for each node before completion.
 
 ### 3.2 Disabled / bypass behavior
 
@@ -441,9 +445,10 @@ Every node definition should contain:
 - examples
 ```
 
-Graph and Sequential Studio render the same definition. A separate `ui.js` is
-optional only when the shared schema renderer cannot express the control; it
-must export one shared editor extension used by both Studios.
+Graph Studio renders the finalized definition directly. A separate `ui.js` is
+optional only when the schema renderer cannot express the control; it must
+export one editor extension used by Graph Studio and covered by the same
+serialization/validation tests.
 
 ---
 
@@ -789,7 +794,10 @@ The following cards define the required node-level behavior. All cards inherit S
 
 **Execution:**
 
-1. Resolve target tab.
+1. Resolve the target tab. The exact `goto_url` + current source + new-tab
+   combination may start without an existing tab because it creates an
+   independent destination; all other combinations fail closed when no tab can
+   be resolved.
 2. For URL navigation, validate URL and evaluate templates.
 3. Execute selected navigation action.
 4. Wait for configured readiness state.
@@ -799,7 +807,9 @@ The following cards define the required node-level behavior. All cards inherit S
 
 **Retry:** Usually safe. Default retry `1` for navigation failures; avoid retrying a navigation after a successful URL change.
 
-**Tests:** URL navigation, redirect, back with no history, reload, new-tab destination, timeout, protected New Tab navigation away.
+**Tests:** URL navigation, redirect, back with no history, reload, new-tab
+destination, tabless Studio new-tab startup, timeout, protected New Tab
+navigation away.
 
 ---
 
@@ -2329,7 +2339,8 @@ Every browser node should have these test classes where relevant:
 13. Host fallback available and successful.
 14. Host unavailable behavior.
 15. Foreground/visible-window enforcement for system input.
-16. Graph Studio and Sequential Studio load/save the same node contract.
+16. Graph Studio editor, saved JSON, reload, and execution preparation preserve
+    the same node contract.
 17. The focused node acceptance workflow validates and runs from source.
 
 Every data node should have these test classes where relevant:
@@ -2351,7 +2362,7 @@ Every control node should have:
 3. Async dependency wait.
 4. Cancellation.
 5. Nested-loop/scope correctness where applicable.
-6. Cross-Studio route/scope round-trip without semantic loss.
+6. Graph save/reload/runtime route and scope round-trip without semantic loss.
 
 ---
 

@@ -88,7 +88,8 @@ Required main-window sections:
 - Status: running/stopped state, WebSocket port, extension connection, version,
   start/stop/restart.
 - Workflow Storage: active folder, open folder, change location, use default,
-  workflow count, storage health, migration options.
+  top-level/recursive discovery toggle, workflow count, storage health,
+  migration options.
 - Approved Folders: alias, path, read/write permissions, recursive access,
   add/edit/remove.
 - Host Fallback: enabled state, coordinate confidence threshold, diagnostics
@@ -161,6 +162,9 @@ fingerprints in the accepted model.
   "workflowStorage": {
     "mode": "default",
     "directory": null
+  },
+  "workflowDiscovery": {
+    "recursive": false
   },
   "approvedDirectories": [
     {
@@ -504,6 +508,9 @@ Phase 7.
   **Implemented.**
 - Return workflow summaries. **Implemented for the companion UI. The v1
   WebSocket list command intentionally retains its filename-list contract.**
+- Persist a top-level/recursive discovery choice and apply it to both the
+  companion table and WebSocket filename list. **Implemented; recursive entries
+  use safe repository-relative names.**
 - Preserve v1 command compatibility. **Implemented for existing workflow
   commands.**
 - Add import/export foundations if package format is settled.
