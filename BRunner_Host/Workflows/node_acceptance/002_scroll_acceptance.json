@@ -1,0 +1,134 @@
+{
+  "acceptance": {
+    "schemaVersion": 1,
+    "catalogOrder": 2,
+    "nodeType": "browser.scroll",
+    "nodeVersion": 2,
+    "synthetic": true,
+    "primaryBehavior": "Scroll only the repository fixture container in bounded viewport-percentage increments until its verified scroll end, then publish the standardized Scroll output.",
+    "expectedOutputKeys": [
+      "operation",
+      "scrollCount",
+      "finalPosition",
+      "stopReason",
+      "executionMethod"
+    ],
+    "safeFailureOrAlternate": "Running on the wrong page or after removing the exact fixture target follows the Graph error or unresolved route to Needs Attention without scrolling an ambiguous element.",
+    "fixturePaths": [
+      "tests/fixtures/scroll-acceptance.html"
+    ]
+  },
+  "schemaVersion": 3,
+  "id": "node-acceptance-002-scroll",
+  "name": "Node 002 - Scroll Acceptance",
+  "description": "Synthetic source acceptance for finalized browser.scroll@2.",
+  "boundDomain": "127.0.0.1",
+  "settings": {
+    "reuseExistingTabs": true,
+    "mapper": {
+      "enabled": true,
+      "mode": "automatic",
+      "captureMode": "static_bounded",
+      "shadowDom": "open_only",
+      "maxComponents": 500,
+      "maxVersions": 3,
+      "materialMutationLimit": 50,
+      "queryAllowlist": [],
+      "siteOverrides": {},
+      "pageOverrides": {}
+    }
+  },
+  "variables": {},
+  "datasets": {},
+  "dataSources": [],
+  "entryNodeId": "scroll-fixture-panel",
+  "nodes": [
+    {
+      "id": "scroll-fixture-panel",
+      "type": "browser.scroll",
+      "version": 2,
+      "position": {
+        "x": 64,
+        "y": 96
+      },
+      "config": {
+        "enabled": true,
+        "displayName": "Scroll acceptance panel to its end",
+        "operation": "until_condition",
+        "scrollTarget": "container",
+        "direction": "down",
+        "amount": 80,
+        "amountUnit": "viewport_percent",
+        "alignment": "nearest",
+        "smooth": false,
+        "maxAttempts": 12,
+        "pauseBetweenScrolls": 150,
+        "stopCondition": "scroll_end",
+        "stopValue": "",
+        "waitForContentAfterEachScroll": false,
+        "timeout": 10000,
+        "useHostFallback": false,
+        "ifHostUnavailable": "fail",
+        "retryCount": 1,
+        "retryDelay": 250,
+        "retryStrategy": "fixed",
+        "retryOnlyFor": "container_not_ready",
+        "onError": "error_port",
+        "saveOutputAs": "scroll_acceptance",
+        "saveToWorkflowClipboard": "replace",
+        "workflowClipboardEntry": "scroll_acceptance",
+        "logLevel": "normal"
+      },
+      "data": {
+        "target": {
+          "identifierType": "css",
+          "identifierValue": "#acceptance-scroll-panel",
+          "textMatch": {
+            "mode": "exact",
+            "caseSensitive": false,
+            "trimWhitespace": true,
+            "normalizeWhitespace": true,
+            "multipleMatchBehavior": "fail",
+            "strictUnique": true
+          },
+          "scope": "whole_page",
+          "targetState": "visible",
+          "mapFreshness": "revalidate_if_stale",
+          "fallbackPolicy": "disabled",
+          "ambiguityPolicy": "fail",
+          "minimumConfidence": 0.9,
+          "tabSource": "current"
+        }
+      }
+    },
+    {
+      "id": "scroll-needs-attention",
+      "type": "workflow.needs_attention",
+      "version": 1,
+      "position": {
+        "x": 440,
+        "y": 250
+      },
+      "config": {},
+      "data": {
+        "systemNode": true
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "scroll-error-route",
+      "source": "scroll-fixture-panel",
+      "sourceHandle": "error",
+      "target": "scroll-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "scroll-unresolved-route",
+      "source": "scroll-fixture-panel",
+      "sourceHandle": "unresolved",
+      "target": "scroll-needs-attention",
+      "targetHandle": "input"
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>BRunner Resolve Element Acceptance</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #0b1220;
+        color: #e5edf8;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+
+      main {
+        width: min(52rem, 100%);
+        margin: 0 auto;
+      }
+
+      #fixture-status {
+        color: #7ee2a8;
+        font-weight: 700;
+      }
+
+      table {
+        width: 100%;
+        margin-top: 1.5rem;
+        border-collapse: collapse;
+        background: #111b2f;
+        border: 2px solid #4d7ee8;
+        border-radius: 0.5rem;
+      }
+
+      th,
+      td {
+        padding: 0.6rem 0.9rem;
+        text-align: left;
+        border-bottom: 1px solid #2a3852;
+      }
+
+      #hidden-panel {
+        display: none;
+      }
+
+      .note {
+        margin-top: 1.5rem;
+        color: #9fb3d1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Resolve Element acceptance fixture</h1>
+      <p id="fixture-status" data-acceptance="resolve-element">ready</p>
+      <p>
+        Keep this page active, then run the Node 004 Resolve Element acceptance
+        workflow. Nothing on this page changes when the workflow runs; Resolve
+        Element only reports what it resolved.
+      </p>
+
+      <table id="results-table" aria-label="Synthetic results table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="result-row"><td>Synthetic row 1</td><td>ready</td></tr>
+          <tr class="result-row"><td>Synthetic row 2</td><td>ready</td></tr>
+          <tr class="result-row"><td>Synthetic row 3</td><td>ready</td></tr>
+          <tr class="result-row"><td>Synthetic row 4</td><td>ready</td></tr>
+        </tbody>
+      </table>
+
+      <section id="hidden-panel" aria-label="Synthetic hidden panel">
+        <p>This panel is display:none and must never satisfy a visible requirement.</p>
+      </section>
+
+      <p class="note">
+        <code>#results-table</code> resolves exactly one component.
+        <code>#results-table tbody tr.result-row</code> enumerates four
+        candidates. <code>#absent-element</code> exists nowhere and drives the
+        safe unresolved route.
+      </p>
+    </main>
+  </body>
+</html>

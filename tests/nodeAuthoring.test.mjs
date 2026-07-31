@@ -335,3 +335,41 @@ test("shared validation covers target, required, select, boolean, and number fie
   }, definition);
   assert.equal(coordinateIssues[0].fieldKey, "target");
 });
+
+test("optional target contracts require a target only for matching operations", () => {
+  const definition = {
+    targetRequired: false,
+    targetSupported: true,
+    targetRequiredWhen: [
+      { field: "scrollTarget", equals: "container" },
+      { field: "operation", equals: "to_element" },
+    ],
+    config: [],
+  };
+
+  assert.deepEqual(validateNodeConfiguration({
+    target: "",
+    config: { operation: "by_amount", scrollTarget: "page" },
+  }, definition), []);
+  assert.deepEqual(
+    validateNodeConfiguration({
+      target: "",
+      config: { operation: "by_amount", scrollTarget: "container" },
+    }, definition).map((issue) => issue.fieldKey),
+    ["target"],
+  );
+  assert.deepEqual(
+    validateNodeConfiguration({
+      target: "",
+      config: { operation: "to_element", scrollTarget: "page" },
+    }, definition).map((issue) => issue.fieldKey),
+    ["target"],
+  );
+  assert.deepEqual(validateNodeConfiguration({
+    target: {
+      identifierType: "css",
+      identifierValue: "#scroll-panel",
+    },
+    config: { operation: "by_amount", scrollTarget: "container" },
+  }, definition), []);
+});

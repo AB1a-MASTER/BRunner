@@ -293,16 +293,24 @@ Use `FOUNDATION_TODO_STATUS.md`, `COMPANION_TODO_STATUS.md`, and
    canonical mapper-graph preparation, and editor/save/runtime semantic parity.
    B19 remains complete: Sequential Studio is disabled without deleting its
    source.
-3. **Accepted — user commit pending:** Node 1, Navigate, passed the exact
-   version-2 source, Graph Studio, cache-safe success, and stopped-server red
-   error-route gates. Record the user-controlled commit hash and mark the
-   tracker row Complete before starting Node 2.
-4. After the Navigate commit is recorded, continue Scroll, Tab Control, Resolve
-   Element, Check Element State, and Wait for Condition strictly one at a time,
-   then close the Phase 1 gate.
+3. **Complete:** Node 1, Navigate, passed the exact version-2 source, Graph
+   Studio, cache-safe success, and stopped-server red error-route gates. Commit
+   hashes are not tracked unless the user explicitly requests it.
+4. **Active:** continue the user-approved Phase 1-2 batch program in
+   [`work_items/P12_PHASE_1_2_BATCH_PROGRAM.md`](work_items/P12_PHASE_1_2_BATCH_PROGRAM.md).
+   Node 2 Scroll, Node 3 Tab Control, and Node 4 Resolve Element are
+   source-complete and batch acceptance queued as of 2026-07-31, each with
+   source, Graph/runtime integration, acceptance workflow, catalogue entry, and
+   a passing focused source gate. None of the three is accepted. Under this
+   program the repetitive full-suite, Graph-build, and unpacked-extension
+   acceptance work is consolidated into one batch that runs after Node 15, so
+   source work continues to Check Element State and Wait for Condition strictly
+   one node at a time. Any consolidated regression or live failure reopens the
+   owning node record and is fixed in catalog order before acceptance resumes.
 5. Continue node Phases 2-7 one node at a time. For each node: add automated
    tests, its focused acceptance workflow and live evidence, update the end-user
-   catalog and tracker, then hand off for a quick user-controlled commit.
+   catalog and tracker, then hand off a detailed user-controlled Conventional
+   Commit subject and explanatory body.
 6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
 7. Run the pre-V2 cleanup milestone, including physical removal of the dormant

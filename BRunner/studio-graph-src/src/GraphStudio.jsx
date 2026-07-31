@@ -1580,13 +1580,25 @@ function InspectorPanel(props) {
         <div className="node-identity"><code>{node.data.type}@{definition.version}</code><span>{navigationMode ? "Navigation mode" : node.data.readOnly ? "Legacy preview" : node.data.executionLocked ? "Execution locked" : `Node ${node.id.slice(-8)}`}</span></div>
         <NodeGuidancePanel definition={definition} />
         <NativeHostRequirementPanel definition={definition} hostConnected={props.hostConnected} hostCapabilities={props.hostCapabilities} />
+        <OptionalPermissionPanel
+          definition={definition}
+          config={configuration.config}
+          disabled={readOnly}
+        />
         <section className="property-section" aria-labelledby="execution-heading"><h3 id="execution-heading">Execution</h3>
           <Field label="Node mode" htmlFor="property-execution-mode"><select id="property-execution-mode" value={node.data.executionMode || "enabled"} disabled={readOnly} onChange={(event) => props.onNodeChange({ executionMode: event.target.value })}><option value="enabled">Enabled</option><option value="disabled">Bypassed (always skip)</option><option value="conditional">Conditional bypass</option></select></Field>
           {node.data.executionMode === "conditional" && <Field label="Bypass when" required htmlFor="property-skip-when" help="Skip when this expression resolves to true."><input id="property-skip-when" value={node.data.skipWhen || ""} disabled={readOnly} onChange={(event) => props.onNodeChange({ skipWhen: event.target.value })} placeholder="{{skip_this_step}}" /></Field>}
           {node.data.executionMode === "disabled" && <p className="bypass-note">Connections remain intact; runtime passes over this node.</p>}
         </section>
         <section className="property-section" aria-labelledby="configuration-heading"><h3 id="configuration-heading">Configuration</h3>
-          {definition.targetRequired && <TargetEditor node={node} schema={definition.targetSchema} onChange={props.onNodeChange} disabled={readOnly} autocompleteContext={autocompleteContext} />}
+          {(definition.targetRequired || definition.targetSupported) && <TargetEditor
+            node={node}
+            schema={definition.targetSchema}
+            onChange={props.onNodeChange}
+            disabled={readOnly}
+            autocompleteContext={autocompleteContext}
+            required={definitionTargetRequired(definition, configuration.config)}
+          />}
           {(definition.config || []).map((field) => <ConfigField
             key={field.key}
             field={field}
@@ -1882,7 +1894,7 @@ function WorkflowDataView({
   );
 }
 
-function TargetEditor({ node, schema, onChange, disabled, autocompleteContext }) {
+function TargetEditor({ node, schema, onChange, disabled, autocompleteContext, required = true }) {
   if (!schema?.fields) return <p className="panel-error">Target editor contract is unavailable.</p>;
   const source = node.data.targetSource || node.data.target ||
     (node.data.componentRef ? { componentRef: node.data.componentRef } : "");
@@ -1897,7 +1909,7 @@ function TargetEditor({ node, schema, onChange, disabled, autocompleteContext })
   };
   return (
     <fieldset className="target-editor">
-      <legend>Target Element *</legend>
+      <legend>{required ? "Target Element / Container *" : "Target Element / Container (optional)"}</legend>
       {schema.fields.map((field) => <ConfigField
         key={field.key}
         idPrefix="target"
@@ -1912,8 +1924,20 @@ function TargetEditor({ node, schema, onChange, disabled, autocompleteContext })
   );
 }
 
+function definitionTargetRequired(definition = {}, config = {}) {
+  if (definition.targetRequired === true) return true;
+  const conditions = Array.isArray(definition.targetRequiredWhen)
+    ? definition.targetRequiredWhen
+    : definition.targetRequiredWhen
+      ? [definition.targetRequiredWhen]
+      : [];
+  return conditions.some((condition) => (
+    String(config[condition.field] ?? "") === String(condition.equals ?? "")
+  ));
+}
+
 function ConfigField({ field, value, config, onChange, disabled, autocompleteOptions = [], issues = [], idPrefix = "property" }) {
-  if (field.visibleWhen && String(config[field.visibleWhen.field] ?? "") !== String(field.visibleWhen.equals)) return null;
+  if (!fieldIsVisible(field, config)) return null;
   const id = `${idPrefix}-${field.key}`;
   const listId = autocompleteOptions.length ? `${id}-options` : undefined;
   const help = [
@@ -1929,7 +1953,110 @@ function ConfigField({ field, value, config, onChange, disabled, autocompleteOpt
   else if (field.kind === "boolean") control = <input id={id} type="checkbox" checked={value === true} disabled={disabled} onChange={(event) => emitChange(event.target.checked)} />;
   else if (["textarea", "value"].includes(field.kind)) control = <textarea id={id} rows="5" disabled={disabled} value={typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)} placeholder={field.placeholder} onChange={(event) => emitChange(event.target.value)} />;
   else control = <><input id={id} value={String(value)} disabled={disabled} inputMode={field.kind === "number" ? "decimal" : undefined} placeholder={field.placeholder} list={listId} onChange={(event) => emitChange(event.target.value)} />{listId && <datalist id={listId}>{autocompleteOptions.map((option) => <option key={option} value={option} />)}</datalist>}</>;
-  return <Field label={field.label || field.key} required={field.required} help={help} error={issues.map((issue) => issue.message).join(" ")} htmlFor={id}>{control}</Field>;
+  const required =
+    field.required === true ||
+    conditionsMatch(field.requiredWhen, config) ||
+    conditionsMatch(field.requiredWhenAny, config) ||
+    conditionsMatchAll(field.requiredWhenAll, config);
+  return <Field label={field.label || field.key} required={required} help={help} error={issues.map((issue) => issue.message).join(" ")} htmlFor={id}>{control}</Field>;
+}
+
+function OptionalPermissionPanel({ definition = {}, config = {}, disabled = false }) {
+  const permissions = (definition.optionalPermissions || []).filter((entry) => (
+    !Array.isArray(entry.operations) ||
+    entry.operations.includes(config.operation)
+  ));
+  const [state, setState] = useState({});
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    Promise.all(permissions.map(async (entry) => {
+      const granted = typeof globalThis.chrome?.permissions?.contains === "function"
+        ? await globalThis.chrome.permissions.contains({ permissions: [entry.permission] })
+        : false;
+      return [entry.permission, granted];
+    })).then((entries) => {
+      if (active) setState(Object.fromEntries(entries));
+    }).catch(() => {
+      if (active) setState({});
+    });
+    return () => {
+      active = false;
+    };
+  }, [permissions.map((entry) => entry.permission).join("|")]);
+
+  if (!permissions.length) return null;
+  const requestPermission = async (permission) => {
+    setError("");
+    try {
+      if (typeof globalThis.chrome?.permissions?.request !== "function") {
+        throw new Error("Chrome optional-permission service is unavailable.");
+      }
+      // Calling request directly from this click handler preserves Chrome's
+      // required visible user gesture.
+      const granted = await globalThis.chrome.permissions.request({
+        permissions: [permission],
+      });
+      setState((current) => ({ ...current, [permission]: granted === true }));
+      if (!granted) setError(`${permission} permission was not granted.`);
+    } catch (requestError) {
+      setError(requestError.message || String(requestError));
+    }
+  };
+  return (
+    <section className="property-section optional-permissions" aria-labelledby="optional-permissions-heading">
+      <h3 id="optional-permissions-heading">Optional permission</h3>
+      {permissions.map((entry) => (
+        <div className="property-field" key={entry.permission}>
+          <label>{entry.label || entry.permission}</label>
+          <small>{entry.description || "Grant only when this operation needs it."}</small>
+          <button
+            type="button"
+            className="inspector-secondary-action"
+            disabled={disabled || state[entry.permission] === true}
+            onClick={() => requestPermission(entry.permission)}
+          >
+            {state[entry.permission] === true ? "Granted" : "Grant permission"}
+          </button>
+        </div>
+      ))}
+      {error && <p className="panel-error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
+function fieldIsVisible(field = {}, config = {}) {
+  if (Array.isArray(field.visibleWhenAll)) {
+    return conditionsMatchAll(field.visibleWhenAll, config);
+  }
+  if (Array.isArray(field.visibleWhenAny)) {
+    return field.visibleWhenAny.some((condition) => conditionMatches(condition, config));
+  }
+  return conditionsMatch(field.visibleWhen, config, true);
+}
+
+function conditionsMatch(conditions, config, emptyResult = false) {
+  if (!conditions) return emptyResult;
+  if (Array.isArray(conditions)) {
+    return conditions.some((condition) => conditionMatches(condition, config));
+  }
+  return conditionMatches(conditions, config);
+}
+
+function conditionMatches(condition, config) {
+  if (!condition || typeof condition !== "object") return false;
+  if (Array.isArray(condition.anyOf)) {
+    return condition.anyOf.some((value) => (
+      String(config[condition.field] ?? "") === String(value ?? "")
+    ));
+  }
+  return String(config[condition.field] ?? "") === String(condition.equals ?? "");
+}
+
+function conditionsMatchAll(conditions, config) {
+  return Array.isArray(conditions) && conditions.length > 0 &&
+    conditions.every((condition) => conditionMatches(condition, config));
 }
 
 function Field({ label, required, help, error, htmlFor, children }) { return <div className="property-field"><label htmlFor={htmlFor}>{label}{required ? " *" : ""}</label>{children}{help && <small>{help}</small>}{error && <small className="property-field-error" role="alert">{error}</small>}</div>; }

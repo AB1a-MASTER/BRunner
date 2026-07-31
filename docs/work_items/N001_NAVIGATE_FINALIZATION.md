@@ -1,16 +1,15 @@
 # Node 1 - Navigate Finalization
 
-**Status:** In progress - Step 7  
+**Status:** Complete
 **Updated:** 2026-07-27  
 **Main tracker:** `../NODE_IMPLEMENTATION_STATUS.md`  
-**Current resume checkpoint:** Step 6 and the source/documentation portion of
-Step 7 are complete. The tracker, roadmap, catalogue, and handoff consistently
-record Navigate as accepted with the user commit pending. The focused
-documentation/source suite passes 7/7, no stale acceptance-pending wording
-remains, and `git diff --check` reports no errors. Provide the
-user-controlled `feat(nodes): implement Navigate` commit handoff, then record
-the resulting hash, mark Step 7 and Node 1 Complete, and only then create the
-Node 2 Scroll work record.
+**Current resume checkpoint:** Node 1 is complete. Source automation,
+cache-safe success, and the stopped-server red error route passed; the tracker,
+roadmap, catalogue, and handoff are synchronized; the focused
+documentation/source suite passes 7/7; and `git diff --check` reports no
+errors. Per the user-updated SOP, no commit hash is requested or tracked unless
+explicitly asked. Continue only through the separately registered Node 2 Scroll
+work record.
 
 ## Objective
 
@@ -53,7 +52,7 @@ and the user has created the quick commit.
 | 4 | Repair Studio-startup and error-route defects exposed by focused testing. | A `current` + `new_tab` entry may start tabless; current-tab/history actions fail closed; explicit red error routing survives. | Complete | Startup policy, error routing, readiness, and prior live fixture checks pass. |
 | 5 | Close Graph-only base items B10-B12 and rerun all source gates. | Canonical editor/save/reload/execution-plan parity plus full build/tests pass. | Complete | B10-B12 are closed. Graph rebuilt from 191 modules; focused round-trip checks passed 60/60, JavaScript 441/441, Python 181/181, ten syntax checks, production fingerprint, and whitespace gates passed. |
 | 6 | Reload the freshly rebuilt unpacked extension and run the success and bounded-error acceptance cases from Graph Studio. | Success reaches the fixture and exposes six output keys plus `navigate_acceptance_tab`; with the fixture unavailable, failure follows the red route to Needs Attention. | Complete | The user confirmed success on the fresh no-store URL. With the verified fixture server stopped, the same workflow failed Navigate and followed the red route to Needs Attention as intended. |
-| 7 | Record live evidence, mark Navigate accepted, synchronize tracker/roadmap/handoff/catalogue, and provide the user-controlled commit message. | All Node 1 checklist items are checked; ledger awaits only the user's commit hash. | In progress | Live acceptance and documentation synchronization are complete; focused consistency checks pass 7/7. The ledger row and tracker await the user's `feat(nodes): implement Navigate` commit hash. |
+| 7 | Record live evidence, mark Navigate accepted, synchronize tracker/roadmap/handoff/catalogue, and provide the user-controlled commit message. | All Node 1 checklist items are checked; the detailed commit handoff follows the user-controlled Git policy. | Complete | Live acceptance and documentation synchronization are complete; focused consistency checks pass 7/7. Commit hashes are not tracked unless the user explicitly requests it. |
 
 ## Item-level completion gates
 
@@ -67,7 +66,7 @@ and the user has created the quick commit.
 - The unavailable-fixture run follows the red `error` route to Needs Attention
   within the configured timeout.
 - Tracker, catalogue, roadmap, handoff, and this record agree on acceptance
-  status; the completed-node ledger awaits only the user's commit hash.
+  status; no commit hash is tracked unless the user explicitly requests it.
 
 ## Live acceptance procedure
 
@@ -244,3 +243,7 @@ gates.
   acceptance-pending wording, and `git diff --check` reports no errors. The
   fixture server remains stopped, and host PID 18992 remains available. Step 7
   waits only for the user commit and its hash.
+- 2026-07-27: The user changed the Git handoff policy: future commit proposals
+  require a detailed Conventional Commit subject and explanatory body, while
+  commit hashes are neither requested nor tracked unless explicitly requested.
+  The SOP was updated, the prior hash gate was removed, and Node 1 is complete.

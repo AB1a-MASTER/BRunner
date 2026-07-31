@@ -438,3 +438,65 @@ test("error-port policy fails closed when the definition has no error port", asy
   assert.equal(outcome.selectedRoute, FinalizedNodeRoutes.Fail);
   assert.equal(outcome.handledError, false);
 });
+
+test("a finalized node may route a preserved mapper failure to unresolved", async () => {
+  const harness = createHarness();
+  const mapperError = new Error("Mapped component is ambiguous.");
+  mapperError.diagnostics = {
+    mapperState: "ambiguous",
+    finalReason: "mapper_ambiguous",
+  };
+  const outcome = await executeVersionedNode({
+    nodeId: "scroll-unresolved",
+    nodeType: "browser.scroll",
+    nodeVersion: 2,
+    definition: {
+      type: "browser.scroll",
+      version: 2,
+      outputPorts: [
+        { id: "success", label: "Success" },
+        { id: "error", label: "Error" },
+        { id: "unresolved", label: "Unresolved" },
+      ],
+    },
+    selectFailureRoute(error) {
+      return error?.diagnostics?.mapperState
+        ? FinalizedNodeRoutes.Unresolved
+        : null;
+    },
+    async executor() {
+      throw mapperError;
+    },
+  }, harness.services);
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Unresolved);
+  assert.equal(outcome.selectedRoute, FinalizedNodeRoutes.Unresolved);
+  assert.equal(outcome.routeError.diagnostics.mapperState, "ambiguous");
+  assert.equal(outcome.result.status, NodeStatuses.FAILED);
+});
+
+test("custom failure routes fail closed when the definition omits the port", async () => {
+  const harness = createHarness();
+  const outcome = await executeVersionedNode({
+    nodeId: "missing-unresolved-port",
+    nodeType: "test.node",
+    nodeVersion: 1,
+    definition: {
+      type: "test.node",
+      version: 1,
+      outputPorts: [{ id: "success", label: "Success" }],
+    },
+    selectFailureRoute() {
+      return FinalizedNodeRoutes.Unresolved;
+    },
+    async executor() {
+      throw new NodeExecutionError(
+        NodeErrorCodes.TargetNotFound,
+        "Target missing.",
+      );
+    },
+  }, harness.services);
+
+  assert.equal(outcome.route, FinalizedNodeRoutes.Fail);
+  assert.equal(outcome.routeError, undefined);
+});

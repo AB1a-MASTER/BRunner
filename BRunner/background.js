@@ -42,6 +42,33 @@ import {
   workflowCanBootstrapNavigateWithoutTab,
 } from "./nodes/navigation/navigate/index.js";
 import {
+  SCROLL_NODE_TYPE,
+  ScrollStopReasons,
+  createChromeScrollAdapter,
+  createContainerNotReadyError,
+  executeScroll,
+  scrollNodeDefinition,
+  validateScrollConfig,
+  verifyScrollBeforeRetry,
+} from "./nodes/navigation/scroll/index.js";
+import {
+  TAB_CONTROL_NODE_TYPE,
+  TabControlOperations,
+  createChromeBookmarksService,
+  createChromeTabControlService,
+  executeTabControl,
+  tabControlNodeDefinition,
+  validateTabControlConfig,
+  verifyTabControlBeforeRetry,
+} from "./nodes/navigation/tab-control/index.js";
+import {
+  RESOLVE_ELEMENT_NODE_TYPE,
+  executeResolveElement,
+  resolveElementNodeDefinition,
+  validateResolveElementConfig,
+  verifyResolveElementBeforeRetry,
+} from "./nodes/targeting/resolve-element/index.js";
+import {
   evaluateNativeHostRequirement,
   formatNativeCapabilities,
   NativeHostCapabilities,
@@ -2072,6 +2099,11 @@ async function runWorkflow(rawWorkflow, options = {}) {
       allowTablessBootstrap:
         workflowCanBootstrapNavigateWithoutTab(workflow),
     });
+    activeRun.originTab = tab?.id
+      ? Object.freeze(structuredClone(tab))
+      : null;
+    activeRun.tabCreationSequence = new Map();
+    activeRun.tabCreationSequenceState = { value: 0 };
     const tabsByRef = new Map();
     const initialTabRef = steps.find((step) => step?.tabRef)?.tabRef;
     if (initialTabRef && tab?.id) {
@@ -2424,6 +2456,7 @@ async function executeWorkflowNode({
   }
 
   let selectedRoute = GraphEdgeHandles.Success;
+  let routedError = null;
   try {
     if (isFinalizedNavigateContract(nodeDefinition)) {
       const navigateResult = await executeFinalizedNavigateWorkflowNode({
@@ -2438,6 +2471,46 @@ async function executeWorkflowNode({
       });
       currentTab = navigateResult.tab || currentTab;
       selectedRoute = navigateResult.route || GraphEdgeHandles.Success;
+    } else if (isFinalizedScrollContract(nodeDefinition)) {
+      const scrollResult = await executeFinalizedScrollWorkflowNode({
+        step: resolvedStep,
+        definition: nodeDefinition,
+        currentTab,
+        variableRegistry,
+        runId,
+        workflowName,
+        stepIndex: index,
+      });
+      currentTab = scrollResult.tab || currentTab;
+      selectedRoute = scrollResult.route || GraphEdgeHandles.Success;
+      routedError = scrollResult.routeError || null;
+    } else if (isFinalizedTabControlContract(nodeDefinition)) {
+      const tabControlResult = await executeFinalizedTabControlWorkflowNode({
+        step: resolvedStep,
+        definition: nodeDefinition,
+        currentTab,
+        tabsByRef,
+        variableRegistry,
+        runId,
+        workflowName,
+        stepIndex: index,
+      });
+      currentTab = tabControlResult.tab;
+      selectedRoute = tabControlResult.route || GraphEdgeHandles.Success;
+      routedError = tabControlResult.routeError || null;
+    } else if (isFinalizedResolveElementContract(nodeDefinition)) {
+      const resolveResult = await executeFinalizedResolveElementWorkflowNode({
+        step: resolvedStep,
+        definition: nodeDefinition,
+        currentTab,
+        variableRegistry,
+        runId,
+        workflowName,
+        stepIndex: index,
+      });
+      currentTab = resolveResult.tab || currentTab;
+      selectedRoute = resolveResult.route || GraphEdgeHandles.Success;
+      routedError = resolveResult.routeError || null;
     } else {
       currentTab = await executeStep(
         currentTab,
@@ -2453,6 +2526,32 @@ async function executeWorkflowNode({
     }
     return handleMapperUnresolvedNode({
       error,
+      step: resolvedStep,
+      index,
+      runId,
+      workflowName,
+      variableRegistry,
+      variableOrigins,
+      progress,
+      tab: currentTab,
+    });
+  }
+
+  if (selectedRoute === GraphEdgeHandles.Unresolved) {
+    if (!allowUnresolvedRoute) {
+      throw new NodeExecutionError(
+        NodeErrorCodes.ConfigInvalid,
+        "Sequential execution cannot follow a Graph unresolved route.",
+        { route: GraphEdgeHandles.Unresolved },
+      );
+    }
+    return handleMapperUnresolvedNode({
+      error: routedError || {
+        diagnostics: {
+          mapperState: "unresolved",
+          finalReason: "mapper_unresolved",
+        },
+      },
       step: resolvedStep,
       index,
       runId,
@@ -2827,9 +2926,39 @@ function isFinalizedNavigateContract(definition = {}) {
     definition.version === navigateNodeDefinition.version;
 }
 
+function isFinalizedScrollContract(definition = {}) {
+  return definition.type === SCROLL_NODE_TYPE &&
+    definition.version === scrollNodeDefinition.version;
+}
+
+function isFinalizedTabControlContract(definition = {}) {
+  return definition.type === TAB_CONTROL_NODE_TYPE &&
+    definition.version === tabControlNodeDefinition.version;
+}
+
+function isFinalizedResolveElementContract(definition = {}) {
+  return definition.type === RESOLVE_ELEMENT_NODE_TYPE &&
+    definition.version === resolveElementNodeDefinition.version;
+}
+
 function validateFinalizedWorkflowConfiguration(config, context = {}) {
   if (isFinalizedNavigateContract(context.definition)) {
     return validateNavigateConfig(config, { allowExpressions: true });
+  }
+  if (isFinalizedScrollContract(context.definition)) {
+    return validateScrollConfig(config, {
+      allowExpressions: true,
+      node: context.node,
+    });
+  }
+  if (isFinalizedTabControlContract(context.definition)) {
+    return validateTabControlConfig(config, { allowExpressions: true });
+  }
+  if (isFinalizedResolveElementContract(context.definition)) {
+    return validateResolveElementConfig(config, {
+      allowExpressions: true,
+      node: context.node,
+    });
   }
   return {
     valid: true,
@@ -2911,6 +3040,7 @@ async function executeFinalizedNavigateWorkflowNode({
     },
   };
   const outcome = await executeFinalizedNode({
+    node: step,
     nodeId: step.id,
     nodeType: step.action || step.type,
     nodeVersion: step.version,
@@ -2958,12 +3088,457 @@ async function executeFinalizedNavigateWorkflowNode({
   };
 }
 
+async function executeFinalizedTabControlWorkflowNode({
+  step,
+  definition,
+  currentTab,
+  tabsByRef,
+  variableRegistry,
+  runId,
+  workflowName,
+  stepIndex,
+}) {
+  const config = step?.config || {};
+  const tabs = createChromeTabControlService({
+    chromeApi: chrome,
+    tabsByRef,
+    currentTab,
+    creationSequence: activeRun?.runId === runId
+      ? activeRun.tabCreationSequence
+      : new Map(),
+    sequenceState: activeRun?.runId === runId
+      ? activeRun.tabCreationSequenceState
+      : { value: 0 },
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+  });
+  const bookmarks = createChromeBookmarksService({ chromeApi: chrome });
+  const services = {
+    tabs,
+    bookmarks,
+    registry: variableRegistry,
+    workflowClipboard: createWorkflowClipboardAdapter(variableRegistry),
+    isCancelled: () => (
+      activeRun?.runId === runId && activeRun.cancelRequested
+    ),
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+    withTimeout: createFinalizedNodeTimeoutService(runId),
+    logger: (event) => appendFinalizedNodeLog({
+      event,
+      runId,
+      workflowName,
+      step,
+      stepIndex,
+    }),
+  };
+  const originTab = activeRun?.runId === runId
+    ? activeRun.originTab
+    : null;
+  const outcome = await executeFinalizedNode({
+    node: step,
+    nodeId: step.id,
+    nodeType: step.action || step.type,
+    nodeVersion: step.version,
+    definition,
+    config,
+    inputs: {
+      operation: config.operation,
+      tabSelectorKind: config.tabSelectorKind,
+      tabSelectorValue: config.tabSelectorValue,
+    },
+    tabRef: config.tabSelectorKind === "saved_reference"
+      ? config.tabSelectorValue
+      : "",
+    url: config.url || currentTab?.url || "",
+    validateConfig: (preparedConfig) => validateTabControlConfig(preparedConfig),
+    executor: (context) => executeTabControl({
+      ...context,
+      tab: currentTab,
+      originTab,
+    }),
+    verifyBeforeRetry: ({ error }) => verifyTabControlBeforeRetry({
+      config,
+      services: { tabs, bookmarks },
+      error,
+    }),
+    selectFailureRoute(error) {
+      return error?.details?.requestedRoute === "error"
+        ? FinalizedNodeRoutes.Error
+        : null;
+    },
+  }, services);
+
+  if (outcome.route === FinalizedNodeRoutes.Fail) {
+    throwFinalizedNodeFailure(outcome, step, stepIndex);
+  }
+  const outputTab = outcome.result?.output?.tab || null;
+  const operation = config.operation;
+  const changesRuntimeTab = [
+    TabControlOperations.SwitchTab,
+    TabControlOperations.SwitchRelativeTab,
+    TabControlOperations.ReturnToOriginTab,
+    TabControlOperations.FocusTab,
+    TabControlOperations.CloseTab,
+  ].includes(operation) || (
+    [
+      TabControlOperations.OpenBrowserNewTab,
+      TabControlOperations.OpenUrlInNewTab,
+    ].includes(operation) &&
+    config.openInBackground !== true
+  );
+  return {
+    tab: changesRuntimeTab ? outputTab : currentTab,
+    route: outcome.route,
+    routeError: outcome.routeError || null,
+    result: outcome.result,
+  };
+}
+
+async function executeFinalizedScrollWorkflowNode({
+  step,
+  definition,
+  currentTab,
+  variableRegistry,
+  runId,
+  workflowName,
+  stepIndex,
+}) {
+  const config = step?.config || {};
+  const target = step?.target ||
+    step?.targetSource ||
+    step?.componentRef ||
+    step?.data?.target ||
+    step?.data?.componentRef ||
+    null;
+  const scroll = createChromeScrollAdapter({
+    executeBrowser: async (request) => {
+      const contentStep = createFinalizedScrollContentStep(step, request);
+      try {
+        const response = await executeContentStep(
+          request.tab || currentTab,
+          contentStep,
+          runId,
+        );
+        return response?.value ?? response;
+      } catch (error) {
+        if (
+          error?.diagnostics?.finalReason === "scroll_container_not_ready"
+        ) {
+          return {
+            ok: false,
+            error: createContainerNotReadyError({
+              tabId: currentTab?.id ?? null,
+              diagnostics: error.diagnostics,
+            }),
+            sideEffectState: "not_started",
+          };
+        }
+        throw error;
+      }
+    },
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+    waitForContent: async (request) => {
+      const previous = String(request.previousContentToken || "");
+      const deadline = Date.now() + Math.min(
+        Math.max(Number(request.config?.pauseBetweenScrolls) || 250, 100),
+        1000,
+      );
+      while (Date.now() < deadline) {
+        throwIfRunCancelled(runId);
+        await delayWithRunCancellation(100, runId);
+        const response = await executeContentStep(
+          request.tab || currentTab,
+          createFinalizedScrollContentStep(step, {
+            ...request,
+            inspectOnly: true,
+          }),
+          runId,
+        );
+        const current = String(
+          response?.value?.contentToken ??
+          response?.contentToken ??
+          "",
+        );
+        if (current && current !== previous) return { changed: true };
+      }
+      return { changed: false };
+    },
+    getHostStatus() {
+      const status = NativeBridge.getStatus();
+      return {
+        connected: Boolean(status.socketConnected && status.paired),
+        capabilities: Array.isArray(status.capabilities)
+          ? status.capabilities
+          : [],
+      };
+    },
+    prepareHostFallback: async (request) => {
+      const tab = request.tab || currentTab;
+      if (!tab?.id || !tab?.windowId) return {};
+      await chrome.windows.update(tab.windowId, { focused: true });
+      await chrome.tabs.update(tab.id, { active: true });
+      await delayWithRunCancellation(150, runId);
+      const prepared = await sendContentRequest(tab, {
+        type: Messages.PrepareHostFallback,
+        step: createFinalizedScrollContentStep(step, request),
+        runId,
+      });
+      if (!prepared?.ok) return {};
+      await NativeBridge.hostWindow({
+        expectedWindowTitle: prepared.window?.title || tab.title || "",
+      });
+      return {
+        ...prepared,
+        foregroundReady: true,
+        targetVisible: prepared.visible === true,
+        sideEffectState: "not_completed",
+      };
+    },
+    executeHost: async (request) => {
+      const tab = request.tab || currentTab;
+      const prepared = request.preparation || {};
+      await NativeBridge.hostAction({
+        action: "scroll",
+        amount: prepared.amount,
+        coordinateSpace: prepared.coordinateSpace,
+        clientPoint: prepared.clientPoint,
+        clientBounds: prepared.clientBounds,
+        devicePixelRatio: prepared.devicePixelRatio,
+        coordinateConfidence: prepared.confidence,
+        expectedWindowTitle: prepared.window?.title || tab?.title || "",
+        nodeId: step?.id || "",
+        workflowRunId: runId || "",
+      });
+      throwIfRunCancelled(runId);
+      const response = await executeContentStep(
+        tab,
+        createFinalizedScrollContentStep(step, {
+          ...request,
+          inspectOnly: true,
+        }),
+        runId,
+      );
+      const value = response?.value ?? response ?? {};
+      const before = prepared.beforePosition || {};
+      const after = value.finalPosition || {};
+      const moved = Math.abs(Number(after.x || 0) - Number(before.x || 0)) > 1 ||
+        Math.abs(Number(after.y || 0) - Number(before.y || 0)) > 1;
+      const boundaryVerified = [
+        ScrollStopReasons.TopReached,
+        ScrollStopReasons.BottomReached,
+        ScrollStopReasons.ScrollEnd,
+      ].includes(value.stopReason);
+      return {
+        ...value,
+        moved,
+        verified: moved || value.conditionMet === true || boundaryVerified,
+      };
+    },
+  });
+  const services = {
+    scroll,
+    registry: variableRegistry,
+    workflowClipboard: createWorkflowClipboardAdapter(variableRegistry),
+    isCancelled: () => (
+      activeRun?.runId === runId && activeRun.cancelRequested
+    ),
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+    withTimeout: createFinalizedNodeTimeoutService(runId),
+    logger: (event) => appendFinalizedNodeLog({
+      event,
+      runId,
+      workflowName,
+      step,
+      stepIndex,
+    }),
+  };
+  const outcome = await executeFinalizedNode({
+    node: step,
+    nodeId: step.id,
+    nodeType: step.action || step.type,
+    nodeVersion: step.version,
+    definition,
+    config,
+    inputs: {
+      operation: config.operation,
+      scrollTarget: config.scrollTarget,
+    },
+    validateConfig: (preparedConfig) => validateScrollConfig(preparedConfig, {
+      target,
+      node: step,
+    }),
+    executor: (context) => executeScroll({
+      ...context,
+      tab: currentTab,
+      target,
+      node: step,
+    }),
+    verifyBeforeRetry: ({ error }) => verifyScrollBeforeRetry({ error }),
+    selectFailureRoute(error) {
+      return isMapperUnresolvedError(error)
+        ? FinalizedNodeRoutes.Unresolved
+        : null;
+    },
+  }, services);
+
+  if (outcome.route === FinalizedNodeRoutes.Fail) {
+    throwFinalizedNodeFailure(outcome, step, stepIndex);
+  }
+  return {
+    tab: currentTab,
+    route: outcome.route,
+    routeError: outcome.routeError || null,
+    result: outcome.result,
+  };
+}
+
+async function executeFinalizedResolveElementWorkflowNode({
+  step,
+  definition,
+  currentTab,
+  variableRegistry,
+  runId,
+  workflowName,
+  stepIndex,
+}) {
+  const config = step?.config || {};
+  const target = step?.data?.target || step?.target || step?.componentRef || null;
+  const resolveElement = {
+    async perform(request = {}) {
+      throwIfRunCancelled(runId);
+      try {
+        const response = await executeContentStep(
+          request.tab || currentTab,
+          createFinalizedResolveElementContentStep(step, request),
+          runId,
+        );
+        return { ok: true, value: response?.value ?? response ?? {} };
+      } catch (error) {
+        return { ok: false, error: resolveElementServiceError(error) };
+      }
+    },
+  };
+  const services = {
+    resolveElement,
+    registry: variableRegistry,
+    workflowClipboard: createWorkflowClipboardAdapter(variableRegistry),
+    isCancelled: () => (
+      activeRun?.runId === runId && activeRun.cancelRequested
+    ),
+    delay: (ms) => delayWithRunCancellation(ms, runId),
+    withTimeout: createFinalizedNodeTimeoutService(runId),
+    logger: (event) => appendFinalizedNodeLog({
+      event,
+      runId,
+      workflowName,
+      step,
+      stepIndex,
+    }),
+  };
+  const outcome = await executeFinalizedNode({
+    node: step,
+    nodeId: step.id,
+    nodeType: step.action || step.type,
+    nodeVersion: step.version,
+    definition,
+    config,
+    inputs: {
+      mode: config.mode,
+      resultCardinality: config.resultCardinality,
+    },
+    validateConfig: (preparedConfig) => validateResolveElementConfig(
+      preparedConfig,
+      { target, node: step },
+    ),
+    executor: (context) => executeResolveElement({
+      ...context,
+      tab: currentTab,
+      target,
+      node: step,
+    }),
+    verifyBeforeRetry: ({ error }) => verifyResolveElementBeforeRetry({ error }),
+    selectFailureRoute(error) {
+      return isMapperUnresolvedError(error)
+        ? FinalizedNodeRoutes.Unresolved
+        : null;
+    },
+  }, services);
+
+  if (outcome.route === FinalizedNodeRoutes.Fail) {
+    throwFinalizedNodeFailure(outcome, step, stepIndex);
+  }
+  return {
+    tab: currentTab,
+    route: outcome.route,
+    routeError: outcome.routeError || null,
+    result: outcome.result,
+  };
+}
+
+function createFinalizedResolveElementContentStep(step = {}, request = {}) {
+  return {
+    ...structuredClone(step),
+    action: RESOLVE_ELEMENT_NODE_TYPE,
+    type: RESOLVE_ELEMENT_NODE_TYPE,
+    version: resolveElementNodeDefinition.version,
+    config: {
+      ...structuredClone(request.config || step.config || {}),
+      __resolveRevalidate: request.revalidate === true,
+    },
+  };
+}
+
+function resolveElementServiceError(error) {
+  const diagnostics = error?.diagnostics || {};
+  const finalReason = String(diagnostics.finalReason || "");
+  if (finalReason === "resolve_cardinality_requires_explicit_selector") {
+    return {
+      code: NodeErrorCodes.ConfigInvalid,
+      message: error?.message ||
+        "Result cardinality first and all require an explicit CSS or XPath target selector.",
+      details: { field: "resultCardinality" },
+    };
+  }
+  const state = diagnostics.mapperState ||
+    (finalReason === "target_not_visible"
+      ? "target_not_visible"
+      : finalReason === "target_not_interactable"
+        ? "target_not_interactable"
+        : "not_found");
+  return {
+    state,
+    message: error?.message || "Resolve Element could not resolve the target.",
+    details: { reason: diagnostics.mapperReason || finalReason },
+  };
+}
+
+function createFinalizedScrollContentStep(step = {}, request = {}) {
+  return {
+    ...structuredClone(step),
+    action: SCROLL_NODE_TYPE,
+    type: SCROLL_NODE_TYPE,
+    version: scrollNodeDefinition.version,
+    config: {
+      ...structuredClone(request.config || step.config || {}),
+      __scrollAttempt: Number(request.attempt) || 1,
+      __scrollInspectOnly: request.inspectOnly === true,
+    },
+  };
+}
+
 function createFinalizedNodeTimeoutService(runId) {
   return async (task, timeoutMs, context = {}) => {
+    const nodeLabel = String(
+      context.definition?.displayName ||
+      context.definition?.label ||
+      context.nodeType ||
+      "Finalized node",
+    );
+    const retryReason =
+      context.definition?.retryOnlyFor?.[0] || "any_error";
     if (activeRun?.runId === runId && activeRun.cancelRequested) {
       throw new NodeExecutionError(
         NodeErrorCodes.Cancelled,
-        "Navigate execution was cancelled.",
+        `${nodeLabel} execution was cancelled.`,
         { attempt: context.attempt, retryable: false },
       );
     }
@@ -2979,11 +3554,11 @@ function createFinalizedNodeTimeoutService(runId) {
       timer = setTimeout(() => {
         reject(new NodeExecutionError(
           NodeErrorCodes.Timeout,
-          "Navigate execution timed out.",
+          `${nodeLabel} execution timed out.`,
           {
             attempt: context.attempt,
             timeoutMs,
-            retryReason: "navigation_failure",
+            retryReason,
             sideEffectState: "unknown",
           },
         ));
@@ -2993,7 +3568,7 @@ function createFinalizedNodeTimeoutService(runId) {
     const cancellationPromise = new Promise((_, reject) => {
       const onAbort = () => reject(new NodeExecutionError(
         NodeErrorCodes.Cancelled,
-        "Navigate execution was cancelled.",
+        `${nodeLabel} execution was cancelled.`,
         { attempt: context.attempt, retryable: false },
       ));
       controller.signal.addEventListener("abort", onAbort, { once: true });

@@ -499,7 +499,13 @@
 
   function validatePreparedConfiguration(config, definition, node) {
     const issues = [];
-    if (definition.targetRequired) {
+    const targetSupported =
+      definition.targetRequired === true ||
+      definition.targetSupported === true;
+    const targetRequired =
+      definition.targetRequired === true ||
+      conditionsMatch(definition.targetRequiredWhen, config, node);
+    if (targetSupported) {
       const targetSource = node.target || node.data?.target || node.componentRef || node.data?.componentRef;
       const isComponentRef = Boolean(
         targetSource && typeof targetSource === "object" &&
@@ -515,15 +521,21 @@
           ? Boolean(parseEditorCoordinates(target.identifierValue))
         : target.identifierValue !== undefined && target.identifierValue !== null &&
           (typeof target.identifierValue !== "string" || target.identifierValue.trim());
-      if (!hasValue) issues.push({ fieldKey: "target", message: "Target element is required." });
-      if (target.identifierType === "attribute" && !target.attributeName.trim()) {
+      if (targetRequired && !hasValue) {
+        issues.push({ fieldKey: "target", message: "Target element or container is required." });
+      }
+      if (hasValue && target.identifierType === "attribute" && !target.attributeName.trim()) {
         issues.push({ fieldKey: "target.attributeName", message: "Attribute targets require an attribute name." });
       }
     }
 
     for (const field of definition.config || definition.configSchema || []) {
       const value = config[field.key] ?? node[field.key] ?? legacyPayloadValue(node, field.key);
-      const required = field.required === true || conditionMatches(field.requiredWhen, config, node);
+      const required =
+        field.required === true ||
+        conditionMatches(field.requiredWhen, config, node) ||
+        conditionsMatch(field.requiredWhenAny, config, node) ||
+        conditionsMatchAll(field.requiredWhenAll, config, node);
       if (required && isEmpty(value)) {
         issues.push({ fieldKey: field.key, message: `${field.label || field.key} is required.` });
         continue;
@@ -768,7 +780,24 @@
   function conditionMatches(condition, config, node) {
     if (!condition || typeof condition !== "object") return false;
     const actual = config[condition.field] ?? node[condition.field];
+    if (Array.isArray(condition.anyOf)) {
+      return condition.anyOf.some((value) => (
+        String(actual ?? "") === String(value ?? "")
+      ));
+    }
     return String(actual ?? "") === String(condition.equals ?? "");
+  }
+
+  function conditionsMatch(conditions, config, node) {
+    if (Array.isArray(conditions)) {
+      return conditions.some((condition) => conditionMatches(condition, config, node));
+    }
+    return conditionMatches(conditions, config, node);
+  }
+
+  function conditionsMatchAll(conditions, config, node) {
+    if (!Array.isArray(conditions) || !conditions.length) return false;
+    return conditions.every((condition) => conditionMatches(condition, config, node));
   }
 
   function legacyPayloadValue(node, key) {

@@ -1,0 +1,313 @@
+{
+  "acceptance": {
+    "schemaVersion": 1,
+    "catalogOrder": 3,
+    "nodeType": "browser.tab.control",
+    "nodeVersion": 1,
+    "synthetic": true,
+    "primaryBehavior": "Open the repository fixture in a background tab, save and switch to its tab reference, verify reversible pin and mute state changes, close it back to the immutable origin, return to that origin explicitly, then complete a deliberate not-found skip with a warning.",
+    "expectedOutputKeys": [
+      "operation",
+      "originTab",
+      "tab",
+      "createdTab",
+      "pageCapability",
+      "matchedBy",
+      "pinned",
+      "muted",
+      "bookmarked"
+    ],
+    "safeFailureOrAlternate": "The final impossible tab-ID selector uses ifNotFound skip and must complete on success with TAB_NOT_FOUND warning and tab null. Bookmark permission absence is covered by deterministic focused tests because a live bookmark probe would create persistent browser data.",
+    "fixturePaths": [
+      "tests/fixtures/navigate-acceptance.html"
+    ]
+  },
+  "schemaVersion": 3,
+  "id": "node-acceptance-003-tab-control",
+  "name": "Node 003 - Tab Control Acceptance",
+  "description": "Synthetic source acceptance for finalized browser.tab.control@1.",
+  "boundDomain": "",
+  "settings": {
+    "reuseExistingTabs": false,
+    "mapper": {
+      "enabled": true,
+      "mode": "automatic",
+      "captureMode": "static_bounded",
+      "shadowDom": "open_only",
+      "maxComponents": 500,
+      "maxVersions": 3,
+      "materialMutationLimit": 50,
+      "queryAllowlist": [],
+      "siteOverrides": {},
+      "pageOverrides": {}
+    }
+  },
+  "variables": {},
+  "datasets": {},
+  "dataSources": [],
+  "entryNodeId": "open-background-fixture",
+  "nodes": [
+    {
+      "id": "open-background-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 60, "y": 80 },
+      "config": {
+        "displayName": "Open fixture in background",
+        "operation": "open_url_in_new_tab",
+        "url": "http://127.0.0.1:8765/tests/fixtures/navigate-acceptance.html?acceptance=003-tab-control-v1",
+        "openInBackground": true,
+        "waitUntil": "dom_ready",
+        "saveTabReferenceAs": "tab_control_acceptance",
+        "timeout": 10000,
+        "onError": "error_port",
+        "saveOutputAs": "tab_opened"
+      },
+      "data": {}
+    },
+    {
+      "id": "switch-saved-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 380, "y": 80 },
+      "config": {
+        "displayName": "Switch to saved fixture",
+        "operation": "switch_tab",
+        "tabSelectorKind": "saved_reference",
+        "tabSelectorValue": "tab_control_acceptance",
+        "ifNotFound": "error_port",
+        "timeout": 5000,
+        "onError": "error_port",
+        "saveOutputAs": "tab_switched"
+      },
+      "data": {}
+    },
+    {
+      "id": "pin-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 700, "y": 80 },
+      "config": {
+        "displayName": "Pin fixture",
+        "operation": "pin_tab",
+        "tabSelectorKind": "current",
+        "timeout": 5000,
+        "onError": "error_port"
+      },
+      "data": {}
+    },
+    {
+      "id": "unpin-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 1020, "y": 80 },
+      "config": {
+        "displayName": "Unpin fixture",
+        "operation": "unpin_tab",
+        "tabSelectorKind": "current",
+        "timeout": 5000,
+        "onError": "error_port"
+      },
+      "data": {}
+    },
+    {
+      "id": "mute-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 1340, "y": 80 },
+      "config": {
+        "displayName": "Mute fixture",
+        "operation": "mute_tab",
+        "tabSelectorKind": "current",
+        "timeout": 5000,
+        "onError": "error_port"
+      },
+      "data": {}
+    },
+    {
+      "id": "unmute-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 1660, "y": 80 },
+      "config": {
+        "displayName": "Unmute fixture",
+        "operation": "unmute_tab",
+        "tabSelectorKind": "current",
+        "timeout": 5000,
+        "onError": "error_port"
+      },
+      "data": {}
+    },
+    {
+      "id": "close-fixture",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 1980, "y": 80 },
+      "config": {
+        "displayName": "Close fixture to opener",
+        "operation": "close_tab",
+        "tabSelectorKind": "current",
+        "closeBehavior": "opener",
+        "confirmBeforeClose": false,
+        "timeout": 5000,
+        "onError": "error_port"
+      },
+      "data": {}
+    },
+    {
+      "id": "return-origin",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 2300, "y": 80 },
+      "config": {
+        "displayName": "Return to immutable origin",
+        "operation": "return_to_origin_tab",
+        "ifNotFound": "error_port",
+        "timeout": 5000,
+        "onError": "error_port",
+        "saveOutputAs": "origin_returned"
+      },
+      "data": {}
+    },
+    {
+      "id": "safe-missing-tab",
+      "type": "browser.tab.control",
+      "version": 1,
+      "position": { "x": 2620, "y": 80 },
+      "config": {
+        "displayName": "Safe missing-tab alternate",
+        "operation": "switch_tab",
+        "tabSelectorKind": "id",
+        "tabSelectorValue": "2147483647",
+        "ifNotFound": "skip",
+        "retryCount": 0,
+        "timeout": 3000,
+        "onError": "fail",
+        "saveOutputAs": "missing_tab_alternate"
+      },
+      "data": {}
+    },
+    {
+      "id": "tab-control-needs-attention",
+      "type": "workflow.needs_attention",
+      "version": 1,
+      "position": { "x": 1340, "y": 360 },
+      "config": {},
+      "data": { "systemNode": true }
+    }
+  ],
+  "edges": [
+    {
+      "id": "open-switch",
+      "source": "open-background-fixture",
+      "sourceHandle": "success",
+      "target": "switch-saved-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "switch-pin",
+      "source": "switch-saved-fixture",
+      "sourceHandle": "success",
+      "target": "pin-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "pin-unpin",
+      "source": "pin-fixture",
+      "sourceHandle": "success",
+      "target": "unpin-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "unpin-mute",
+      "source": "unpin-fixture",
+      "sourceHandle": "success",
+      "target": "mute-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "mute-unmute",
+      "source": "mute-fixture",
+      "sourceHandle": "success",
+      "target": "unmute-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "unmute-close",
+      "source": "unmute-fixture",
+      "sourceHandle": "success",
+      "target": "close-fixture",
+      "targetHandle": "input"
+    },
+    {
+      "id": "close-return",
+      "source": "close-fixture",
+      "sourceHandle": "success",
+      "target": "return-origin",
+      "targetHandle": "input"
+    },
+    {
+      "id": "return-missing",
+      "source": "return-origin",
+      "sourceHandle": "success",
+      "target": "safe-missing-tab",
+      "targetHandle": "input"
+    },
+    {
+      "id": "open-error",
+      "source": "open-background-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "switch-error",
+      "source": "switch-saved-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "pin-error",
+      "source": "pin-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "unpin-error",
+      "source": "unpin-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "mute-error",
+      "source": "mute-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "unmute-error",
+      "source": "unmute-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "close-error",
+      "source": "close-fixture",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "return-error",
+      "source": "return-origin",
+      "sourceHandle": "error",
+      "target": "tab-control-needs-attention",
+      "targetHandle": "input"
+    }
+  ]
+}

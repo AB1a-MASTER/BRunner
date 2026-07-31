@@ -1,0 +1,275 @@
+{
+  "acceptance": {
+    "schemaVersion": 1,
+    "catalogOrder": 4,
+    "nodeType": "element.resolve",
+    "nodeVersion": 1,
+    "synthetic": true,
+    "primaryBehavior": "Resolve the repository fixture table as exactly one visible component, enumerate its four synthetic rows as a bounded reusable component set, then publish the standardized Resolve Element output without changing the page.",
+    "expectedOutputKeys": [
+      "mode",
+      "resolvedComponentId",
+      "component",
+      "components",
+      "matchCount",
+      "targetResolution"
+    ],
+    "safeFailureOrAlternate": "The final node targets #absent-element, which exists nowhere in the fixture. It must take the unresolved route to Needs Attention rather than resolving an ambiguous or arbitrary element. A hidden #hidden-panel is present so a visible requirement can be confirmed to reject it.",
+    "fixturePaths": [
+      "tests/fixtures/resolve-acceptance.html"
+    ]
+  },
+  "schemaVersion": 3,
+  "id": "node-acceptance-004-resolve-element",
+  "name": "Node 004 - Resolve Element Acceptance",
+  "description": "Synthetic source acceptance for finalized element.resolve@1.",
+  "boundDomain": "127.0.0.1",
+  "settings": {
+    "reuseExistingTabs": true,
+    "mapper": {
+      "enabled": true,
+      "mode": "automatic",
+      "captureMode": "static_bounded",
+      "shadowDom": "open_only",
+      "maxComponents": 500,
+      "maxVersions": 3,
+      "materialMutationLimit": 50,
+      "queryAllowlist": [],
+      "siteOverrides": {},
+      "pageOverrides": {}
+    }
+  },
+  "variables": {},
+  "datasets": {},
+  "dataSources": [],
+  "entryNodeId": "resolve-results-table",
+  "nodes": [
+    {
+      "id": "resolve-results-table",
+      "type": "element.resolve",
+      "version": 1,
+      "position": {
+        "x": 64,
+        "y": 96
+      },
+      "config": {
+        "enabled": true,
+        "displayName": "Resolve the fixture results table",
+        "mode": "resolve_known",
+        "expectedElementType": "table",
+        "resultCardinality": "one",
+        "searchScope": "whole_page",
+        "visibilityRequirement": "visible",
+        "mapFreshness": "revalidate_if_stale",
+        "minimumConfidence": 0.75,
+        "ambiguityPolicy": "fail",
+        "timeout": 10000,
+        "retryCount": 1,
+        "retryDelay": 250,
+        "retryStrategy": "fixed",
+        "retryOnlyFor": "target_not_found",
+        "onError": "error_port",
+        "saveOutputAs": "resolve_acceptance_table",
+        "saveToWorkflowClipboard": "replace",
+        "workflowClipboardEntry": "resolve_acceptance_table",
+        "logLevel": "normal"
+      },
+      "data": {
+        "target": {
+          "identifierType": "css",
+          "identifierValue": "#results-table",
+          "textMatch": {
+            "mode": "exact",
+            "caseSensitive": false,
+            "trimWhitespace": true,
+            "normalizeWhitespace": true,
+            "multipleMatchBehavior": "fail",
+            "strictUnique": true
+          },
+          "scope": "whole_page",
+          "targetState": "visible",
+          "mapFreshness": "revalidate_if_stale",
+          "fallbackPolicy": "disabled",
+          "ambiguityPolicy": "fail",
+          "minimumConfidence": 0.75,
+          "tabSource": "current"
+        }
+      }
+    },
+    {
+      "id": "resolve-result-rows",
+      "type": "element.resolve",
+      "version": 1,
+      "position": {
+        "x": 440,
+        "y": 96
+      },
+      "config": {
+        "enabled": true,
+        "displayName": "Enumerate the four synthetic rows",
+        "mode": "find_dynamic",
+        "expectedElementType": "row",
+        "resultCardinality": "all",
+        "searchScope": "whole_page",
+        "visibilityRequirement": "visible",
+        "mapFreshness": "use_cache",
+        "minimumConfidence": 0.75,
+        "ambiguityPolicy": "fail",
+        "timeout": 10000,
+        "retryCount": 0,
+        "retryDelay": 0,
+        "retryStrategy": "fixed",
+        "retryOnlyFor": "target_not_found",
+        "onError": "error_port",
+        "saveOutputAs": "resolve_acceptance_rows",
+        "saveToWorkflowClipboard": "off",
+        "workflowClipboardEntry": "",
+        "logLevel": "normal"
+      },
+      "data": {
+        "target": {
+          "identifierType": "css",
+          "identifierValue": "#results-table tbody tr.result-row",
+          "textMatch": {
+            "mode": "exact",
+            "caseSensitive": false,
+            "trimWhitespace": true,
+            "normalizeWhitespace": true,
+            "multipleMatchBehavior": "return_all",
+            "strictUnique": false
+          },
+          "scope": "whole_page",
+          "targetState": "visible",
+          "mapFreshness": "use_cache",
+          "fallbackPolicy": "disabled",
+          "ambiguityPolicy": "fail",
+          "minimumConfidence": 0.75,
+          "tabSource": "current"
+        }
+      }
+    },
+    {
+      "id": "resolve-absent-element",
+      "type": "element.resolve",
+      "version": 1,
+      "position": {
+        "x": 816,
+        "y": 96
+      },
+      "config": {
+        "enabled": true,
+        "displayName": "Safe unresolved alternate",
+        "mode": "find_dynamic",
+        "expectedElementType": "",
+        "resultCardinality": "one",
+        "searchScope": "whole_page",
+        "visibilityRequirement": "visible",
+        "mapFreshness": "use_cache",
+        "minimumConfidence": 0.75,
+        "ambiguityPolicy": "fail",
+        "timeout": 5000,
+        "retryCount": 0,
+        "retryDelay": 0,
+        "retryStrategy": "fixed",
+        "retryOnlyFor": "target_not_found",
+        "onError": "error_port",
+        "saveOutputAs": "resolve_acceptance_absent",
+        "saveToWorkflowClipboard": "off",
+        "workflowClipboardEntry": "",
+        "logLevel": "normal"
+      },
+      "data": {
+        "target": {
+          "identifierType": "css",
+          "identifierValue": "#absent-element",
+          "textMatch": {
+            "mode": "exact",
+            "caseSensitive": false,
+            "trimWhitespace": true,
+            "normalizeWhitespace": true,
+            "multipleMatchBehavior": "fail",
+            "strictUnique": true
+          },
+          "scope": "whole_page",
+          "targetState": "visible",
+          "mapFreshness": "use_cache",
+          "fallbackPolicy": "disabled",
+          "ambiguityPolicy": "fail",
+          "minimumConfidence": 0.75,
+          "tabSource": "current"
+        }
+      }
+    },
+    {
+      "id": "resolve-needs-attention",
+      "type": "workflow.needs_attention",
+      "version": 1,
+      "position": {
+        "x": 816,
+        "y": 320
+      },
+      "config": {},
+      "data": {
+        "systemNode": true
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "table-to-rows",
+      "source": "resolve-results-table",
+      "sourceHandle": "success",
+      "target": "resolve-result-rows",
+      "targetHandle": "input"
+    },
+    {
+      "id": "rows-to-absent",
+      "source": "resolve-result-rows",
+      "sourceHandle": "success",
+      "target": "resolve-absent-element",
+      "targetHandle": "input"
+    },
+    {
+      "id": "table-error-route",
+      "source": "resolve-results-table",
+      "sourceHandle": "error",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "table-unresolved-route",
+      "source": "resolve-results-table",
+      "sourceHandle": "unresolved",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "rows-error-route",
+      "source": "resolve-result-rows",
+      "sourceHandle": "error",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "rows-unresolved-route",
+      "source": "resolve-result-rows",
+      "sourceHandle": "unresolved",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "absent-error-route",
+      "source": "resolve-absent-element",
+      "sourceHandle": "error",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    },
+    {
+      "id": "absent-unresolved-route",
+      "source": "resolve-absent-element",
+      "sourceHandle": "unresolved",
+      "target": "resolve-needs-attention",
+      "targetHandle": "input"
+    }
+  ]
+}

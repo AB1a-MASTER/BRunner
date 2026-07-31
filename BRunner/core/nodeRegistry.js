@@ -13,6 +13,9 @@ import {
   normalizeNodeFieldSchema,
 } from "./nodeAuthoring.js";
 import { navigateNodeDefinition } from "../nodes/navigation/navigate/index.js";
+import { scrollNodeDefinition } from "../nodes/navigation/scroll/index.js";
+import { tabControlNodeDefinition } from "../nodes/navigation/tab-control/index.js";
+import { resolveElementNodeDefinition } from "../nodes/targeting/resolve-element/index.js";
 
 export const NodeContractKinds = Object.freeze({
   Provisional: "provisional",
@@ -42,6 +45,9 @@ const definitions = [
     outputs: ["success"],
   },
   navigateNodeDefinition,
+  scrollNodeDefinition,
+  tabControlNodeDefinition,
+  resolveElementNodeDefinition,
   {
     type: Actions.ElementClick,
     version: 1,
@@ -121,53 +127,6 @@ const definitions = [
     description: "Reload the current browser tab.",
     targetRequired: false,
     config: [],
-    inputs: ["input"],
-    outputs: ["success"],
-  },
-  {
-    type: Actions.BrowserTabOpen,
-    version: 1,
-    category: "Browser",
-    label: "Open Tab",
-    icon: "➕",
-    description: "Open a URL in a new tracked browser tab.",
-    targetRequired: false,
-    config: [
-      { key: "url", label: "URL", kind: "text", required: true },
-      {
-        key: "continueIn",
-        label: "Continue Workflow In",
-        kind: "select",
-        default: "newTab",
-        options: ["newTab", "currentTab"],
-      },
-      {
-        key: "tabRef",
-        label: "New Tab Reference",
-        kind: "text",
-        default: "",
-      },
-    ],
-    inputs: ["input"],
-    outputs: ["success", "tab"],
-  },
-  {
-    type: Actions.BrowserTabClose,
-    version: 1,
-    category: "Browser",
-    label: "Close Current Tab",
-    icon: "✕",
-    description: "Close the current tab and return to its opener or another safe tab.",
-    targetRequired: false,
-    config: [
-      {
-        key: "continueIn",
-        label: "After Closing",
-        kind: "select",
-        default: "openerOrAvailable",
-        options: ["openerOrAvailable", "none"],
-      },
-    ],
     inputs: ["input"],
     outputs: ["success"],
   },
@@ -1310,7 +1269,7 @@ function normalizeNodeDefinition(definition) {
     configSchema: structuredClone(config),
     inputPorts,
     outputPorts,
-    targetSchema: definition.targetRequired
+    targetSchema: definition.targetRequired || definition.targetSupported
       ? structuredClone(definition.targetSchema || createTargetEditorSchema(true))
       : null,
     inputs: inputPorts.map((port) => port.id),
@@ -1382,7 +1341,9 @@ function normalizeNodeGuidance(definition = {}) {
     : "No required configuration fields.";
   const targetText = definition.targetRequired
     ? "Select or record the target element before running."
-    : "Runs without a target element.";
+    : definition.targetSupported
+      ? "Select or record a target when the chosen operation requires one."
+      : "Runs without a target element.";
 
   return {
     description: definition.description || `Run ${label}.`,

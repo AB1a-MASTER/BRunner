@@ -1,6 +1,6 @@
 # Finalized Node Program Tracker
 
-Updated: 2026-07-25
+Updated: 2026-07-27
 
 This is the single authoritative work tracker for the finalized node program
 and the implementation-status companion to
@@ -13,8 +13,9 @@ inventory. `AGENTS.md` defines the repeatable working instructions and
 Update this file in the same change that closes a base task or node. A node row
 may be marked **Complete** only after its acceptance workflow,
 Graph-editor/save/runtime round-trip, user documentation, and automated/live
-evidence pass. Add the user commit hash to the completion ledger after the
-accepted slice is committed.
+evidence pass. Record the accepted automated and live evidence in the
+completion ledger. Commit hashes are omitted unless the user explicitly asks
+for hash tracking.
 
 ## Current status
 
@@ -23,8 +24,9 @@ accepted slice is committed.
 | Finalized catalog inventory | **Complete** | All 94 blueprint nodes have a stable type, phase, disposition, and provisional-code reference inventory. |
 | Base contract hardening | **Complete** | B01-B15 and B19 are closed for Node 1; phase-specific B16-B18 remain due only before their listed phases. |
 | Sequential Studio retirement | **Complete; source dormant** | B19 evidence is recorded in [`work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md`](work_items/B19_DISABLE_SEQUENTIAL_STUDIO.md). Every normal launch opens Graph Studio, the former URL is fail-closed, and physical source removal remains C12. |
-| Finalized node implementations | **Node 1 accepted; commit pending** | Navigate v2 passed its complete automated and unpacked-extension acceptance gates. The user-controlled commit hash is the only remaining Node 1 closeout item. |
-| Phase 1 shared adapters | **Navigate integrated** | Standard runtime/output/logging/retry plus the Chrome tab adapter are production-integrated for Navigate only; later nodes remain pending. |
+| Finalized node implementations | **Node 1 complete; Nodes 2-4 source-complete and batch acceptance queued** | Navigate v2 is accepted. Scroll v2, Tab Control v1, and Resolve Element v1 pass focused source checks, acceptance-schema guards, and user documentation; live acceptance remains queued for the batch and none of the three is accepted. |
+| Phase 1-2 batch program | **Documentation complete; Node 5 is next** | [`work_items/P12_PHASE_1_2_BATCH_PROGRAM.md`](work_items/P12_PHASE_1_2_BATCH_PROGRAM.md) owns the bounded documentation-first, catalog-ordered implementation and consolidated acceptance plan. Node 3 closed at 170/170 on 2026-07-30 and Node 4 closed at 382/382 on 2026-07-31. No node source item is currently active; Node 5 is the next one to start. |
+| Phase 1 shared adapters | **Navigate, Scroll, Tab Control, and Resolve Element integrated** | Standard runtime/output/logging/retry serves all four finalized nodes. Navigate and Tab Control use Chrome tab adapters; Scroll uses canonical target resolution, content telemetry, and optional visible host fallback; Resolve Element uses the shared target editor plus mapper-owned content resolution with no page side effects. |
 | Provisional removals | **Queued** | `browser.search` and `http.request` are absent from the finalized catalog and must be removed during runtime integration. |
 
 Base closeout verification on 2026-07-25: Graph Studio production build passed
@@ -42,6 +44,11 @@ focused live acceptance.
 - **In progress**: active implementation work; not yet accepted.
 - **Integration pending**: isolated source/tests exist but Graph Studio and the
   production runtime do not yet consume the same contract.
+- **Source complete - batch acceptance queued**: the user explicitly approved
+  consolidated acceptance for a bounded catalog slice; definition,
+  implementation, focused tests, acceptance workflow, and user documentation
+  are complete, while full-suite/build/live evidence remains mandatory and the
+  node is not accepted.
 - **Complete**: definition, editor, executor, outputs, logging, tests, and
   applicable live acceptance meet the blueprint definition of done, the user
   catalogue is current, and a node acceptance workflow exists.
@@ -104,7 +111,7 @@ For each catalog row, complete these items in one isolated slice:
 - [ ] Focused live source acceptance where applicable.
 - [ ] Replaced provisional paths removed or explicitly isolated.
 - [ ] End-user catalogue entry completed.
-- [ ] Tracker row marked Complete and completion ledger filled after user commit.
+- [ ] Tracker row marked Complete and completion ledger filled after acceptance.
 
 ## Phase 1 shared adapters
 
@@ -200,28 +207,52 @@ retired and does not satisfy the replacement B10-B12 Graph-only gates.
 - [x] Load `BRunner/` unpacked and run the focused workflow from Graph Studio;
       verify the six output keys, saved tab reference, and bounded error route.
 - [x] Mark the live acceptance result Accepted only after that live run.
-- [ ] Add the user commit hash, mark Node 1 Complete, and only then begin
-      Node 2.
+- [x] Mark Node 1 Complete after synchronized evidence. Commit hashes are
+      tracked only when the user explicitly requests it.
+
+## Node 2 — Scroll batch acceptance checkpoint
+
+Power-loss-safe ordered work and the deferred Step 7 checkpoint are recorded in
+[`work_items/N002_SCROLL_FINALIZATION.md`](work_items/N002_SCROLL_FINALIZATION.md).
+The exact `browser.scroll@2` definition, package, registry, Graph editor,
+background/content runtime, deterministic tests, synthetic acceptance workflow,
+and acceptance-pending user catalogue entry are complete. Graph Studio rebuilt
+from 191 modules; JavaScript passes 481/481, Python passes 183/183, production
+syntax/fingerprint/integrity and whitespace gates pass. No production Scroll v2
+behavior is accepted until its focused unpacked-extension success and safe
+failure/alternate runs are confirmed. On 2026-07-27 the user explicitly moved
+those live checks into the consolidated Phase 1-2 acceptance batch.
+
+## Phase 1-2 batch program active work
+
+The documentation-first plan, consolidated verification boundary, agent
+handoff rules, and combined workflow design are recorded in
+[`work_items/P12_PHASE_1_2_BATCH_PROGRAM.md`](work_items/P12_PHASE_1_2_BATCH_PROGRAM.md).
+Documentation Step 2 is complete: N003-N015 records are frozen and the exact
+contract/version/disposition matrix matches the machine catalog. Step 3 is
+active with Node 3 as the sole implementation item. Nodes remain catalog
+ordered, focused tests remain per-node, and full-suite/build/live evidence is
+deferred without being waived.
 
 ## Full finalized node tracker
 
 | # | Finalized node | Stable type | Phase | Disposition | Provisional action reference(s) | Status |
 |---:|---|---|---:|---|---|---|
-| 1 | Navigate | `browser.navigate` | 1 | Rewrite | `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload` | Accepted — user commit pending |
-| 2 | Scroll | `browser.scroll` | 1 | Rewrite | `browser.scroll`, `element.scroll_into_view` | Queued |
-| 3 | Tab Control | `browser.tab.control` | 1 | Rewrite | `browser.tab.switch`, `browser.tab.open`, `browser.tab.close` | Queued |
-| 4 | Resolve Element | `element.resolve` | 1 | Add | — | Queued |
-| 5 | Check Element State | `element.check_state` | 1 | Add | — | Queued |
-| 6 | Wait for Condition | `wait.condition` | 1 | Rewrite | `wait.element.visible`, `wait.element.hidden`, `wait.element.enabled`, `wait.element.text`, `wait.url` | Queued |
-| 7 | Click | `element.click` | 2 | Rewrite | `element.click`, `element.double_click` | Queued |
-| 8 | Hover / Move Pointer | `element.hover` | 2 | Rewrite | `element.hover` | Queued |
-| 9 | Focus Element | `element.focus` | 2 | Upgrade | `element.focus` | Queued |
-| 10 | Select Text | `element.select_text` | 2 | Add | — | Queued |
-| 11 | Drag and Drop | `element.drag_drop` | 2 | Add | — | Queued |
-| 12 | Enter Text | `element.enter_text` | 2 | Rewrite | `element.type`, `element.clear` | Queued |
-| 13 | Press Key | `keyboard.press_key` | 2 | Rewrite | `keyboard.send_keys` | Queued |
-| 14 | Copy to Clipboard | `clipboard.copy` | 2 | Rewrite | `clipboard.write` | Queued |
-| 15 | Paste from Clipboard | `clipboard.paste` | 2 | Rewrite | `clipboard.read` | Queued |
+| 1 | Navigate | `browser.navigate` | 1 | Rewrite | `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload` | Complete |
+| 2 | Scroll | `browser.scroll` | 1 | Rewrite | `browser.scroll`, `element.scroll_into_view` | Source complete - batch acceptance queued |
+| 3 | Tab Control | `browser.tab.control` | 1 | Rewrite | `browser.tab.switch`, `browser.tab.open`, `browser.tab.close` | Source complete - batch acceptance queued - [`N003`](work_items/N003_TAB_CONTROL_FINALIZATION.md) Steps 1-6 closed; focused source gate 170/170 |
+| 4 | Resolve Element | `element.resolve` | 1 | Add | — | Source complete - batch acceptance queued - [`N004`](work_items/N004_RESOLVE_ELEMENT_FINALIZATION.md) Steps 1-6 closed; focused source gate 382/382 |
+| 5 | Check Element State | `element.check_state` | 1 | Add | — | Queued - [contract frozen](work_items/N005_CHECK_ELEMENT_STATE_FINALIZATION.md) |
+| 6 | Wait for Condition | `wait.condition` | 1 | Rewrite | `wait.element.visible`, `wait.element.hidden`, `wait.element.enabled`, `wait.element.text`, `wait.url` | Queued - [contract frozen](work_items/N006_WAIT_FOR_CONDITION_FINALIZATION.md) |
+| 7 | Click | `element.click` | 2 | Rewrite | `element.click`, `element.double_click` | Queued - [contract frozen](work_items/N007_CLICK_FINALIZATION.md) |
+| 8 | Hover / Move Pointer | `element.hover` | 2 | Rewrite | `element.hover` | Queued - [contract frozen](work_items/N008_HOVER_MOVE_POINTER_FINALIZATION.md) |
+| 9 | Focus Element | `element.focus` | 2 | Upgrade | `element.focus` | Queued - [contract frozen](work_items/N009_FOCUS_ELEMENT_FINALIZATION.md) |
+| 10 | Select Text | `element.select_text` | 2 | Add | — | Queued - [contract frozen](work_items/N010_SELECT_TEXT_FINALIZATION.md) |
+| 11 | Drag and Drop | `element.drag_drop` | 2 | Add | — | Queued - [contract frozen](work_items/N011_DRAG_AND_DROP_FINALIZATION.md) |
+| 12 | Enter Text | `element.enter_text` | 2 | Rewrite | `element.type`, `element.clear` | Queued - [contract frozen](work_items/N012_ENTER_TEXT_FINALIZATION.md) |
+| 13 | Press Key | `keyboard.press_key` | 2 | Rewrite | `keyboard.send_keys` | Queued - [contract frozen](work_items/N013_PRESS_KEY_FINALIZATION.md) |
+| 14 | Copy to Clipboard | `clipboard.copy` | 2 | Rewrite | `clipboard.write` | Queued - [contract frozen](work_items/N014_COPY_TO_CLIPBOARD_FINALIZATION.md) |
+| 15 | Paste from Clipboard | `clipboard.paste` | 2 | Rewrite | `clipboard.read` | Queued - [contract frozen](work_items/N015_PASTE_FROM_CLIPBOARD_FINALIZATION.md) |
 | 16 | Select Dropdown Option | `form.select_option` | 3 | Upgrade | `element.select` | Queued |
 | 17 | Set Checkbox / Toggle | `form.set_toggle` | 3 | Rewrite | `element.toggle` | Queued |
 | 18 | Select Radio Option | `form.select_radio` | 3 | Rewrite | `element.toggle` | Queued |
@@ -335,18 +366,19 @@ node-specific acceptance workflow.
 ## Next acceptance boundary
 
 B10-B12 and B19 are complete; dormant Sequential Studio source remains deferred
-to C12. **Node 1: Navigate** passed its full source and live acceptance gate.
-The immediate boundary is its user-controlled quick commit and ledger hash.
-After the hash is recorded and Navigate is marked Complete, create the Node 2
-work record and begin **Scroll**. Phase 1 closes only after Nodes 1-6 and the
-combined blueprint workflow succeed through Graph Studio and the canonical
-graph runtime.
+to C12. **Node 1: Navigate** is complete. **Node 2: Scroll** is source-complete
+with its live checks queued in the explicitly approved Phase 1-2 acceptance
+batch. The active work is the Phase 1-2 documentation program, followed by
+Nodes 3-15 in catalog order. Commit hashes are not tracked unless explicitly
+requested. Phase 1 closes only after Nodes 1-6 and the combined blueprint
+workflow succeed through Graph Studio and the canonical graph runtime.
 
 ## Completed-node ledger
 
-Add one row only after the full per-node completion checklist passes. The Git
-commit is created by the user after reviewing the completed slice.
+Add one row only after the full per-node completion checklist passes. Git
+operations remain user-controlled; commit hashes are omitted unless the user
+explicitly requests hash tracking.
 
-| # | Node | Final contract | Acceptance workflow | Automated evidence | Live evidence | Commit |
-|---:|---|---|---|---|---|---|
-| 1 | Navigate | `browser.navigate@2` | `node_acceptance/001_navigate_acceptance.json` | JavaScript 445/445; Python 183/183; cache-safe focused checks 21/21; verified 191-module Graph build | Cache-safe success and stopped-server red error route passed 2026-07-27 | Pending user commit |
+| # | Node | Final contract | Acceptance workflow | Automated evidence | Live evidence |
+|---:|---|---|---|---|---|
+| 1 | Navigate | `browser.navigate@2` | `node_acceptance/001_navigate_acceptance.json` | JavaScript 445/445; Python 183/183; cache-safe focused checks 21/21; verified 191-module Graph build | Cache-safe success and stopped-server red error route passed 2026-07-27 |

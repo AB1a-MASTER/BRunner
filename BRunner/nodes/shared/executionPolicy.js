@@ -21,6 +21,7 @@ export const RetryReasons = Object.freeze({
   Timeout: "timeout",
   TargetNotFound: "target_not_found",
   NavigationFailure: "navigation_failure",
+  ContainerNotReady: "container_not_ready",
   HostUnavailable: "host_unavailable",
   DependencyNotReady: "dependency_not_ready",
   AnyError: "any_error",
@@ -120,6 +121,9 @@ export function classifyRetryError(error = {}) {
   );
   if (error?.details?.retryReason === RetryReasons.NavigationFailure) {
     return RetryReasons.NavigationFailure;
+  }
+  if (error?.details?.retryReason === RetryReasons.ContainerNotReady) {
+    return RetryReasons.ContainerNotReady;
   }
   if (category === NodeErrorCategories.Navigation) {
     return RetryReasons.NavigationFailure;
@@ -573,11 +577,20 @@ export async function executeBrowserFirst(options = {}) {
 
 function normalizeExecutionError(error) {
   if (error instanceof NodeExecutionError) return error;
-  return new NodeExecutionError(
+  const diagnostics =
+    error?.diagnostics && typeof error.diagnostics === "object"
+      ? error.diagnostics
+      : null;
+  const normalized = new NodeExecutionError(
     error?.code || NodeErrorCodes.ValidationFailed,
     error?.message || "Node execution failed.",
-    error?.details || {},
+    {
+      ...(error?.details || {}),
+      ...(diagnostics ? { diagnostics } : {}),
+    },
   );
+  if (diagnostics) normalized.diagnostics = diagnostics;
+  return normalized;
 }
 
 function normalizeActionOutcome(value = {}) {

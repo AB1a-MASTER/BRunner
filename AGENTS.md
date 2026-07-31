@@ -24,7 +24,14 @@ references only. Never treat provisional behavior as a compatibility contract.
    node tracker before accepting Node 1.
 2. Implement finalized nodes strictly by catalog number, one at a time.
 3. Do not begin the next node until the current node satisfies every completion
-   gate below and its tracker row is marked complete.
+   gate below and its tracker row is marked complete, except for a bounded
+   batch-live-acceptance program explicitly requested by the user. In that
+   case, the current node may advance only to **Source complete - batch
+   acceptance queued** after its definition, implementation, focused automated
+   verification, acceptance workflow, and user documentation are complete.
+   The next catalog node may then start, but no queued node may be marked
+   **Complete** until the consolidated full-suite/build and each required live
+   acceptance check pass.
 4. Keep release work and the V2 saved-map viewer deferred unless the user
    explicitly starts those milestones.
 
@@ -49,6 +56,9 @@ status may supplement them but must not replace these checkpoints.
    - item-level completion gates.
 3. Register the step-record path and current status in the main tracker. Only
    one item and one step may be marked **In progress** at a time.
+   A node explicitly marked **Source complete - batch acceptance queued** is
+   not active; its exact deferred full-suite/build/live checks must remain
+   recorded in its checkpoint and in the batch program record.
 4. Before starting an implementation step, mark that step **In progress** and
    write what must be rechecked if execution is interrupted.
 5. Complete only that step, run its focused verification, then immediately mark
@@ -68,7 +78,12 @@ status may supplement them but must not replace these checkpoints.
    step record and main tracker to **Complete**, synchronize affected handoff
    and user documentation, and record any remaining external/manual evidence.
 9. Never start the next tracker item while the current record has an incomplete
-   step or unmet completion gate.
+   source step. A user-approved batch-live-acceptance program is the only
+   exception for deferred consolidated full-suite/build/live gates, and those
+   nodes remain explicitly incomplete until the batch gate closes.
+10. Git commit hashes are optional metadata, not completion gates. Do not
+    request, require, record, or track a commit hash unless the user explicitly
+    asks for hash tracking.
 
 ## One canonical Graph Studio workflow and node model
 
@@ -124,8 +139,8 @@ A node is complete only when all of the following are true:
 - an end-user entry in `docs/NODE_USER_CATALOG.md` covering purpose,
   requirements, fields, examples, outputs, failures, and Graph Studio usage;
 - removal or isolation of replaced provisional registry/editor/executor paths;
-- tracker row updated with acceptance evidence and commit hash after the user
-  commits the accepted slice.
+- tracker row updated with acceptance evidence. Record a commit hash only when
+  the user explicitly asks for it.
 
 ## Acceptance workflow rules
 
@@ -139,8 +154,14 @@ A node is complete only when all of the following are true:
 ## Git and documentation discipline
 
 - The user controls staging, commits, branches, pushes, and pull requests.
-- After a successful node, propose a small Conventional Commit such as
-  `feat(nodes): implement Navigate`; do not commit unless explicitly asked.
+- After a successful node, propose a detailed Conventional Commit; do not
+  commit unless explicitly asked. Use a concise Conventional Commit subject and
+  a body that explains the user-visible outcome, important contract/runtime
+  decisions, verification and live-acceptance evidence, and any migration or
+  operational notes needed to understand the change later. Do not hand off only
+  a one-line subject.
+- Do not request, require, record, or track commit hashes unless the user
+  explicitly asks.
 - Update the tracker, user catalogue, roadmap/handoff when priority changes,
   and affected developer documentation in the same node slice.
 - Rebuild `BRunner/studio-graph/` whenever Graph Studio source or imported

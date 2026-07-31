@@ -236,7 +236,21 @@ export async function executeFinalizedNode(request = {}, services = {}) {
           baseExecution.executionMethod,
       },
     });
-    const handled = applyOnErrorPolicy(failureResult, config, error, definition);
+    const requestedRoute = await selectFailureRoute(
+      request,
+      rawError,
+      error,
+      definition,
+    );
+    const handled = requestedRoute
+      ? {
+          result: failureResult,
+          route: requestedRoute,
+          selectedRoute: requestedRoute,
+          handledError: true,
+          routeError: rawError,
+        }
+      : applyOnErrorPolicy(failureResult, config, error, definition);
     await publishAndLog({
       request,
       services,
@@ -482,6 +496,28 @@ function normalizeRuntimeError(error) {
     normalized.details,
     { category: normalized.category },
   );
+}
+
+async function selectFailureRoute(
+  request,
+  rawError,
+  normalizedError,
+  definition,
+) {
+  if (typeof request.selectFailureRoute !== "function") return null;
+  const route = await request.selectFailureRoute(rawError, {
+    error: normalizedError,
+    definition,
+  });
+  if (
+    ![
+      FinalizedNodeRoutes.Error,
+      FinalizedNodeRoutes.Unresolved,
+    ].includes(route)
+  ) {
+    return null;
+  }
+  return definitionSupportsOutputPort(definition, route) ? route : null;
 }
 
 function isResultEnvelope(value) {

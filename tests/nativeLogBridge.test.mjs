@@ -458,6 +458,42 @@ test("production runner dispatches finalized Navigate v2 through the shared runt
   );
 });
 
+test("production runner dispatches finalized Scroll v2 without reinterpreting v1", async () => {
+  const [background, mapper, finalizedRuntime] = await Promise.all([
+    readFile(new URL("BRunner/background.js", root), "utf8"),
+    readFile(new URL("BRunner/content/mapper.js", root), "utf8"),
+    readFile(
+      new URL("BRunner/nodes/runtime/executeFinalizedNode.js", root),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(background, /isFinalizedScrollContract\(nodeDefinition\)/);
+  assert.match(background, /executeFinalizedScrollWorkflowNode/);
+  assert.match(background, /createChromeScrollAdapter/);
+  assert.match(background, /validateScrollConfig/);
+  assert.match(background, /verifyScrollBeforeRetry/);
+  assert.match(background, /action:\s*"scroll"/);
+  assert.match(background, /selectedRoute === GraphEdgeHandles\.Unresolved/);
+  assert.match(finalizedRuntime, /selectFailureRoute/);
+  assert.match(finalizedRuntime, /routeError:\s*rawError/);
+
+  const v2Dispatch = mapper.search(
+    /action === Actions\.BrowserScroll &&\s*Number\(step\.version\) === 2/,
+  );
+  const provisionalDispatch = mapper.indexOf(
+    "if (action === Actions.BrowserScroll) {",
+    v2Dispatch + 1,
+  );
+  assert.ok(v2Dispatch >= 0);
+  assert.ok(provisionalDispatch > v2Dispatch);
+  assert.match(mapper, /executeFinalizedScrollStep/);
+  assert.match(mapper, /prepareFinalizedScrollHostFallback/);
+  assert.match(mapper, /scroll_container_not_ready/);
+  assert.match(mapper, /__scrollInspectOnly/);
+  assert.match(mapper, /scroll_host_horizontal_unsupported/);
+});
+
 test("host-served workflows reference files exposed by the repository-root server", async () => {
   const workflowDir = new URL("BRunner_Host/Workflows/", root);
   const filenames = (await readdir(workflowDir))

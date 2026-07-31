@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>BRunner Scroll Acceptance</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #0b1220;
+        color: #e5edf8;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+
+      main {
+        width: min(52rem, 100%);
+        margin: 0 auto;
+      }
+
+      #fixture-status {
+        color: #7ee2a8;
+        font-weight: 700;
+      }
+
+      #acceptance-scroll-panel {
+        height: 20rem;
+        margin-top: 1.5rem;
+        overflow: auto;
+        overscroll-behavior: contain;
+        border: 2px solid #4d7ee8;
+        border-radius: 0.75rem;
+        background: #111b2f;
+        scroll-behavior: auto;
+      }
+
+      .scroll-row {
+        min-height: 8rem;
+        display: grid;
+        place-items: center;
+        border-bottom: 1px solid #2a3852;
+      }
+
+      #scroll-complete-marker {
+        min-height: 10rem;
+        display: grid;
+        place-items: center;
+        color: #7ee2a8;
+        font-size: 1.2rem;
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Scroll acceptance fixture</h1>
+      <p id="fixture-status" data-acceptance="scroll">ready</p>
+      <p>
+        Keep this page active, then run the Node 002 Scroll acceptance workflow.
+        The workflow scrolls the bounded panel to its verified end, where the
+        completion marker is displayed.
+      </p>
+      <section
+        id="acceptance-scroll-panel"
+        aria-label="Synthetic Scroll acceptance panel"
+        tabindex="0"
+      >
+        <div class="scroll-row">Synthetic row 1</div>
+        <div class="scroll-row">Synthetic row 2</div>
+        <div class="scroll-row">Synthetic row 3</div>
+        <div class="scroll-row">Synthetic row 4</div>
+        <div class="scroll-row">Synthetic row 5</div>
+        <div class="scroll-row">Synthetic row 6</div>
+        <div class="scroll-row">Synthetic row 7</div>
+        <div class="scroll-row">Synthetic row 8</div>
+        <div id="scroll-complete-marker">Scroll acceptance complete</div>
+      </section>
+    </main>
+  </body>
+</html>

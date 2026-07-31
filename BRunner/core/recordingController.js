@@ -363,11 +363,18 @@ export function createRecordingController({ nativeBridge, onStateChanged }) {
 
     const step = {
       id: createRecordedStepId(),
-      action: Actions.BrowserTabSwitch,
+      action: "browser.tab.control",
+      type: "browser.tab.control",
+      version: 1,
       tabRef: trackedTab.tabRef,
       openerTabRef: trackedTab.openerTabRef || "",
       url: tab.url || trackedTab.lastUrl || "",
-      createIfMissing: true,
+      config: {
+        operation: "switch_tab",
+        tabSelectorKind: "saved_reference",
+        tabSelectorValue: trackedTab.tabRef,
+        ifNotFound: "fail",
+      },
       friendlyName: `Switch tab: ${tab.title || tab.url || trackedTab.tabRef}`,
       page: {
         ...getPageContextFromUrl(tab.url || "", tab.title || ""),

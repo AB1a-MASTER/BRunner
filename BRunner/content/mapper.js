@@ -28,6 +28,7 @@
     ElementClear: "element.clear",
     ElementScrollIntoView: "element.scroll_into_view",
     BrowserScroll: "browser.scroll",
+    ElementResolve: "element.resolve",
     DataExtractText: "data.extract.text",
     DataExtractAttribute: "data.extract.attribute",
     DataExtractList: "data.extract.list",
@@ -61,6 +62,7 @@
   const MAX_MAPPER_RUNTIME_LOCATORS = 32;
   const DEFAULT_MAPPER_RUNTIME_WORK = 50000;
   const MAX_MAPPER_RUNTIME_WORK = 100000;
+  const FINALIZED_RESOLVE_MAX_MATCHES = 200;
   const MAPPER_RESCAN_DEBOUNCE_MS = 350;
 
   if (!resolver) {
@@ -3156,6 +3158,20 @@
         };
       }
 
+      if (
+        action === Actions.BrowserScroll &&
+        Number(step.version) === 2
+      ) {
+        return await this.executeFinalizedScrollStep(step, runId);
+      }
+
+      if (
+        action === Actions.ElementResolve &&
+        Number(step.version) === 1
+      ) {
+        return await this.executeFinalizedResolveElementStep(step, runId);
+      }
+
       if (action === Actions.BrowserScroll) {
         window.scrollBy({
           left: Number(step.config?.x || 0),
@@ -3383,10 +3399,706 @@
       };
     }
 
+    async executeFinalizedResolveElementStep(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
+      const config = step.config || {};
+      const resolved = this.resolveStepTarget(step, Actions.ElementResolve);
+      if (!resolved.element) {
+        return {
+          ok: false,
+          error: resolved.mapperState
+            ? `Mapper could not resolve target: ${resolved.mapperState}`
+            : "Could not resolve the Resolve Element target.",
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            resolved.mapperState
+              ? `mapper_${resolved.mapperState}`
+              : "target_resolution_failed",
+          ),
+        };
+      }
+
+      const requirement = String(config.visibilityRequirement || "any");
+      const primary = this.finalizedResolveComponentFacts(
+        resolved.element,
+        resolved,
+        step,
+      );
+      if (!this.finalizedResolveSatisfiesRequirement(primary, requirement)) {
+        return {
+          ok: false,
+          error: `The resolved element does not satisfy the ${requirement} requirement.`,
+          diagnostics: this.createExecutionDiagnostics(
+            step,
+            resolved,
+            requirement === "interactable"
+              ? "target_not_interactable"
+              : "target_not_visible",
+          ),
+        };
+      }
+
+      const cardinality = String(config.resultCardinality || "one");
+      const collection = this.collectFinalizedResolveMatches(
+        step,
+        resolved,
+        cardinality,
+        requirement,
+      );
+      if (collection.error) return collection.error;
+
+      return this.withMapperRuntimeResolution({
+        ok: true,
+        value: {
+          component: primary,
+          components: collection.components,
+          matchCount: collection.matchCount,
+          mapperState: resolved.mapperState || "resolved",
+          confidence: primary.confidence,
+          visible: primary.visible,
+          interactable: primary.interactable,
+        },
+        usedStrategy: resolved.strategy,
+        usedValue: resolved.value,
+      }, step, resolved);
+    }
+
+    finalizedResolveComponentFacts(element, resolved = {}, step = {}, index = 0) {
+      const component = resolved.component || step.mapperContext?.component || {};
+      const semantic = component.fingerprint?.semantic || {};
+      const frameScope = component.fingerprint?.structural?.frameScope || null;
+      const visible = this.isVisibleElement(element);
+      const disabled = element.disabled === true ||
+        element.getAttribute?.("aria-disabled") === "true";
+      const rawConfidence = Number(resolved.confidence);
+      const confidence = resolved.mode === "direct"
+        ? 100
+        : Number.isFinite(rawConfidence) ? rawConfidence : 0;
+      return {
+        // Prefer mapper identity, then the element's own id. The resolver
+        // locator is identical for every enumerated candidate, so it can only
+        // be a last resort and is disambiguated by ordinal position.
+        componentId: String(
+          component.componentId ||
+            element.id ||
+            `${String(element.tagName || "element").toLowerCase()}:${index}`,
+        ),
+        componentUid: component.componentUid || null,
+        semanticType: String(
+          semantic.semanticType ||
+            element.getAttribute?.("role") ||
+            element.tagName ||
+            "",
+        ).toLowerCase() || null,
+        accessibleName: semantic.accessibleName ||
+          element.getAttribute?.("aria-label") ||
+          null,
+        mappingLayer: component.mappingLayer || null,
+        pageProfileKey: component.pageProfileKey || null,
+        frameContext: frameScope
+          ? { framePath: frameScope.framePath || null, access: frameScope.access || null }
+          : null,
+        visible,
+        interactable: visible && !disabled,
+        confidence,
+      };
+    }
+
+    finalizedResolveSatisfiesRequirement(facts = {}, requirement = "any") {
+      if (requirement === "visible") return facts.visible === true;
+      if (requirement === "interactable") return facts.interactable === true;
+      return true;
+    }
+
+    collectFinalizedResolveMatches(step, resolved, cardinality, requirement) {
+      const primary = this.finalizedResolveComponentFacts(
+        resolved.element,
+        resolved,
+        step,
+      );
+      if (cardinality === "one") {
+        return { components: [primary], matchCount: 1 };
+      }
+
+      const target = step.data?.target || step.target || {};
+      const identifierType = String(target.identifierType || "").toLowerCase();
+      const selector = String(target.identifierValue || "").trim();
+      if (!["css", "xpath"].includes(identifierType) || !selector) {
+        return {
+          error: {
+            ok: false,
+            error:
+              "Result cardinality first and all require an explicit CSS or XPath target selector so the complete candidate set is enumerable.",
+            diagnostics: this.createExecutionDiagnostics(
+              step,
+              resolved,
+              "resolve_cardinality_requires_explicit_selector",
+            ),
+          },
+        };
+      }
+
+      const elements = this.finalizedResolveQueryAll(identifierType, selector);
+      const matching = elements
+        .map((element, index) => this.finalizedResolveComponentFacts(
+          element,
+          resolved,
+          step,
+          index,
+        ))
+        .filter((facts) => this.finalizedResolveSatisfiesRequirement(facts, requirement));
+      const bounded = matching.slice(0, FINALIZED_RESOLVE_MAX_MATCHES);
+      if (!bounded.length) {
+        return { components: [primary], matchCount: 1 };
+      }
+      return {
+        components: cardinality === "first" ? bounded.slice(0, 1) : bounded,
+        matchCount: matching.length,
+      };
+    }
+
+    finalizedResolveQueryAll(identifierType, selector) {
+      try {
+        if (identifierType === "css") {
+          return Array.from(document.querySelectorAll(selector))
+            .slice(0, FINALIZED_RESOLVE_MAX_MATCHES);
+        }
+        const found = document.evaluate(
+          selector,
+          document,
+          null,
+          XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+          null,
+        );
+        const elements = [];
+        for (
+          let index = 0;
+          index < found.snapshotLength && index < FINALIZED_RESOLVE_MAX_MATCHES;
+          index += 1
+        ) {
+          const node = found.snapshotItem(index);
+          if (node?.nodeType === 1) elements.push(node);
+        }
+        return elements;
+      } catch {
+        return [];
+      }
+    }
+
+    async executeFinalizedScrollStep(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
+      const config = step.config || {};
+      const prepared = this.prepareFinalizedScrollRoot(step);
+      if (!prepared.ok) return prepared;
+
+      const { root, targetElement, resolved } = prepared;
+      const before = this.finalizedScrollPosition(root);
+      const inspectOnly = config.__scrollInspectOnly === true;
+
+      if (!inspectOnly) {
+        const movement = this.finalizedScrollMovement(config, root);
+        const behavior = config.smooth === true ? "smooth" : "instant";
+
+        if (config.operation === "to_element") {
+          targetElement.scrollIntoView({
+            block: this.finalizedScrollAlignment(config.alignment),
+            inline: "nearest",
+            behavior,
+          });
+        } else if (movement.mode === "absolute") {
+          this.setFinalizedScrollPosition(
+            root,
+            movement.left,
+            movement.top,
+            behavior,
+          );
+        } else {
+          this.moveFinalizedScrollPosition(
+            root,
+            movement.left,
+            movement.top,
+            behavior,
+          );
+        }
+
+        if (config.smooth === true) {
+          await this.waitForFinalizedScrollSettle(root, runId);
+        } else {
+          await this.waitForHostFallbackPaint();
+        }
+        this.throwIfExecutionCancelled(runId);
+      }
+
+      const finalPosition = this.finalizedScrollPosition(root);
+      const moved = this.finalizedScrollPositionsDiffer(
+        before,
+        finalPosition,
+      );
+      let condition;
+      try {
+        condition = this.evaluateFinalizedScrollCondition(
+          config,
+          root,
+          moved,
+          finalPosition,
+        );
+      } catch (error) {
+        return {
+          ok: false,
+          error: error.message || String(error),
+          diagnostics: {
+            action: Actions.BrowserScroll,
+            finalReason: "scroll_condition_invalid",
+            sideEffectState: inspectOnly ? "not_started" : "unknown",
+          },
+        };
+      }
+
+      const value = {
+        verified: true,
+        moved,
+        conditionMet: condition.met,
+        scrollCount: inspectOnly || !moved ? 0 : 1,
+        finalPosition,
+        stopReason: this.finalizedScrollStopReason(
+          config,
+          moved,
+          condition,
+        ),
+        contentToken: this.finalizedScrollContentToken(root),
+      };
+      const response = {
+        ok: true,
+        value,
+        usedStrategy:
+          resolved?.strategy ||
+          (root === this.finalizedPageScrollRoot()
+            ? "page_scrolling_element"
+            : "resolved_scroll_container"),
+        usedValue: resolved?.value || "",
+      };
+      return resolved
+        ? this.withMapperRuntimeResolution(response, step, resolved)
+        : response;
+    }
+
+    prepareFinalizedScrollRoot(step = {}) {
+      const config = step.config || {};
+      const targetRequired =
+        config.scrollTarget === "container" ||
+        config.operation === "to_element";
+      let resolved = null;
+      let targetElement = null;
+
+      if (targetRequired) {
+        resolved = this.resolveStepTarget(step, Actions.BrowserScroll);
+        if (!resolved.element) {
+          return {
+            ok: false,
+            error: resolved.mapperState
+              ? `Mapper could not resolve Scroll target: ${resolved.mapperState}`
+              : "Could not resolve the finalized Scroll target.",
+            diagnostics: this.createExecutionDiagnostics(
+              step,
+              resolved,
+              resolved.mapperState
+                ? `mapper_${resolved.mapperState}`
+                : "scroll_target_resolution_failed",
+            ),
+          };
+        }
+        targetElement = resolved.element;
+      }
+
+      let root = this.finalizedPageScrollRoot();
+      if (config.operation === "to_element") {
+        root = this.findFinalizedScrollRoot(targetElement);
+      } else if (config.scrollTarget === "container") {
+        root = targetElement;
+      }
+
+      if (
+        root !== this.finalizedPageScrollRoot() &&
+        !this.isFinalizedScrollableContainer(root)
+      ) {
+        return {
+          ok: false,
+          error: "The requested Scroll container is not currently scrollable.",
+          diagnostics: {
+            ...this.createExecutionDiagnostics(
+              step,
+              resolved || {},
+              "scroll_container_not_ready",
+            ),
+            sideEffectState: "not_started",
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        root,
+        targetElement,
+        resolved,
+      };
+    }
+
+    finalizedPageScrollRoot() {
+      return document.scrollingElement || document.documentElement;
+    }
+
+    findFinalizedScrollRoot(element) {
+      let candidate = element?.parentElement || null;
+      while (candidate && candidate !== document.body) {
+        if (this.isFinalizedScrollableContainer(candidate)) return candidate;
+        candidate = candidate.parentElement;
+      }
+      return this.finalizedPageScrollRoot();
+    }
+
+    isFinalizedScrollableContainer(element) {
+      if (!element || !(element instanceof Element)) return false;
+      const style = window.getComputedStyle(element);
+      const vertical = (
+        ["auto", "scroll", "overlay"].includes(style.overflowY) &&
+        element.scrollHeight > element.clientHeight + 1
+      );
+      const horizontal = (
+        ["auto", "scroll", "overlay"].includes(style.overflowX) &&
+        element.scrollWidth > element.clientWidth + 1
+      );
+      return vertical || horizontal;
+    }
+
+    finalizedScrollMovement(config = {}, root) {
+      const position = this.finalizedScrollPosition(root);
+      if (config.operation === "to_top") {
+        return { mode: "absolute", left: position.x, top: 0 };
+      }
+      if (config.operation === "to_bottom") {
+        return {
+          mode: "absolute",
+          left: position.x,
+          top: position.maxY,
+        };
+      }
+
+      const horizontal = ["left", "right"].includes(config.direction);
+      const viewport = horizontal
+        ? Number(root?.clientWidth || window.innerWidth || 0)
+        : Number(root?.clientHeight || window.innerHeight || 0);
+      const amount = Math.max(Number(config.amount) || 0, 0);
+      const magnitude = config.amountUnit === "viewport_percent"
+        ? viewport * amount / 100
+        : config.amountUnit === "screen"
+          ? viewport * amount
+          : amount;
+      const signed = ["up", "left"].includes(config.direction)
+        ? -magnitude
+        : magnitude;
+      return {
+        mode: "relative",
+        left: horizontal ? signed : 0,
+        top: horizontal ? 0 : signed,
+      };
+    }
+
+    setFinalizedScrollPosition(root, left, top, behavior) {
+      if (root === this.finalizedPageScrollRoot()) {
+        window.scrollTo({ left, top, behavior });
+        return;
+      }
+      root.scrollTo({ left, top, behavior });
+    }
+
+    moveFinalizedScrollPosition(root, left, top, behavior) {
+      if (root === this.finalizedPageScrollRoot()) {
+        window.scrollBy({ left, top, behavior });
+        return;
+      }
+      root.scrollBy({ left, top, behavior });
+    }
+
+    finalizedScrollPosition(root) {
+      const page = root === this.finalizedPageScrollRoot();
+      const x = Math.max(Number(page ? window.scrollX : root?.scrollLeft) || 0, 0);
+      const y = Math.max(Number(page ? window.scrollY : root?.scrollTop) || 0, 0);
+      const width = Math.max(
+        Number(root?.scrollWidth) || 0,
+        Number(page ? document.documentElement?.scrollWidth : 0) || 0,
+      );
+      const height = Math.max(
+        Number(root?.scrollHeight) || 0,
+        Number(page ? document.documentElement?.scrollHeight : 0) || 0,
+      );
+      const viewportWidth = Math.max(
+        Number(page ? window.innerWidth : root?.clientWidth) || 0,
+        0,
+      );
+      const viewportHeight = Math.max(
+        Number(page ? window.innerHeight : root?.clientHeight) || 0,
+        0,
+      );
+      const maxX = Math.max(width - viewportWidth, 0);
+      const maxY = Math.max(height - viewportHeight, 0);
+      return {
+        x,
+        y,
+        maxX,
+        maxY,
+        atStart: x <= 1 && y <= 1,
+        atEnd: x >= maxX - 1 && y >= maxY - 1,
+      };
+    }
+
+    finalizedScrollPositionsDiffer(first = {}, second = {}) {
+      return (
+        Math.abs(Number(first.x || 0) - Number(second.x || 0)) > 1 ||
+        Math.abs(Number(first.y || 0) - Number(second.y || 0)) > 1
+      );
+    }
+
+    evaluateFinalizedScrollCondition(
+      config = {},
+      root,
+      moved,
+      position = {},
+    ) {
+      if (config.operation !== "until_condition") {
+        return { met: false, reason: "" };
+      }
+      if (config.stopCondition === "position_unchanged") {
+        return {
+          met: moved === false,
+          reason: moved === false ? "position_unchanged" : "",
+        };
+      }
+      if (config.stopCondition === "scroll_end") {
+        const horizontal = ["left", "right"].includes(config.direction);
+        const atStart = horizontal
+          ? Number(position.x) <= 1
+          : Number(position.y) <= 1;
+        const atEnd = horizontal
+          ? Number(position.x) >= Number(position.maxX) - 1
+          : Number(position.y) >= Number(position.maxY) - 1;
+        const met = ["up", "left"].includes(config.direction)
+          ? atStart
+          : atEnd;
+        return { met, reason: met ? "scroll_end" : "" };
+      }
+      if (config.stopCondition === "selector_visible") {
+        const scope = root === this.finalizedPageScrollRoot()
+          ? document
+          : root;
+        const element = scope.querySelector(String(config.stopValue || ""));
+        const met = Boolean(
+          element &&
+          this.isFinalizedScrollConditionElementVisible(element, root),
+        );
+        return { met, reason: met ? "condition_met" : "" };
+      }
+      if (config.stopCondition === "text_present") {
+        const text = String(config.stopValue || "");
+        const content = String(
+          root === this.finalizedPageScrollRoot()
+            ? document.body?.innerText || document.body?.textContent || ""
+            : root?.innerText || root?.textContent || "",
+        );
+        const met = Boolean(text && content.includes(text));
+        return { met, reason: met ? "condition_met" : "" };
+      }
+      return { met: false, reason: "" };
+    }
+
+    isFinalizedScrollConditionElementVisible(element, root) {
+      if (!this.isVisibleElement(element)) return false;
+      const rect = element.getBoundingClientRect();
+      const boundary = root === this.finalizedPageScrollRoot()
+        ? {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight,
+          }
+        : root.getBoundingClientRect();
+      return (
+        rect.right > boundary.left &&
+        rect.left < boundary.right &&
+        rect.bottom > boundary.top &&
+        rect.top < boundary.bottom
+      );
+    }
+
+    finalizedScrollStopReason(config = {}, moved, condition = {}) {
+      if (condition.met && condition.reason) return condition.reason;
+      if (!moved) return "no_movement";
+      const reasons = {
+        by_amount: "amount_complete",
+        to_top: "top_reached",
+        to_bottom: "bottom_reached",
+        to_element: "target_aligned",
+      };
+      return reasons[config.operation] || "";
+    }
+
+    finalizedScrollContentToken(root) {
+      const textLength = Number(root?.textContent?.length) || 0;
+      return [
+        Number(root?.scrollWidth) || 0,
+        Number(root?.scrollHeight) || 0,
+        Number(root?.childElementCount) || 0,
+        textLength,
+      ].join(":");
+    }
+
+    finalizedScrollAlignment(value) {
+      const alignments = {
+        top: "start",
+        center: "center",
+        bottom: "end",
+        nearest: "nearest",
+      };
+      return alignments[value] || "center";
+    }
+
+    async waitForFinalizedScrollSettle(root, runId = "") {
+      let previous = this.finalizedScrollPosition(root);
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await this.delayWithCancellation(40, runId);
+        await this.waitForHostFallbackPaint();
+        const current = this.finalizedScrollPosition(root);
+        if (!this.finalizedScrollPositionsDiffer(previous, current)) return;
+        previous = current;
+      }
+    }
+
+    async prepareFinalizedScrollHostFallback(step = {}, runId = "") {
+      this.throwIfExecutionCancelled(runId);
+
+      const config = step.config || {};
+      if (["left", "right"].includes(config.direction)) {
+        return {
+          ok: false,
+          error: "Visible host fallback does not support horizontal Scroll.",
+          diagnostics: {
+            action: Actions.BrowserScroll,
+            finalReason: "scroll_host_horizontal_unsupported",
+          },
+        };
+      }
+      if (config.operation === "to_element") {
+        return {
+          ok: false,
+          error: "Visible host fallback cannot safely align a target element.",
+          diagnostics: {
+            action: Actions.BrowserScroll,
+            finalReason: "scroll_host_element_alignment_unsupported",
+          },
+        };
+      }
+
+      const prepared = this.prepareFinalizedScrollRoot(step);
+      if (!prepared.ok) return prepared;
+      const root = prepared.root;
+      const page = root === this.finalizedPageScrollRoot();
+      const rect = page
+        ? {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight,
+            width: window.innerWidth,
+            height: window.innerHeight,
+          }
+        : root.getBoundingClientRect();
+      const clientPoint = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      };
+      const pointVisible = (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        clientPoint.x >= 0 &&
+        clientPoint.y >= 0 &&
+        clientPoint.x < window.innerWidth &&
+        clientPoint.y < window.innerHeight
+      );
+      const visible = page || (
+        pointVisible &&
+        this.isVisibleElement(root)
+      );
+      if (!visible) {
+        return {
+          ok: false,
+          error: "Visible host fallback Scroll target is outside the viewport.",
+          diagnostics: {
+            action: Actions.BrowserScroll,
+            finalReason: "scroll_host_target_not_visible",
+          },
+        };
+      }
+
+      const position = this.finalizedScrollPosition(root);
+      const movement = this.finalizedScrollMovement(config, root);
+      const pixelAmount = config.operation === "to_top" ||
+          config.operation === "to_bottom"
+        ? Math.max(position.maxY, window.innerHeight)
+        : Math.abs(Number(movement.top) || 0);
+      const wheelClicks = Math.max(
+        1,
+        Math.min(20, Math.ceil(pixelAmount / 120)),
+      );
+      const towardStart = config.operation === "to_top" ||
+        config.direction === "up";
+      const devicePixelRatio = Number(window.devicePixelRatio || 1);
+
+      return {
+        ok: true,
+        action: "scroll",
+        amount: towardStart ? wheelClicks : -wheelClicks,
+        confidence: 1,
+        coordinateSpace: "css_viewport",
+        clientPoint,
+        clientBounds: {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          devicePixelRatio,
+        },
+        devicePixelRatio,
+        window: {
+          title: document.title || "",
+          url: window.location.href,
+        },
+        visible: true,
+        interactable: true,
+        beforePosition: position,
+        usedStrategy:
+          prepared.resolved?.strategy ||
+          (page ? "page_scrolling_element" : "resolved_scroll_container"),
+        usedValue: prepared.resolved?.value || "",
+      };
+    }
+
     async prepareHostFallback(step = {}, runId = "") {
       this.throwIfExecutionCancelled(runId);
 
       const action = step.action || step.type;
+      if (
+        action === Actions.BrowserScroll &&
+        Number(step.version) === 2
+      ) {
+        return await this.prepareFinalizedScrollHostFallback(step, runId);
+      }
+
       const hostAction = this.toHostFallbackAction(action);
       if (!hostAction) {
         return {
@@ -5939,6 +6651,10 @@
       // Later we can use a public suffix list if needed.
       return parts.slice(-2).join(".");
     }
+  }
+
+  if (window.__BRUNNER_MAPPER_TEST_HOOK__ === true) {
+    window.__BRUNNER_MAPPER_CLASS__ = BRunnerMapper;
   }
 
   if (!window.__BRUNNER_MAPPER__) {

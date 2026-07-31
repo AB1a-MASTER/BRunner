@@ -48,6 +48,37 @@ test("Navigate keeps provisional v1 isolated while the palette selects finalized
   );
 });
 
+test("Scroll keeps provisional v1 isolated while the palette selects finalized v2", () => {
+  const provisional = getNodeDefinition("browser.scroll", 1);
+  const finalized = getNodeDefinition("browser.scroll", 2);
+  assert.equal(provisional.label, "Scroll Page");
+  assert.equal(finalized.label, "Scroll");
+  assert.equal(provisional.contractKind, NodeContractKinds.Provisional);
+  assert.equal(finalized.contractKind, NodeContractKinds.Finalized);
+  assert.equal(finalized.catalogNumber, 2);
+  assert.deepEqual(getNodeDefinitionVersions("browser.scroll"), [1, 2]);
+  assert.equal(getLatestNodeDefinition("browser.scroll"), finalized);
+  assert.equal(
+    getNodeDefinitions().find((definition) => definition.type === "browser.scroll")?.version,
+    2,
+  );
+  assert.throws(
+    () => migrateNodeContract({
+      id: "legacy-scroll",
+      type: "browser.scroll",
+      version: 1,
+      config: { x: 0, y: 500 },
+    }, { targetVersion: 2 }),
+    (error) => error.code === NodeContractResolutionCodes.MigrationUnavailable,
+  );
+  assert.throws(
+    () => resolveNodeDefinition({ type: "browser.scroll", version: 3 }),
+    (error) =>
+      error.code === NodeContractResolutionCodes.UnsupportedVersion &&
+      error.details.supportedVersions.join(",") === "1,2",
+  );
+});
+
 test("registry fails closed on missing and unsupported node versions", () => {
   assert.throws(
     () => resolveNodeDefinition({ type: "element.click" }),

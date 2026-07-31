@@ -1,5 +1,5 @@
 BRunner - Current Development Handoff
-Updated: 2026-07-27
+Updated: 2026-07-31
 
 PURPOSE
 
@@ -52,13 +52,29 @@ loaded-window, body-ancestry, and verification issues were fixed and rerun. The
 extension/host round trip passed with `extension-host-roundtrip.txt |
 extension-host-roundtrip.txt | 1`.
 
-The most recent recorded source verification on 2026-07-27 passed 445
-JavaScript tests and 183 Python tests; Graph Studio remains the verified
-191-module build and the cache-safe focused Navigate/server set passed 21/21.
+The most recent recorded source verification on 2026-07-27 passed 481
+JavaScript tests and 183 Python tests; Graph Studio is the freshly rebuilt
+verified 191-module production bundle. Twelve changed production JavaScript
+files pass syntax checks, the production fingerprint/integrity checks pass,
+and the whitespace gate is clean.
 Rerun the relevant gates after implementation changes rather than treating
 those counts as permanent. Navigate v2 passed both its unpacked-extension
-success case and its stopped-server red error route. Its user-controlled commit
-hash is the only remaining Node 1 closeout item.
+success case and its stopped-server red error route and is complete.
+
+As of 2026-07-31, Scroll v2, Tab Control v1, and Resolve Element v1 are all
+**source-complete and batch acceptance queued** under the user-approved
+Phase 1-2 batch program. Each has its implementation, focused automated
+verification, canonical acceptance workflow, and acceptance-pending catalogue
+entry. None of the three is accepted. Node 3 closed its focused source gate at
+170/170 and Node 4 at 382/382. No node source item is currently active; Node 5,
+Check Element State, is next.
+
+Node 4 introduced two contract-visible decisions that are recorded in
+`docs/work_items/N004_RESOLVE_ELEMENT_FINALIZATION.md` under "Step 3
+implementation decisions requiring user review" and should be confirmed:
+`first`/`all` result cardinality requires an explicit CSS or XPath selector so
+the candidate set is enumerable, and a uniquely matched explicit locator reports
+confidence 1.0 rather than the resolver's strategy-preference score.
 
 Focus on:
 
@@ -69,10 +85,12 @@ Focus on:
    to use one canonical semantic path;
 3. preserving completed B19 isolation while retaining dormant source for
    pre-V2 cleanup;
-4. recording the accepted Navigate slice in the user-controlled quick commit;
-   and
-5. only after that commit, continuing Scroll, Tab Control, Resolve Element,
-   Check Element State, and Wait for Condition in catalog order.
+4. continuing Check Element State, Wait for Condition, then Nodes 7-15 in
+   catalog order, noting that Check Element State needs the generic repeatable
+   structured-check editor and therefore a Graph Studio rebuild; and
+5. keeping the deferred consolidated build/full-suite/live gates for Nodes 2, 3,
+   and 4 recorded in `docs/work_items/P12_PHASE_1_2_BATCH_PROGRAM.md` and
+   running them only as the single batch after Node 15.
 
 The existing Mapper Inspector is an engineering diagnostic surface for this
 work. Do not spend the current milestone polishing it into a final saved-map
@@ -87,14 +105,16 @@ CURRENT TODO SEQUENCE
 2. COMPLETE: Graph Studio consolidation items B10-B12.
 3. COMPLETE: B19 disables Sequential Studio entry points and authoring/run
    access while retaining `BRunner/studio/` as dormant reference source.
-4. ACCEPTED, COMMIT PENDING: Navigate passed focused Graph Studio success and
-   stopped-server error-route acceptance. Record the user-controlled commit
-   hash, then correct and integrate the remaining Phase 1 adapters and nodes in
-   catalog order beginning with Scroll.
+4. ACTIVE: Navigate is complete. Scroll v2, Tab Control v1, and Resolve
+   Element v1 are source-complete and batch acceptance queued; their focused
+   unpacked-extension runs and the consolidated build/full-suite gates are
+   deliberately deferred to the single Phase 1-2 batch after Node 15. Continue
+   with Node 5, Check Element State.
 5. Continue node Phases 2-7 one node at a time, removing provisional types
    absent from the catalog. Every node gets automated tests, a focused workflow
    under `BRunner_Host/Workflows/node_acceptance/`, focused live evidence, an
-   end-user catalog entry, a tracker update, and a quick user-controlled commit.
+   end-user catalog entry, a tracker update, and a detailed user-controlled
+   Conventional Commit subject and explanatory body.
 6. Complete the six cross-node acceptance workflows and integrated V1 source
    acceptance.
 7. Run the pre-V2 cleanup: remove the already-disabled Sequential Studio and
@@ -227,7 +247,8 @@ DEVELOPMENT RULES
 - Keep Sequential Studio disabled but present until the final pre-V2 cleanup;
   do not repair it or use it as acceptance evidence.
 - Complete one node at a time, including its acceptance workflow and end-user
-  documentation, then hand it to the user for the quick Git commit.
+  documentation, then hand it to the user with a detailed Conventional Commit
+  subject and explanatory body. Do not track a commit hash unless requested.
 - Defer polished saved-map viewing to V2.
 - Perform no release work now.
 - Update this handoff and the master roadmap together whenever priority, scope,
